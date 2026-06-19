@@ -192,7 +192,6 @@ wheels = [
 
 [[package]]
 name = "otter-ai"
-version = "0.1.0"
 source = { editable = "packages/otter_ai" }
 
 [[package]]

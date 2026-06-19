@@ -28,11 +28,14 @@ uv run ruff check --fix -- "${STAGED[@]}"
 echo "pre-commit >> ruff format"
 uv run ruff format -- "${STAGED[@]}"
 
-# Stage any files ruff modified so the fixes are included in this commit.
+# Stage only the files ruff actually modified, intersected with the staged
+# set, so unrelated unstaged WIP in other files isn't swept into this commit.
 CHANGED=()
-while IFS= read -r line; do
-    [ -n "$line" ] && CHANGED+=("$line")
-done < <(git diff --name-only -- '*.py')
+for f in "${STAGED[@]}"; do
+    if ! git diff --quiet -- "$f"; then
+        CHANGED+=("$f")
+    fi
+done
 
 if [ "${#CHANGED[@]}" -gt 0 ]; then
     echo "pre-commit >> staging ruff fixes"
