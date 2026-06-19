@@ -128,7 +128,9 @@ leaf carries strict `role`/`type` Literals together with `extra="forbid"`.
 ### Quick example
 
 ```python
-from otter_ai import ContextItemEvent, TypeAdapter  # TypeAdapter from pydantic
+from pydantic import TypeAdapter
+
+from otter_ai import ContextItemEvent
 
 adapter = TypeAdapter(ContextItemEvent)
 

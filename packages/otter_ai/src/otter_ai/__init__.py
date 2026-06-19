@@ -1,8 +1,9 @@
 """Otter AI — LLM context data model.
 
 This package provides a Pydantic v2 model for representing LLM conversation
-context (``Context``, messages, content blocks, tools, usage). It is data-only:
-no LLMs, providers, APIs, or streaming.
+context (``Context``, messages, content blocks, tools, usage) and the streaming
+events used to build it. It is data-only: no LLMs, providers, APIs, transports,
+or ``stream()`` dispatch.
 """
 
 from __future__ import annotations
