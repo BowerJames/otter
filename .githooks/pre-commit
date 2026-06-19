@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: ruff (auto-fix + format, auto-staged) then mypy.
+#
+# Requires a one-time opt-in per clone:
+#     git config core.hooksPath .githooks
+#
+# The commit is rejected if any check exits non-zero.
+#
+# Written for broad compatibility (works on macOS bash 3.2 as well as bash 4+).
+
+set -euo pipefail
+
+# Only consider added/copied/modified staged files; ignore deletions.
+STAGED=()
+while IFS= read -r line; do
+    [ -n "$line" ] && STAGED+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+
+if [ "${#STAGED[@]}" -eq 0 ]; then
+    echo "pre-commit: no staged Python files; skipping ruff/mypy."
+    exit 0
+fi
+
+echo "pre-commit >> ruff check --fix"
+uv run ruff check --fix -- "${STAGED[@]}"
+
+echo "pre-commit >> ruff format"
+uv run ruff format -- "${STAGED[@]}"
+
+# Stage any files ruff modified so the fixes are included in this commit.
+CHANGED=()
+while IFS= read -r line; do
+    [ -n "$line" ] && CHANGED+=("$line")
+done < <(git diff --name-only -- '*.py')
+
+if [ "${#CHANGED[@]}" -gt 0 ]; then
+    echo "pre-commit >> staging ruff fixes"
+    git add -- "${CHANGED[@]}"
+fi
+
+echo "pre-commit >> mypy"
+uv run mypy
