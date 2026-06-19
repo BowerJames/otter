@@ -1,8 +1,9 @@
 """Otter AI — LLM context data model.
 
 This package provides a Pydantic v2 model for representing LLM conversation
-context (``Context``, messages, content blocks, tools, usage). It is data-only:
-no LLMs, providers, APIs, or streaming.
+context (``Context``, messages, content blocks, tools, usage) and the streaming
+events used to build it. It is data-only: no LLMs, providers, APIs, transports,
+or ``stream()`` dispatch.
 """
 
 from __future__ import annotations
@@ -19,6 +20,38 @@ from otter_ai.context import Context
 from otter_ai.diagnostics import (
     AssistantMessageDiagnostic,
     DiagnosticErrorInfo,
+)
+from otter_ai.events import (
+    AssistantDoneEvent,
+    AssistantDoneReason,
+    AssistantErrorEvent,
+    AssistantMessageEvent,
+    AssistantStartEvent,
+    AssistantTextDeltaEvent,
+    AssistantTextEndEvent,
+    AssistantTextStartEvent,
+    AssistantThinkingDeltaEvent,
+    AssistantThinkingEndEvent,
+    AssistantThinkingStartEvent,
+    AssistantToolCallDeltaEvent,
+    AssistantToolCallEndEvent,
+    AssistantToolCallStartEvent,
+    ContextItemEvent,
+    EventErrorReason,
+    ToolResultDoneEvent,
+    ToolResultErrorEvent,
+    ToolResultMessageEvent,
+    ToolResultStartEvent,
+    ToolResultTextDeltaEvent,
+    ToolResultTextEndEvent,
+    ToolResultTextStartEvent,
+    UserDoneEvent,
+    UserErrorEvent,
+    UserMessageEvent,
+    UserStartEvent,
+    UserTextDeltaEvent,
+    UserTextEndEvent,
+    UserTextStartEvent,
 )
 from otter_ai.messages import (
     AssistantMessage,
@@ -50,6 +83,37 @@ __all__ = [
     # diagnostics
     "AssistantMessageDiagnostic",
     "DiagnosticErrorInfo",
+    # events
+    "AssistantDoneEvent",
+    "AssistantDoneReason",
+    "AssistantErrorEvent",
+    "AssistantMessageEvent",
+    "AssistantStartEvent",
+    "AssistantTextDeltaEvent",
+    "AssistantTextEndEvent",
+    "AssistantTextStartEvent",
+    "AssistantThinkingDeltaEvent",
+    "AssistantThinkingEndEvent",
+    "AssistantThinkingStartEvent",
+    "AssistantToolCallDeltaEvent",
+    "AssistantToolCallEndEvent",
+    "AssistantToolCallStartEvent",
+    "ContextItemEvent",
+    "EventErrorReason",
+    "ToolResultDoneEvent",
+    "ToolResultErrorEvent",
+    "ToolResultMessageEvent",
+    "ToolResultStartEvent",
+    "ToolResultTextDeltaEvent",
+    "ToolResultTextEndEvent",
+    "ToolResultTextStartEvent",
+    "UserDoneEvent",
+    "UserErrorEvent",
+    "UserMessageEvent",
+    "UserStartEvent",
+    "UserTextDeltaEvent",
+    "UserTextEndEvent",
+    "UserTextStartEvent",
     # content
     "AssistantContent",
     "ImageContent",
