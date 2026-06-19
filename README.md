@@ -37,9 +37,11 @@ All packages and dev dependencies share a single `.venv` at the root.
 
 ## `otter-ai` context model
 
-The `otter-ai` package is a **data-only** model for representing LLM conversation
-context. It contains no LLMs, providers, APIs, or streaming — only the
-Pydantic v2 data structures a conversation is built from:
+The `otter-ai` package models LLM conversation context and the streaming
+runtime used to build it. It defines **no LLMs, providers, APIs, transports,
+API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
+conversation is built from, the streaming-event protocol, and a
+generic async stream runtime:
 
 - [`Context`](./packages/otter_ai/src/otter_ai/context.py) — the top-level
   conversation (`system_prompt`, `messages`, `tools`), JSON-serializable so a
@@ -52,6 +54,14 @@ Pydantic v2 data structures a conversation is built from:
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
 - [`Usage`](./packages/otter_ai/src/otter_ai/usage.py) and diagnostics for
   per-turn accounting.
+- [`events.py`](./packages/otter_ai/src/otter_ai/events.py) — the streaming-event
+  protocol: `AssistantMessageEvent`, `UserMessageEvent`, and
+  `ToolResultMessageEvent` families (each a discriminated union on `type`),
+  the plain unions `MessageEvent` (assistant + user) and `ContextItemEvent`
+  (all three).
+- [`stream.py`](./packages/otter_ai/src/otter_ai/stream.py) — a generic async
+  stream runtime (`Stream` / `StreamWriter` / `create_stream`) plus the typed
+  message-stream aliases. See [Generic stream runtime](#generic-stream-runtime).
 
 `AssistantMessage` also carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,
@@ -89,6 +99,63 @@ assert restored == context
 # Opt-in replay prep (only when you intend to send to a model elsewhere):
 replay_ready = normalize_messages(context.messages)
 ```
+
+### Generic stream runtime
+
+[`stream.py`](./packages/otter_ai/src/otter_ai/stream.py) is a faithful
+Python/`asyncio` port of pi-ai's `EventStream` push-queue. The runtime is split
+into a consumer and a producer sharing one queue:
+
+- `Stream[TEvent]` — the consumer; iterate with `async for`.
+- `StreamWriter[TEvent]` — the producer; call `push(event)` for every event
+  (including the terminal `done`/`error`), then `end()`.
+- `create_stream()` — returns a linked `(Stream, StreamWriter)` pair.
+
+Typed aliases specialize it: `AssistantMessageStream`, `UserMessageStream`,
+`MessageEventStream` (assistant + user), `ContextItemStream` (all three), each
+with a matching `*Writer` alias.
+
+There is **no `result()`** — pi-ai's `result()` is single-item-only sugar that
+doesn't generalize to multi-item streams (`MessageEventStream`/
+`ContextItemStream`); consumers read the terminal `done`/`error` event directly.
+
+`Stream` and `StreamWriter` are runtime objects and are **not** JSON-serializable
+(unlike `Context`); the serializable data model is unchanged.
+
+```python
+import asyncio
+
+from otter_ai import AssistantDoneEvent, AssistantMessage, create_stream
+
+
+async def main() -> None:
+    stream, writer = create_stream()
+
+    async def produce() -> None:
+        msg = AssistantMessage(
+            role="assistant",
+            content=[],
+            api="anthropic-messages",
+            provider="anthropic",
+            model="claude-3",
+            usage=...,  # a Usage instance
+            stop_reason="stop",
+            timestamp=0,
+        )
+        # Push every event, including the terminal ``done``, then end:
+        writer.push(
+            AssistantDoneEvent(role="assistant", type="done", reason="stop", message=msg)
+        )
+        writer.end()
+
+    task = asyncio.create_task(produce())
+    async for event in stream:  # the terminal "done" event is the last one yielded
+        ...
+    await task
+```
+
+Otter defines the runtime and types only — **no providers, no registry, no
+`stream()` dispatch**.
 
 ## Tooling
 
