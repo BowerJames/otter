@@ -1,0 +1,12 @@
+default: default
+profiles:
+  default:
+    cmd: pi
+    extensions:
+      - code-review
+      - dynamic-skills
+      - mode
+    skills:
+      - repo-explorer
+    prompts:
+      - overview
