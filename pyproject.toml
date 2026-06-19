@@ -32,6 +32,7 @@ strict = true
 files = ["packages"]
 mypy_path = "packages/otter_ai/src"
 explicit_package_bases = true
+plugins = ["pydantic.mypy"]
 
 # ---------------------------------------------------------------------------
 # Pytest
