@@ -1,9 +1,17 @@
-"""Otter AI — LLM context data model.
+"""Otter AI — LLM context data model and generic stream runtime.
 
-This package provides a Pydantic v2 model for representing LLM conversation
-context (``Context``, messages, content blocks, tools, usage) and the streaming
-events used to build it. It is data-only: no LLMs, providers, APIs, transports,
-or ``stream()`` dispatch.
+This package provides:
+
+* a Pydantic v2 model for representing LLM conversation context (``Context``,
+  messages, content blocks, tools, usage) and the streaming events used to
+  build it; and
+* a provider-agnostic async stream runtime (``Stream`` / ``StreamWriter`` /
+  ``create_stream``) plus the typed message-stream aliases a provider package
+  built on top will import.
+
+It defines **no LLMs, providers, APIs, transports, API registry, or
+``stream()`` dispatch** — only the data model, the event protocol, and the
+generic stream runtime.
 """
 
 from __future__ import annotations
@@ -38,6 +46,7 @@ from otter_ai.events import (
     AssistantToolCallStartEvent,
     ContextItemEvent,
     EventErrorReason,
+    MessageEvent,
     ToolResultDoneEvent,
     ToolResultErrorEvent,
     ToolResultMessageEvent,
@@ -63,6 +72,19 @@ from otter_ai.normalize import (
     drop_unreplayable_assistant_turns,
     fill_missing_tool_results,
     normalize_messages,
+)
+from otter_ai.stream import (
+    AssistantMessageStream,
+    AssistantMessageWriter,
+    ContextItemStream,
+    ContextItemWriter,
+    MessageEventStream,
+    MessageEventWriter,
+    Stream,
+    StreamWriter,
+    UserMessageStream,
+    UserMessageWriter,
+    create_stream,
 )
 from otter_ai.tools import Tool, tool_from_pydantic
 from otter_ai.types import Api, Provider, StopReason
@@ -100,6 +122,7 @@ __all__ = [
     "AssistantToolCallStartEvent",
     "ContextItemEvent",
     "EventErrorReason",
+    "MessageEvent",
     "ToolResultDoneEvent",
     "ToolResultErrorEvent",
     "ToolResultMessageEvent",
@@ -135,4 +158,16 @@ __all__ = [
     "drop_unreplayable_assistant_turns",
     "fill_missing_tool_results",
     "normalize_messages",
+    # stream runtime + aliases
+    "Stream",
+    "StreamWriter",
+    "create_stream",
+    "AssistantMessageStream",
+    "UserMessageStream",
+    "MessageEventStream",
+    "ContextItemStream",
+    "AssistantMessageWriter",
+    "UserMessageWriter",
+    "MessageEventWriter",
+    "ContextItemWriter",
 ]

@@ -318,6 +318,15 @@ UserMessageEvent = Annotated[
     Field(discriminator="type"),
 ]
 
+#: Plain union of assistant and user message events (excludes tool results).
+#
+# Not a discriminated union: the two families share ``type`` values
+# (``start``/``text_*``/``done``/``error``) and are distinguished by ``role``.
+# It routes deterministically because every leaf carries strict ``role``/
+# ``type`` Literals together with ``extra="forbid"``. (Same rationale as
+# :data:`ContextItemEvent`.)
+MessageEvent = AssistantMessageEvent | UserMessageEvent
+
 
 # --------------------------------------------------------------------------- #
 # Tool-result events
