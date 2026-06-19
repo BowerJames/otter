@@ -79,7 +79,7 @@ from otter_ai import Context, UserMessage, normalize_messages
 
 context = Context(
     system_prompt="You are helpful.",
-    messages=[UserMessage(role="user", content="Hi!")],
+    messages=[UserMessage(role="user", content="Hi!", timestamp=0)],
 )
 
 # A Context round-trips through plain JSON.
