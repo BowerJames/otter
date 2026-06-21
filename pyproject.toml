@@ -30,7 +30,7 @@ known-first-party = ["otter_ai", "otter_ai_chat_completions"]
 python_version = "3.12"
 strict = true
 files = ["packages"]
-mypy_path = ["packages/otter_ai/src", "packages/otter_ai_chat_completions/src"]
+mypy_path = ["packages/otter_ai/src", "packages/otter_ai_chat_completions/src", "packages/otter_ai_chat_completions/tests"]
 explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 

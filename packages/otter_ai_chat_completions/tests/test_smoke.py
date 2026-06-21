@@ -1,13 +1,11 @@
-"""Smoke tests: imports, options defaults, and seam placeholder behaviour."""
+"""Smoke tests: imports, options defaults, and seam contract."""
 
 from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 import otter_ai_chat_completions as pkg
-from otter_ai import Context, UserMessage
+from otter_ai import Context, Stream, UserMessage
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsHooks,
@@ -75,11 +73,20 @@ def test_options_defaults_are_independent() -> None:
     assert not b.abort_signal.is_set()
 
 
-def test_seam_is_callable_and_not_implemented() -> None:
+async def test_seam_returns_stream_synchronously() -> None:
+    # The seam is synchronous: it returns an ``AssistantMessageStream`` (a
+    # ``Stream``) without raising, and schedules its producer via
+    # ``asyncio.create_task``. With no API key the producer will emit an error
+    # event — but the synchronous return contract is what we pin here.
     options = _options()
     context = Context(
         system_prompt="hi",
         messages=[UserMessage(role="user", content="hello", timestamp=0)],
     )
-    with pytest.raises(NotImplementedError):
-        create_chat_completions_assistant_message_stream(options, context)
+    stream = create_chat_completions_assistant_message_stream(options, context)
+    assert isinstance(stream, Stream)
+    # A producer task was scheduled and is tracked. Drain it so the test does
+    # not leak the task (and to assert it completes rather than hanging).
+    await stream.aclose()
+    # Let the scheduled producer reach its error path.
+    await asyncio.sleep(0)

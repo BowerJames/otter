@@ -22,12 +22,17 @@ from otter_ai_chat_completions.hooks import (
     Payload,
 )
 from otter_ai_chat_completions.models import (
+    CHAT_TEMPLATE_THINKING_EFFORT,
+    CHAT_TEMPLATE_THINKING_ENABLED,
     ChatCompletionsApi,
     ChatCompletionsCompat,
     ChatCompletionsCost,
     ChatCompletionsModel,
     ChatCompletionsReasoningEffort,
     ChatCompletionsThinkingLevelKey,
+    ChatTemplateKwargValue,
+    ChatTemplateKwargVar,
+    ChatTemplateKwargVarName,
 )
 from otter_ai_chat_completions.options import ChatCompletionsModelOptions
 from otter_ai_chat_completions.stream import (
@@ -46,6 +51,11 @@ __all__ = [
     "ChatCompletionsModel",
     "ChatCompletionsReasoningEffort",
     "ChatCompletionsThinkingLevelKey",
+    "ChatTemplateKwargValue",
+    "ChatTemplateKwargVar",
+    "ChatTemplateKwargVarName",
+    "CHAT_TEMPLATE_THINKING_ENABLED",
+    "CHAT_TEMPLATE_THINKING_EFFORT",
     # hooks
     "ChatCompletionsHooks",
     "OnPayloadEvent",
