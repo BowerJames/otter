@@ -33,6 +33,8 @@ pure-JSON-serializable so a context can be persisted, transferred, and replayed.
   or a Pydantic `BaseModel` subclass.
 - [`Usage`](./src/otter_ai/usage.py) / [`diagnostics.py`](./src/otter_ai/diagnostics.py)
   for per-turn accounting and failure records.
+- [`hook.py`](./src/otter_ai/hook.py) — the generic async
+  `Hook[TEvent, TResponse]` alias provider packages build hook types on top of.
 
 `AssistantMessage` carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,

@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "otter-ai",
+    "otter-ai-chat-completions",
 ]
 
 [manifest.dependency-groups]
@@ -208,6 +209,20 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2" }]
+
+[[package]]
+name = "otter-ai-chat-completions"
+source = { editable = "packages/otter_ai_chat_completions" }
+dependencies = [
+    { name = "otter-ai" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "otter-ai", editable = "packages/otter_ai" },
+    { name = "pydantic", specifier = ">=2" },
+]
 
 [[package]]
 name = "packaging"

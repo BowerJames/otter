@@ -172,21 +172,25 @@ UserMessageWriter = StreamWriter[UserMessageEvent]
 MessageEventWriter = StreamWriter[MessageEvent]
 ContextItemWriter = StreamWriter[ContextItemEvent]
 
-#: Function that builds an :data:`AssistantMessageStream` for a model.
+#: Function that builds an :data:`AssistantMessageStream`.
 #:
-#: Producer-side seam between a provider package and the dispatch layer
-#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai). A provider registers
-#: a function of this shape keyed by ``model.api``; dispatch looks it up and
-#: invokes it with ``(model, context)``.
+#: Producer-side seam between a provider package and a future dispatch layer
+#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai, with the model and
+#: options slots collapsed into one: ``TOptions``).
 #:
-#: Per-provider stream options (temperature, max tokens, abort signal, API key,
-#: …) are intentionally **not** part of this typed seam. They are passed
-#: out-of-band by dispatch (e.g. via a closure or registry metadata), keeping
-#: the seam to the two universally-present arguments: the model — the dispatch
-#: key — and the context. This is a deliberate departure from pi-ai's
-#: ``StreamFunction<TApi, TOptions>``, which types options at the seam.
-#: ``TModel`` is left open so a provider package can specialize it to its own
-#: ``Model`` type.
-type AssistantMessageStreamFn[TModel] = Callable[
-    [TModel, Context], AssistantMessageStream
+#: The first argument carries the provider's per-call configuration. A future
+#: dispatch layer would key on the model's ``api`` (read off the configuration)
+#: and invoke the registered function with ``(options, context)``. Otter
+#: defines no dispatch today — this alias is the contract a provider package
+#: and a dispatch layer will agree on.
+#:
+#: ``TOptions`` is open because the realistic shape is a provider-specific
+#: **options bundle** — pure-data config (model id, temperature, max tokens,
+#: API key, …) bundled with runtime handles (hooks, abort signals) that cannot
+#: travel out-of-band (a closure is per-call and defeats registry-keyed lookup;
+#: registry metadata is per-registration, not per-call). A provider that needs
+#: nothing beyond the model may specialize ``TOptions`` to a bare ``Model``
+#: type, but the options-bundle form is the intended pattern.
+type AssistantMessageStreamFn[TOptions] = Callable[
+    [TOptions, Context], AssistantMessageStream
 ]

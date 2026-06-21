@@ -62,6 +62,7 @@ from otter_ai.events import (
     UserTextEndEvent,
     UserTextStartEvent,
 )
+from otter_ai.hook import Hook
 from otter_ai.messages import (
     AssistantMessage,
     Message,
@@ -100,6 +101,8 @@ __all__ = [
     "Api",
     "Provider",
     "StopReason",
+    # hooks
+    "Hook",
     # usage
     "Usage",
     "UsageCost",
