@@ -274,7 +274,7 @@ def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
         Context,
     )
 
-    def make_stream(model: object, context: Context) -> AssistantMessageStream:
+    def make_stream(options: object, context: Context) -> AssistantMessageStream:
         stream: AssistantMessageStream
         _writer: AssistantMessageWriter
         stream, _writer = create_stream()
