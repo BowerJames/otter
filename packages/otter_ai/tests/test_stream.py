@@ -260,3 +260,25 @@ def test_type_aliases_are_stream_specializations() -> None:
     c_stream, c_writer = create_stream()
     assert isinstance(c_stream, Stream)
     assert isinstance(c_writer, StreamWriter)
+
+
+def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
+    """``AssistantMessageStreamFn`` is the producer-side seam type.
+
+    mypy is the real enforcer; this just checks the alias is importable and a
+    trivially-conforming two-argument function binds under an annotation
+    referencing it.
+    """
+    from otter_ai import (
+        AssistantMessageStreamFn,
+        Context,
+    )
+
+    def make_stream(model: object, context: Context) -> AssistantMessageStream:
+        stream: AssistantMessageStream
+        _writer: AssistantMessageWriter
+        stream, _writer = create_stream()
+        return stream
+
+    fn: AssistantMessageStreamFn[object] = make_stream
+    assert callable(fn)
