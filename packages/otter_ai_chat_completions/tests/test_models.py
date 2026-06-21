@@ -9,6 +9,7 @@ from otter_ai_chat_completions import (
     ChatCompletionsCompat,
     ChatCompletionsCost,
     ChatCompletionsModel,
+    ChatTemplateKwargVar,
 )
 
 
@@ -100,7 +101,7 @@ def test_compat_rejects_unknown_field() -> None:
 
 
 def test_compat_round_trips_json() -> None:
-    # Fully populate all 17 mixed-type optional fields so serialization is
+    # Fully populate all 18 mixed-type optional fields so serialization is
     # exercised in one place (compat is otherwise only tested via the model).
     compat = ChatCompletionsCompat(
         supports_store=True,
@@ -112,7 +113,12 @@ def test_compat_round_trips_json() -> None:
         requires_assistant_after_tool_result=False,
         requires_thinking_as_text=True,
         requires_reasoning_content_on_assistant_messages=True,
-        thinking_format="deepseek",
+        thinking_format="chat-template",
+        chat_template_kwargs={
+            "enable_thinking": ChatTemplateKwargVar(var="thinking.enabled"),
+            "effort": ChatTemplateKwargVar(var="thinking.effort", omit_when_off=True),
+            "static": "value",
+        },
         openrouter_routing={"only": ["anthropic"]},
         vercel_gateway_routing={"order": ["openai"]},
         zai_tool_stream=True,
@@ -123,3 +129,27 @@ def test_compat_round_trips_json() -> None:
     )
     restored = ChatCompletionsCompat.model_validate_json(compat.model_dump_json())
     assert restored == compat
+
+
+def test_compat_has_eighteen_fields() -> None:
+    # Pin the public compat field set. ``chat_template_kwargs`` was added in #13
+    # bringing the count from 17 to 18.
+    assert len(ChatCompletionsCompat.model_fields) == 18
+
+
+def test_chat_template_kwarg_var_round_trips() -> None:
+    var = ChatTemplateKwargVar(var="thinking.effort", omit_when_off=True)
+    restored = ChatTemplateKwargVar.model_validate_json(var.model_dump_json())
+    assert restored == var
+
+
+def test_chat_template_kwarg_var_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError):
+        ChatTemplateKwargVar(var="thinking.effort", omitWhenOff=True)  # type: ignore[call-arg]
+
+
+def test_thinking_format_includes_chat_template() -> None:
+    # The generic ``chat-template`` format was added in #13 alongside
+    # ``chat_template_kwargs``.
+    field = ChatCompletionsCompat.model_fields["thinking_format"]
+    assert "chat-template" in str(field.annotation)

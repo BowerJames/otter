@@ -34,6 +34,35 @@ ChatCompletionsThinkingLevelKey = Literal[
     "off", "minimal", "low", "medium", "high", "xhigh"
 ]
 
+#: ``var`` names for :class:`ChatTemplateKwargVar`. Mirrors pi-ai's
+#: ``ChatTemplateKwargValue.$var``. The runtime constants below are kept for
+#: comparison code; the :class:`ChatTemplateKwargVarName` literal inlines the
+#: string values because mypy does not accept a variable inside ``Literal[...]``.
+CHAT_TEMPLATE_THINKING_ENABLED = "thinking.enabled"
+CHAT_TEMPLATE_THINKING_EFFORT = "thinking.effort"
+ChatTemplateKwargVarName = Literal["thinking.enabled", "thinking.effort"]
+
+
+class ChatTemplateKwargVar(BaseModel):
+    """A ``pi``-controlled ``chat_template_kwargs`` value.
+
+    Resolved at request-build time from the call's ``reasoning_effort``:
+
+    * ``var == "thinking.enabled"`` → ``bool`` (``reasoning_effort`` is set).
+    * ``var == "thinking.effort"`` → the mapped (``thinking_level_map``) or raw
+      ``reasoning_effort`` string. When ``omit_when_off`` is ``True`` and no
+      ``reasoning_effort`` is set, the whole entry is omitted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    var: ChatTemplateKwargVarName
+    omit_when_off: bool | None = None
+
+
+#: A ``chat_template_kwargs`` value: a JSON scalar or a resolved variable.
+ChatTemplateKwargValue = str | int | float | bool | None | ChatTemplateKwargVar
+
 
 class ChatCompletionsCost(BaseModel):
     """Pricing rates in USD per million tokens.
@@ -81,11 +110,17 @@ class ChatCompletionsCompat(BaseModel):
             "zai",
             "qwen",
             "qwen-chat-template",
+            "chat-template",
             "string-thinking",
             "ant-ling",
         ]
         | None
     ) = None
+    #: Provider-defined Jinja template variables emitted as
+    #: ``chat_template_kwargs`` when ``thinking_format == "chat-template"``.
+    #: Values are scalars or a :class:`ChatTemplateKwargVar` resolved from the
+    #: call's ``reasoning_effort``. Defaults to ``{}`` when unset.
+    chat_template_kwargs: dict[str, ChatTemplateKwargValue] | None = None
     openrouter_routing: dict[str, Any] | None = None
     vercel_gateway_routing: dict[str, Any] | None = None
     zai_tool_stream: bool | None = None
