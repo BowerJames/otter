@@ -75,6 +75,7 @@ from otter_ai.normalize import (
 )
 from otter_ai.stream import (
     AssistantMessageStream,
+    AssistantMessageStreamFn,
     AssistantMessageWriter,
     ContextItemStream,
     ContextItemWriter,
@@ -163,6 +164,7 @@ __all__ = [
     "StreamWriter",
     "create_stream",
     "AssistantMessageStream",
+    "AssistantMessageStreamFn",
     "UserMessageStream",
     "MessageEventStream",
     "ContextItemStream",

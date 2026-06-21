@@ -39,8 +39,10 @@ unchanged.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from typing import Self
 
+from otter_ai.context import Context
 from otter_ai.events import (
     AssistantMessageEvent,
     ContextItemEvent,
@@ -169,3 +171,22 @@ AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
 UserMessageWriter = StreamWriter[UserMessageEvent]
 MessageEventWriter = StreamWriter[MessageEvent]
 ContextItemWriter = StreamWriter[ContextItemEvent]
+
+#: Function that builds an :data:`AssistantMessageStream` for a model.
+#:
+#: Producer-side seam between a provider package and the dispatch layer
+#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai). A provider registers
+#: a function of this shape keyed by ``model.api``; dispatch looks it up and
+#: invokes it with ``(model, context)``.
+#:
+#: Per-provider stream options (temperature, max tokens, abort signal, API key,
+#: …) are intentionally **not** part of this typed seam. They are passed
+#: out-of-band by dispatch (e.g. via a closure or registry metadata), keeping
+#: the seam to the two universally-present arguments: the model — the dispatch
+#: key — and the context. This is a deliberate departure from pi-ai's
+#: ``StreamFunction<TApi, TOptions>``, which types options at the seam.
+#: ``TModel`` is left open so a provider package can specialize it to its own
+#: ``Model`` type.
+type AssistantMessageStreamFn[TModel] = Callable[
+    [TModel, Context], AssistantMessageStream
+]
