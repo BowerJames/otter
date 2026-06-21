@@ -172,6 +172,28 @@ class TestOverrides:
         assert compat.thinking_format == "zai"
         assert compat.supports_developer_role is False
 
+    def test_compat_override_applied_when_catalog_has_no_compat(self) -> None:
+        # Regression: OpenAI models have catalog compat=None. A caller compat
+        # override must still be applied (must not be silently dropped).
+        from otter_ai_chat_completions import ChatCompletionsCompat
+
+        options = ModelProviderOptions(
+            model=ModelProviderConfig(
+                model="gpt-4o",
+                provider="openai",
+                api_key="sk",
+                thinking_level="off",
+                overrides=ModelProviderOverrides(
+                    compat=ChatCompletionsCompat(supports_store=True)
+                ),
+            )
+        )
+        compat = _resolve_options(options).model.compat
+        assert compat is not None
+        assert compat.supports_store is True
+        # Non-overridden fields fall back to None (standard defaults).
+        assert compat.thinking_format is None
+
     def test_overrides_do_not_carry_api_key(self) -> None:
         # api_key lives on ModelProviderConfig, not overrides (compile-time check
         # via the model — assert the field is genuinely absent).

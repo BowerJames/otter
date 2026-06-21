@@ -162,7 +162,10 @@ def _merge_compat(
     base_dict = base.model_dump() if base is not None else {}
     override_dict = override.model_dump(exclude_defaults=False)
     merged: dict[str, object] = {}
-    for field in base_dict:
+    # Iterate over the union of both fields: when ``base`` is ``None`` (e.g.
+    # OpenAI models, which use standard defaults) ``base_dict`` is empty, so a
+    # plain ``for field in base_dict`` would silently drop every override.
+    for field in set(base_dict) | set(override_dict):
         override_value = override_dict.get(field)
         if override_value is not None:
             merged[field] = override_value
