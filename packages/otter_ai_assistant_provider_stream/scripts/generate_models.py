@@ -148,11 +148,11 @@ def parse_models_dev(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _render_value(value: Any, indent: str) -> str:
-    """Render a JSON value as a Python literal with tab indentation."""
+    """Render a JSON value as a Python literal with 4-space indentation."""
     if isinstance(value, dict):
         if not value:
             return "{}"
-        inner = indent + "\t"
+        inner = indent + "    "
         items = [
             f"{inner}{repr(key)}: {_render_value(val, inner)}"
             for key, val in value.items()
@@ -161,7 +161,7 @@ def _render_value(value: Any, indent: str) -> str:
     if isinstance(value, list):
         if not value:
             return "[]"
-        inner = indent + "\t"
+        inner = indent + "    "
         items = [_render_value(item, inner) for item in value]
         return "[\n" + ",\n".join(items) + "\n" + indent + "]"
     # Scalars: repr gives valid Python (True/False/None/str/int/float).

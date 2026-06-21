@@ -14,6 +14,7 @@ from typing import Any
 from otter_ai import AssistantMessageStreamFn
 from otter_ai_assistant_provider_stream.api_registry import (
     clear_api_fns,
+    get_api_stream_fn,
     register_api_stream_fn,
 )
 from otter_ai_assistant_provider_stream.catalog import (
@@ -54,9 +55,6 @@ def register_built_ins() -> None:
 
 def get_default_api_stream_fn() -> AssistantMessageStreamFn[Any] | None:
     """The stream fn currently registered under :data:`DEFAULT_API`."""
-    # Imported here to avoid a circular import at module load.
-    from otter_ai_assistant_provider_stream.api_registry import get_api_stream_fn
-
     return get_api_stream_fn(DEFAULT_API)
 
 
