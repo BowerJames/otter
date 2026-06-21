@@ -1,0 +1,60 @@
+"""otter-ai-chat-completions — Chat Completions wire-format contract package.
+
+Defines the data model (:class:`ChatCompletionsModel`, cost, compat), the
+runtime options bundle (model + hooks + abort signal), and the seam
+:func:`create_chat_completions_assistant_message_stream` — a concrete
+implementation of :data:`otter_ai.AssistantMessageStreamFn` for the Chat
+Completions wire format.
+
+Scope: this package owns the Chat Completions wire-format contract only.
+Provider-specific configuration (compat flags, static headers, env-key
+resolution, model catalog) is the consumer's responsibility.
+"""
+
+from __future__ import annotations
+
+from otter_ai_chat_completions.hooks import (
+    ChatCompletionsHooks,
+    OnPayloadEvent,
+    OnPayloadHook,
+    OnResponseEvent,
+    OnResponseHook,
+    Payload,
+)
+from otter_ai_chat_completions.models import (
+    ChatCompletionsApi,
+    ChatCompletionsCompat,
+    ChatCompletionsCost,
+    ChatCompletionsModel,
+    ChatCompletionsReasoningEffort,
+    ChatCompletionsThinkingLevelKey,
+)
+from otter_ai_chat_completions.options import ChatCompletionsModelOptions
+from otter_ai_chat_completions.stream import (
+    create_chat_completions_assistant_message_stream,
+)
+
+__version__ = "0.1.0"
+
+__all__ = [
+    # version
+    "__version__",
+    # data model
+    "ChatCompletionsModel",
+    "ChatCompletionsCost",
+    "ChatCompletionsCompat",
+    "ChatCompletionsApi",
+    "ChatCompletionsReasoningEffort",
+    "ChatCompletionsThinkingLevelKey",
+    # hooks
+    "ChatCompletionsHooks",
+    "OnPayloadEvent",
+    "OnResponseEvent",
+    "OnPayloadHook",
+    "OnResponseHook",
+    "Payload",
+    # options bundle
+    "ChatCompletionsModelOptions",
+    # seam
+    "create_chat_completions_assistant_message_stream",
+]

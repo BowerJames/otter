@@ -21,7 +21,7 @@ extend-exclude = [".venv", "build", "dist"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["otter_ai"]
+known-first-party = ["otter_ai", "otter_ai_chat_completions"]
 
 # ---------------------------------------------------------------------------
 # Mypy: type checking
@@ -30,7 +30,7 @@ known-first-party = ["otter_ai"]
 python_version = "3.12"
 strict = true
 files = ["packages"]
-mypy_path = "packages/otter_ai/src"
+mypy_path = ["packages/otter_ai/src", "packages/otter_ai_chat_completions/src"]
 explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 
