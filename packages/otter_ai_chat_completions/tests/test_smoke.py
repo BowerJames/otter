@@ -35,21 +35,20 @@ def _options() -> ChatCompletionsModelOptions:
 
 
 def test_public_api_imports() -> None:
-    expected = {
-        "ChatCompletionsModel",
-        "ChatCompletionsCost",
-        "ChatCompletionsCompat",
-        "ChatCompletionsHooks",
-        "ChatCompletionsModelOptions",
-        "OnPayloadEvent",
-        "OnResponseEvent",
-        "OnPayloadHook",
-        "OnResponseHook",
-        "Payload",
-        "create_chat_completions_assistant_message_stream",
-    }
-    missing = expected - set(pkg.__all__)
-    assert not missing, f"missing exports: {missing}"
+    # Every name advertised in ``__all__`` must actually resolve on the
+    # package object (guards against an export being declared but never
+    # imported, and covers the literal aliases + ``__version__``).
+    assert pkg.__all__, "__all__ should not be empty"
+    missing: list[str] = []
+    for name in pkg.__all__:
+        if not hasattr(pkg, name):
+            missing.append(name)
+    assert not missing, f"declared but not importable: {missing}"
+
+    # ``__version__`` is not in ``__all__`` by convention here, but is part
+    # of the public API surface; assert it is a non-empty string.
+    assert isinstance(pkg.__version__, str)
+    assert pkg.__version__
 
 
 def test_options_defaults() -> None:

@@ -73,3 +73,27 @@ def test_compat_all_none_constructs() -> None:
 
 def test_model_without_compat_constructs() -> None:
     assert _sample_model().compat is None
+
+
+def test_cost_round_trips_json() -> None:
+    cost = ChatCompletionsCost(input=2.5, output=10.0, cache_read=1.25, cache_write=0.0)
+    restored = ChatCompletionsCost.model_validate_json(cost.model_dump_json())
+    assert restored == cost
+
+
+def test_cost_rejects_unknown_field() -> None:
+    # ``extra="forbid"`` must reject typos on the cost submodel too.
+    with pytest.raises(ValidationError):
+        ChatCompletionsCost(
+            input=2.5,
+            output=10.0,
+            cache_read=1.25,
+            cache_write=0.0,
+            currency="usd",  # type: ignore[call-arg]
+        )
+
+
+def test_compat_rejects_unknown_field() -> None:
+    # ``extra="forbid"`` must reject typos on the compat submodel too.
+    with pytest.raises(ValidationError):
+        ChatCompletionsCompat(thinkingFormat="openai")  # type: ignore[call-arg]
