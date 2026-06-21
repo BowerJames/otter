@@ -349,6 +349,39 @@ def test_tool_result_images_reinjected_as_user_message_for_vision_model() -> Non
     )
 
 
+def test_requires_assistant_after_tool_result_plus_image_reinjection() -> None:
+    # Combined interaction: a vision tool result on a provider that also needs
+    # an assistant bridge after tool results. The synthetic assistant must
+    # precede the reinjected image user message.
+    model = make_model(input_modalities=["text", "image"])
+    asst = _asst(
+        content=[ToolCall(type="tool_call", id="c1", name="snap", arguments={})]
+    )
+    result = ToolResultMessage(
+        role="tool_result",
+        tool_call_id="c1",
+        tool_name="snap",
+        content=[ImageContent(type="image", data="AAA", mime_type="image/png")],
+        is_error=False,
+        timestamp=0,
+    )
+    params = convert_messages(
+        model,
+        None,
+        [UserMessage(role="user", content="x", timestamp=0), asst, result],
+        _compat(requires_assistant_after_tool_result=True),
+    )
+    roles = [
+        (p["role"], "image" if isinstance(p.get("content"), list) else "text")
+        for p in params
+    ]
+    assert ("tool", "text") in roles
+    tool_idx = roles.index(("tool", "text"))
+    # Bridge assistant then the reinjected image user message follow the tool.
+    assert roles[tool_idx + 1] == ("assistant", "text")
+    assert roles[tool_idx + 2] == ("user", "image")
+
+
 # --------------------------------------------------------------------------- #
 # convert_tools + has_tool_history
 # --------------------------------------------------------------------------- #

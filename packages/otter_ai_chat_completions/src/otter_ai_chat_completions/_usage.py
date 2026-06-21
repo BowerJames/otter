@@ -26,8 +26,8 @@ def calculate_cost(model: ChatCompletionsModel, usage: Usage) -> UsageCost:
     their own rates. All rates are per-million tokens.
     """
     rate = model.cost
-    long_write = usage.cache_write_1h or 0
-    short_write = usage.cache_write - long_write
+    long_write = max(0, usage.cache_write_1h or 0)
+    short_write = max(0, usage.cache_write - long_write)
     cost = UsageCost(
         input=(rate.input / 1_000_000) * usage.input,
         output=(rate.output / 1_000_000) * usage.output,

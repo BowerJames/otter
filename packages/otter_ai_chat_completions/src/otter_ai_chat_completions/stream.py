@@ -92,7 +92,10 @@ _REASONING_FIELDS = ("reasoning_content", "reasoning", "reasoning_text")
 
 #: Strong references to in-flight producer tasks. asyncio will cancel a task
 #: with no live reference before it completes; we hold one until the producer
-#: finishes. (See the develop-mode plan for :issue:`13`.)
+#: finishes. (See the develop-mode plan for :issue:`13`.) The set is valid
+#: within a single event loop: each ``create_task`` call binds to the
+#: currently-running loop, so a process that runs multiple loops (e.g. tests)
+#: must drain the set across the loop boundary.
 _producer_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -293,7 +296,11 @@ def _backoff_seconds(attempt: int, cap: float) -> float:
 
 
 async def _sleep_or_abort(options: ChatCompletionsModelOptions, seconds: float) -> None:
-    """Sleep, but wake early if the abort signal fires (raising to abort)."""
+    """Sleep, but raise immediately if the abort signal fires during the delay.
+
+    A retry backoff interrupted by an abort must surface the abort on the spot
+    rather than continuing to the next send attempt.
+    """
     if seconds <= 0:
         return
     try:
@@ -302,6 +309,8 @@ async def _sleep_or_abort(options: ChatCompletionsModelOptions, seconds: float) 
         )
     except TimeoutError:
         return
+    # The inner task completed before the timeout — the abort signal fired.
+    raise RuntimeError("Request was aborted")
 
 
 async def _wait_for_abort(options: ChatCompletionsModelOptions) -> None:

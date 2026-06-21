@@ -222,6 +222,51 @@ async def test_tool_call_stream_finalizes_parsed_arguments(
     )
 
 
+async def test_multiple_concurrent_tool_calls_tracked_by_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Interleaved deltas for index 0 and index 1 must each route to the right
+    # placeholder ToolCall and finalize independently.
+    chunks = [
+        _delta_chunk(
+            {"tool_calls": [{"index": 0, "id": "call_a", "function": {"name": "add"}}]}
+        ),
+        _delta_chunk(
+            {"tool_calls": [{"index": 1, "id": "call_b", "function": {"name": "mul"}}]}
+        ),
+        _delta_chunk(
+            {"tool_calls": [{"index": 0, "function": {"arguments": '{"x": 1}'}}]}
+        ),
+        _delta_chunk(
+            {"tool_calls": [{"index": 1, "function": {"arguments": '{"y": 2}'}}]}
+        ),
+        _delta_chunk({}, finish_reason="tool_calls"),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return sse_response(chunks)
+
+    install_fake_transport(monkeypatch, handler)
+    stream = create_chat_completions_assistant_message_stream(
+        make_options(), simple_context()
+    )
+    events = await collect(stream)
+
+    ends = [e for e in events if isinstance(e, AssistantToolCallEndEvent)]
+    assert len(ends) == 2
+    finalized = {end.tool_call.id: end.tool_call for end in ends}
+    assert finalized["call_a"] == ToolCall(
+        type="tool_call", id="call_a", name="add", arguments={"x": 1}
+    )
+    assert finalized["call_b"] == ToolCall(
+        type="tool_call", id="call_b", name="mul", arguments={"y": 2}
+    )
+    # The done message carries both finalized calls in creation order.
+    done = next(e for e in events if isinstance(e, AssistantDoneEvent))
+    tool_calls = [b for b in done.message.content if isinstance(b, ToolCall)]
+    assert [tc.id for tc in tool_calls] == ["call_a", "call_b"]
+
+
 # --------------------------------------------------------------------------- #
 # Usage + finish_reason mapping
 # --------------------------------------------------------------------------- #
