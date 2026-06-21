@@ -60,6 +60,21 @@ def test_options_defaults() -> None:
     assert not options.abort_signal.is_set()
 
 
+def test_options_defaults_are_independent() -> None:
+    # The ``default_factory`` pattern must give each construction fresh
+    # runtime handles — a shared-mutable default would alias hooks/abort_signal
+    # across instances. Pin that contract.
+    a = _options()
+    b = _options()
+    assert a.hooks is not b.hooks
+    assert a.abort_signal is not b.abort_signal
+
+    # Mutating one must not affect the other.
+    a.abort_signal.set()
+    assert a.abort_signal.is_set()
+    assert not b.abort_signal.is_set()
+
+
 def test_seam_is_callable_and_not_implemented() -> None:
     options = _options()
     context = Context(

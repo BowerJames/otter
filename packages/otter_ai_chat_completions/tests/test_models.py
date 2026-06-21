@@ -97,3 +97,29 @@ def test_compat_rejects_unknown_field() -> None:
     # ``extra="forbid"`` must reject typos on the compat submodel too.
     with pytest.raises(ValidationError):
         ChatCompletionsCompat(thinkingFormat="openai")  # type: ignore[call-arg]
+
+
+def test_compat_round_trips_json() -> None:
+    # Fully populate all 17 mixed-type optional fields so serialization is
+    # exercised in one place (compat is otherwise only tested via the model).
+    compat = ChatCompletionsCompat(
+        supports_store=True,
+        supports_developer_role=False,
+        supports_reasoning_effort=True,
+        supports_usage_in_streaming=False,
+        max_tokens_field="max_tokens",
+        requires_tool_result_name=True,
+        requires_assistant_after_tool_result=False,
+        requires_thinking_as_text=True,
+        requires_reasoning_content_on_assistant_messages=True,
+        thinking_format="deepseek",
+        openrouter_routing={"only": ["anthropic"]},
+        vercel_gateway_routing={"order": ["openai"]},
+        zai_tool_stream=True,
+        supports_strict_mode=False,
+        cache_control_format="anthropic",
+        send_session_affinity_headers=True,
+        supports_long_cache_retention=False,
+    )
+    restored = ChatCompletionsCompat.model_validate_json(compat.model_dump_json())
+    assert restored == compat
