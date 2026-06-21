@@ -45,8 +45,8 @@ def test_public_api_imports() -> None:
             missing.append(name)
     assert not missing, f"declared but not importable: {missing}"
 
-    # ``__version__`` is not in ``__all__`` by convention here, but is part
-    # of the public API surface; assert it is a non-empty string.
+    # ``__version__`` is the first entry of ``__all__``; assert it is a
+    # non-empty string (the loop above only checks resolvability, not type).
     assert isinstance(pkg.__version__, str)
     assert pkg.__version__
 

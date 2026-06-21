@@ -57,6 +57,8 @@ context = Context(
 )
 
 stream = create_chat_completions_assistant_message_stream(options, context)
+# NOTE: in this version the seam body raises NotImplementedError; the
+# transport + translation land in a follow-on PR. See "Status" above.
 
 
 async def consume() -> None:
