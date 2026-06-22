@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from otter_ai import (
+from otter_ai_core import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
@@ -187,7 +187,7 @@ def test_assistant_thinking_and_tool_call_blocks_round_trip() -> None:
         type="tool_call_end",
         content_index=1,
         tool_call=ToolCall(type="tool_call", id="t1", name="get_time", arguments={}),
-        partial=__import__("otter_ai").AssistantMessage.model_validate(rich),
+        partial=__import__("otter_ai_core").AssistantMessage.model_validate(rich),
     )
     restored = _ASSISTANT_ADAPTER.validate_json(ev.model_dump_json())
     assert isinstance(restored, AssistantToolCallEndEvent)
@@ -469,13 +469,13 @@ def test_user_and_tool_result_done_have_no_reason_field() -> None:
 
 
 def test_assistant_error_round_trip_through_union() -> None:
-    import otter_ai
+    import otter_ai_core
 
-    err = otter_ai.AssistantErrorEvent(
+    err = otter_ai_core.AssistantErrorEvent(
         role="assistant",
         type="error",
         reason="aborted",
-        error=otter_ai.AssistantMessage.model_validate(
+        error=otter_ai_core.AssistantMessage.model_validate(
             _assistant_partial(stop_reason="aborted", error_message="user cancel")
         ),
     )
@@ -515,21 +515,21 @@ def test_tool_result_done_covers_is_error() -> None:
 def test_event_roles_match_message_roles() -> None:
     from pydantic import BaseModel
 
-    import otter_ai
+    import otter_ai_core
 
     # The Literal in each event's `role` must equal the corresponding
     # Message's `role` Literal. Typed against BaseModel so `.model_fields`
     # (a ClassVar) resolves cleanly.
     cases: list[tuple[type[BaseModel], type[BaseModel]]] = [
-        (AssistantStartEvent, otter_ai.AssistantMessage),
-        (UserStartEvent, otter_ai.UserMessage),
-        (ToolResultStartEvent, otter_ai.ToolResultMessage),
-        (AssistantDoneEvent, otter_ai.AssistantMessage),
-        (UserDoneEvent, otter_ai.UserMessage),
-        (ToolResultDoneEvent, otter_ai.ToolResultMessage),
-        (AssistantErrorEvent, otter_ai.AssistantMessage),
-        (UserErrorEvent, otter_ai.UserMessage),
-        (ToolResultErrorEvent, otter_ai.ToolResultMessage),
+        (AssistantStartEvent, otter_ai_core.AssistantMessage),
+        (UserStartEvent, otter_ai_core.UserMessage),
+        (ToolResultStartEvent, otter_ai_core.ToolResultMessage),
+        (AssistantDoneEvent, otter_ai_core.AssistantMessage),
+        (UserDoneEvent, otter_ai_core.UserMessage),
+        (ToolResultDoneEvent, otter_ai_core.ToolResultMessage),
+        (AssistantErrorEvent, otter_ai_core.AssistantMessage),
+        (UserErrorEvent, otter_ai_core.UserMessage),
+        (ToolResultErrorEvent, otter_ai_core.ToolResultMessage),
     ]
     for event_cls, message_cls in cases:
         assert event_cls.model_fields["role"].annotation == (
@@ -543,7 +543,7 @@ def test_context_can_hold_messages_built_from_streamed_done_events() -> None:
         role="assistant",
         type="done",
         reason="tool_use",
-        message=__import__("otter_ai").AssistantMessage.model_validate(
+        message=__import__("otter_ai_core").AssistantMessage.model_validate(
             _assistant_partial(stop_reason="tool_use")
         ),
     ).message

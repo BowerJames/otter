@@ -1,13 +1,13 @@
-"""otter-ai-assistant-provider-stream — provider/dispatch layer for otter-ai.
+"""otter-ai-assistant-provider-stream — provider/dispatch layer for otter-ai-core.
 
-This package adds the dispatch layer :mod:`otter_ai` deliberately omits:
+This package adds the dispatch layer :mod:`otter_ai_core` deliberately omits:
 
 * a built-in model catalog (generated from models.dev, ``openai`` + ``zai``);
 * env-key resolution (explicit > env > raise);
 * thinking-level clamping (port of pi-ai's ``clampThinkingLevel``);
 * three runtime registries (providers, catalog, api stream fns);
 * the seam :func:`create_assistant_message_stream_by_provider`, a concrete
-  value of :data:`otter_ai.AssistantMessageStreamFn`.
+  value of :data:`otter_ai_core.AssistantMessageStreamFn`.
 
 Importing the package auto-registers the built-ins (mirrors pi-ai's
 ``index.ts``, not ``base.ts``): ``openai`` and ``zai`` work immediately.

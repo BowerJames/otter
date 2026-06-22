@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from otter_ai import Hook
+from otter_ai_core import Hook
 
 
 async def _sample_hook(_event: int) -> str:

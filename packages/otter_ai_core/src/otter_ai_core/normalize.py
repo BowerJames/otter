@@ -3,7 +3,7 @@
 These functions prepare a message list for replay to an LLM elsewhere (e.g. in
 a provider package). They are intentionally **model-agnostic** and **opt-in**:
 
-* they are **never** applied automatically at :class:`~otter_ai.context.Context`
+* they are **never** applied automatically at :class:`~otter_ai_core.context.Context`
   construction or via validators;
 * call them explicitly only when you intend to replay the messages to a model.
 
@@ -15,8 +15,8 @@ knowledge and live outside this data-only package.
 
 from __future__ import annotations
 
-from otter_ai.content import TextContent, ToolCall
-from otter_ai.messages import AssistantMessage, Message, ToolResultMessage
+from otter_ai_core.content import TextContent, ToolCall
+from otter_ai_core.messages import AssistantMessage, Message, ToolResultMessage
 
 #: ``stop_reason`` values whose turns are not safe to replay.
 _UNREPLAYABLE_STOP_REASONS = frozenset({"error", "aborted"})
@@ -43,8 +43,8 @@ def drop_unreplayable_assistant_turns(messages: list[Message]) -> list[Message]:
 def fill_missing_tool_results(messages: list[Message]) -> list[Message]:
     """Insert synthetic error tool results for orphaned tool calls.
 
-    For every :class:`~otter_ai.messages.ToolCall` that is not followed by a
-    matching :class:`~otter_ai.messages.ToolResultMessage` before the next
+    For every :class:`~otter_ai_core.messages.ToolCall` that is not followed by a
+    matching :class:`~otter_ai_core.messages.ToolResultMessage` before the next
     assistant/user turn (or the end of the list), a synthetic
     ``tool_result`` is inserted with ``is_error=True`` and text
     ``"No result provided"``. Tool results that already exist are left

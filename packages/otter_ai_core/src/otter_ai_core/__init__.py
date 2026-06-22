@@ -16,7 +16,7 @@ generic stream runtime.
 
 from __future__ import annotations
 
-from otter_ai.content import (
+from otter_ai_core.content import (
     AssistantContent,
     ImageContent,
     TextContent,
@@ -24,12 +24,12 @@ from otter_ai.content import (
     ToolCall,
     UserContent,
 )
-from otter_ai.context import Context
-from otter_ai.diagnostics import (
+from otter_ai_core.context import Context
+from otter_ai_core.diagnostics import (
     AssistantMessageDiagnostic,
     DiagnosticErrorInfo,
 )
-from otter_ai.events import (
+from otter_ai_core.events import (
     AssistantDoneEvent,
     AssistantDoneReason,
     AssistantErrorEvent,
@@ -62,19 +62,19 @@ from otter_ai.events import (
     UserTextEndEvent,
     UserTextStartEvent,
 )
-from otter_ai.hook import Hook
-from otter_ai.messages import (
+from otter_ai_core.hook import Hook
+from otter_ai_core.messages import (
     AssistantMessage,
     Message,
     ToolResultMessage,
     UserMessage,
 )
-from otter_ai.normalize import (
+from otter_ai_core.normalize import (
     drop_unreplayable_assistant_turns,
     fill_missing_tool_results,
     normalize_messages,
 )
-from otter_ai.stream import (
+from otter_ai_core.stream import (
     AssistantMessageStream,
     AssistantMessageStreamFn,
     AssistantMessageWriter,
@@ -88,9 +88,9 @@ from otter_ai.stream import (
     UserMessageWriter,
     create_stream,
 )
-from otter_ai.tools import Tool, tool_from_pydantic
-from otter_ai.types import Api, Provider, StopReason
-from otter_ai.usage import Usage, UsageCost
+from otter_ai_core.tools import Tool, tool_from_pydantic
+from otter_ai_core.types import Api, Provider, StopReason
+from otter_ai_core.usage import Usage, UsageCost
 
 __version__ = "0.1.0"
 

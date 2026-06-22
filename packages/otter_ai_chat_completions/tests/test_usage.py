@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 from _helpers import make_model
 
-from otter_ai import Usage, UsageCost
 from otter_ai_chat_completions import ChatCompletionsCost
 from otter_ai_chat_completions._usage import (
     calculate_cost,
     map_stop_reason,
     parse_chunk_usage,
 )
+from otter_ai_core import Usage, UsageCost
 
 
 def _cost(**kwargs: Any) -> ChatCompletionsCost:

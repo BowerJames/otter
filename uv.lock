@@ -8,9 +8,9 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "otter-ai",
     "otter-ai-assistant-provider-stream",
     "otter-ai-chat-completions",
+    "otter-ai-core",
 ]
 
 [manifest.dependency-groups]
@@ -270,28 +270,18 @@ wheels = [
 ]
 
 [[package]]
-name = "otter-ai"
-source = { editable = "packages/otter_ai" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2" }]
-
-[[package]]
 name = "otter-ai-assistant-provider-stream"
 source = { editable = "packages/otter_ai_assistant_provider_stream" }
 dependencies = [
-    { name = "otter-ai" },
     { name = "otter-ai-chat-completions" },
+    { name = "otter-ai-core" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "otter-ai", editable = "packages/otter_ai" },
     { name = "otter-ai-chat-completions", editable = "packages/otter_ai_chat_completions" },
+    { name = "otter-ai-core", editable = "packages/otter_ai_core" },
     { name = "pydantic", specifier = ">=2" },
 ]
 
@@ -300,16 +290,26 @@ name = "otter-ai-chat-completions"
 source = { editable = "packages/otter_ai_chat_completions" }
 dependencies = [
     { name = "httpx" },
-    { name = "otter-ai" },
+    { name = "otter-ai-core" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
-    { name = "otter-ai", editable = "packages/otter_ai" },
+    { name = "otter-ai-core", editable = "packages/otter_ai_core" },
     { name = "pydantic", specifier = ">=2" },
 ]
+
+[[package]]
+name = "otter-ai-core"
+source = { editable = "packages/otter_ai_core" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2" }]
 
 [[package]]
 name = "packaging"

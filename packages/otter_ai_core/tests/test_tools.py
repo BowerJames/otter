@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from otter_ai import Tool, tool_from_pydantic
+from otter_ai_core import Tool, tool_from_pydantic
 
 
 class _GetTimeParams(BaseModel):

@@ -1,21 +1,22 @@
 """The Chat Completions ``AssistantMessageStreamFn`` seam.
 
 :func:`create_chat_completions_assistant_message_stream` is a concrete
-implementation of :data:`otter_ai.AssistantMessageStreamFn` for the Chat
+implementation of :data:`otter_ai_core.AssistantMessageStreamFn` for the Chat
 Completions wire format. It is a faithful async/:mod:`httpx` port of pi-ai's
 ``streamOpenAICompletions``.
 
-The seam is **synchronous**: it returns the :class:`~otter_ai.AssistantMessageStream`
-immediately and schedules its producer via :func:`asyncio.create_task`. The
+The seam is **synchronous**: it returns the
+:class:`~otter_ai_core.AssistantMessageStream` immediately and schedules its
+producer via :func:`asyncio.create_task`. The
 producer pushes every streaming event, including the terminal
-``done``/:class:`~otter_ai.AssistantErrorEvent`, then calls ``end()`` on the
+``done``/:class:`~otter_ai_core.AssistantErrorEvent`, then calls ``end()`` on the
 writer. The seam **never raises** — request/model/runtime failures are encoded
-as :class:`~otter_ai.AssistantErrorEvent` (with ``stop_reason`` of ``"error"``
+as :class:`~otter_ai_core.AssistantErrorEvent` (with ``stop_reason`` of ``"error"``
 or ``"aborted"`` and ``error_message`` set).
 
 Cooperative abort is honoured via ``options.abort_signal`` (an
 :class:`asyncio.Event`), checked between SSE chunks and around the request
-send. On abort the producer emits an :class:`~otter_ai.AssistantErrorEvent`
+send. On abort the producer emits an :class:`~otter_ai_core.AssistantErrorEvent`
 with ``reason="aborted"`` and stops, preserving any partial content.
 
 Hooks (pi-ai parity):
@@ -43,7 +44,15 @@ from typing import Any
 
 import httpx
 
-from otter_ai import (
+from otter_ai_chat_completions._compat import resolve_compat
+from otter_ai_chat_completions._json import parse_streaming_json
+from otter_ai_chat_completions._params import build_params
+from otter_ai_chat_completions._sse import iter_sse_events
+from otter_ai_chat_completions._usage import map_stop_reason, parse_chunk_usage
+from otter_ai_chat_completions.hooks import OnPayloadEvent, OnResponseEvent
+from otter_ai_chat_completions.models import ChatCompletionsModel
+from otter_ai_chat_completions.options import ChatCompletionsModelOptions
+from otter_ai_core import (
     AssistantContent,
     AssistantDoneEvent,
     AssistantErrorEvent,
@@ -68,14 +77,6 @@ from otter_ai import (
     UsageCost,
     create_stream,
 )
-from otter_ai_chat_completions._compat import resolve_compat
-from otter_ai_chat_completions._json import parse_streaming_json
-from otter_ai_chat_completions._params import build_params
-from otter_ai_chat_completions._sse import iter_sse_events
-from otter_ai_chat_completions._usage import map_stop_reason, parse_chunk_usage
-from otter_ai_chat_completions.hooks import OnPayloadEvent, OnResponseEvent
-from otter_ai_chat_completions.models import ChatCompletionsModel
-from otter_ai_chat_completions.options import ChatCompletionsModelOptions
 
 #: Default request timeout (seconds) when ``model.timeout_ms`` is unset.
 #: Matches the OpenAI SDK default (10 minutes).
@@ -102,12 +103,12 @@ _producer_tasks: set[asyncio.Task[None]] = set()
 def create_chat_completions_assistant_message_stream(
     options: ChatCompletionsModelOptions, context: Context
 ) -> AssistantMessageStream:
-    """Build an :class:`~otter_ai.AssistantMessageStream` for a Chat
+    """Build an :class:`~otter_ai_core.AssistantMessageStream` for a Chat
     Completions model.
 
     Synchronous; returns immediately and spawns its producer via
     :func:`asyncio.create_task`. Honours the
-    :data:`~otter_ai.AssistantMessageStreamFn` contract — it never raises.
+    :data:`~otter_ai_core.AssistantMessageStreamFn` contract — it never raises.
     """
     stream: AssistantMessageStream
     writer: AssistantMessageWriter

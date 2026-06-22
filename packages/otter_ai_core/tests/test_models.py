@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from otter_ai import (
+from otter_ai_core import (
     AssistantMessage,
     Context,
     ImageContent,

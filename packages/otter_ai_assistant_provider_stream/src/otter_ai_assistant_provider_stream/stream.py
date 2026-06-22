@@ -1,7 +1,7 @@
 """The provider-dispatch seam.
 
 :func:`create_assistant_message_stream_by_provider` is a concrete value of
-:data:`otter_ai.AssistantMessageStreamFn` that resolves a
+:data:`otter_ai_core.AssistantMessageStreamFn` that resolves a
 :class:`~otter_ai_assistant_provider_stream.types.ModelProviderConfig` against
 the catalog + env + thinking-clamp registries, builds a fully-populated
 :class:`~otter_ai_chat_completions.ChatCompletionsModelOptions`, and dispatches
@@ -9,8 +9,8 @@ to the api stream fn registered for the model's ``api``.
 
 The seam **never raises**. Request/model/runtime failures (unknown model,
 unknown api, missing api key) are encoded as an
-:class:`~otter_ai.AssistantErrorEvent` carrying a best-effort skeleton
-:class:`~otter_ai.AssistantMessage`, mirroring pi-ai's
+:class:`~otter_ai_core.AssistantErrorEvent` carrying a best-effort skeleton
+:class:`~otter_ai_core.AssistantMessage`, mirroring pi-ai's
 ``createLazyLoadErrorMessage`` pattern. This honours the
 ``AssistantMessageStreamFn`` contract: the caller always receives a live
 stream and learns of failure by reading its terminal event.
@@ -20,16 +20,6 @@ from __future__ import annotations
 
 import time
 
-from otter_ai import (
-    AssistantErrorEvent,
-    AssistantMessage,
-    AssistantMessageStream,
-    AssistantMessageWriter,
-    Context,
-    Usage,
-    UsageCost,
-    create_stream,
-)
 from otter_ai_assistant_provider_stream.api_registry import get_api_stream_fn
 from otter_ai_assistant_provider_stream.catalog import get_model
 from otter_ai_assistant_provider_stream.env import get_env_api_key
@@ -46,6 +36,16 @@ from otter_ai_chat_completions import (
     ChatCompletionsCompat,
     ChatCompletionsModel,
     ChatCompletionsModelOptions,
+)
+from otter_ai_core import (
+    AssistantErrorEvent,
+    AssistantMessage,
+    AssistantMessageStream,
+    AssistantMessageWriter,
+    Context,
+    Usage,
+    UsageCost,
+    create_stream,
 )
 
 #: Fields on :class:`ModelProviderOverrides` that map 1:1 onto mutable
@@ -70,10 +70,10 @@ _DIRECT_OVERRIDE_FIELDS: tuple[str, ...] = (
 def create_assistant_message_stream_by_provider(
     options: ModelProviderOptions, context: Context
 ) -> AssistantMessageStream:
-    """Build an :class:`~otter_ai.AssistantMessageStream` for a catalog model.
+    """Build an :class:`~otter_ai_core.AssistantMessageStream` for a catalog model.
 
     Synchronous; never raises. Resolution/dispatch failures are encoded as an
-    :class:`~otter_ai.AssistantErrorEvent` on the returned stream.
+    :class:`~otter_ai_core.AssistantErrorEvent` on the returned stream.
     """
     try:
         cc_options = _resolve_options(options)

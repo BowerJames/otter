@@ -3,7 +3,7 @@
 `Api` and `Provider` are intentionally left as open :class:`str` aliases. In
 the upstream pi-ai library they drive a provider registry; otter is data-only,
 so they exist purely as inert provenance recorded on
-:class:`~otter_ai.messages.AssistantMessage`.
+:class:`~otter_ai_core.messages.AssistantMessage`.
 """
 
 from __future__ import annotations

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from otter_ai import AssistantMessageStream, Context, create_stream
 from otter_ai_assistant_provider_stream import (
     DEFAULT_API,
     create_assistant_message_stream_by_provider,
@@ -17,6 +16,7 @@ from otter_ai_assistant_provider_stream.types import (
     ModelProviderConfig,
     ModelProviderOptions,
 )
+from otter_ai_core import AssistantMessageStream, Context, create_stream
 
 
 def _make_options(api: str = "custom-api") -> ModelProviderOptions:

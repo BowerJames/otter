@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from otter_ai import Context
 from otter_ai_chat_completions._compat import ResolvedCompat
 from otter_ai_chat_completions._messages import (
     convert_messages,
@@ -29,6 +28,7 @@ from otter_ai_chat_completions.models import (
     ChatTemplateKwargValue,
     ChatTemplateKwargVar,
 )
+from otter_ai_core import Context
 
 #: A cache-control marker for Anthropic-style prompt caching.
 _AnthropicCacheControl = dict[str, Any]

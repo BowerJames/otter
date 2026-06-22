@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from otter_ai import (
+from otter_ai_core import (
     AssistantDoneEvent,
     AssistantMessage,
     AssistantMessageEvent,
@@ -43,7 +43,7 @@ def _usage() -> Usage:
 
 
 def _assistant_message() -> AssistantMessage:
-    from otter_ai import TextContent
+    from otter_ai_core import TextContent
 
     return AssistantMessage(
         role="assistant",
@@ -199,7 +199,7 @@ async def test_concurrent_producer_consumer() -> None:
 
 async def test_message_event_stream_carries_assistant_and_user() -> None:
     """``MessageEventStream`` spans assistant + user events (no tool results)."""
-    from otter_ai import UserDoneEvent, UserStartEvent
+    from otter_ai_core import UserDoneEvent, UserStartEvent
 
     stream: Stream[MessageEvent]
     writer: StreamWriter[MessageEvent]
@@ -269,7 +269,7 @@ def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
     trivially-conforming two-argument function binds under an annotation
     referencing it.
     """
-    from otter_ai import (
+    from otter_ai_core import (
         AssistantMessageStreamFn,
         Context,
     )

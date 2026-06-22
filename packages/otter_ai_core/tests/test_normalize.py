@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from otter_ai import (
+from otter_ai_core import (
     AssistantMessage,
     Message,
     TextContent,
@@ -197,7 +197,7 @@ def test_normalize_drops_then_fills() -> None:
 
 
 def test_normalize_output_round_trips() -> None:
-    from otter_ai import Context
+    from otter_ai_core import Context
 
     messages: list[Message] = [
         _assistant(tool_calls=[_tool_call("t1")]),

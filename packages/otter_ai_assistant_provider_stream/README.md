@@ -1,14 +1,14 @@
 # otter-ai-assistant-provider-stream
 
-Provider/dispatch layer for `otter-ai`.
+Provider/dispatch layer for `otter-ai-core`.
 
 ## Scope
 
-This package owns the **dispatch layer** that `otter-ai` deliberately omits:
+This package owns the **dispatch layer** that `otter-ai-core` deliberately omits:
 a built-in model catalog (generated from [models.dev]), env-key resolution,
 thinking-level clamping, three runtime registries, and the seam
 `create_assistant_message_stream_by_provider` — a concrete value of
-`otter_ai.AssistantMessageStreamFn`.
+`otter_ai_core.AssistantMessageStreamFn`.
 
 It dispatches through [`otter-ai-chat-completions`](../otter_ai_chat_completions);
 a future provider package registers additional api stream fns without this
@@ -56,7 +56,7 @@ uv run python packages/otter_ai_assistant_provider_stream/scripts/generate_model
 ```python
 import asyncio
 
-from otter_ai import Context, UserMessage
+from otter_ai_core import Context, UserMessage
 from otter_ai_assistant_provider_stream import (
     ModelProviderConfig,
     ModelProviderOptions,

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from otter_ai import AssistantMessageStreamFn
+from otter_ai_core import AssistantMessageStreamFn
 
 #: Module-level registry: api -> stream fn.
 # ``AssistantMessageStreamFn`` is generic in ``TOptions``; the registry holds fns

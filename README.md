@@ -27,39 +27,45 @@ Packages live under [`packages/`](./packages):
 
 ```
 packages/
-└── otter_ai/        # the otter-ai package (import as `otter_ai`)
-    ├── src/otter_ai/
+└── otter_ai_core/        # the otter-ai-core package (import as `otter_ai_core`)
+    ├── src/otter_ai_core/
     └── tests/
 ```
 
 The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/).
 All packages and dev dependencies share a single `.venv` at the root.
 
-## `otter-ai` context model
+## `otter-ai-core` context model
 
-The `otter-ai` package models LLM conversation context and the streaming
+`otter-ai-core` is the **driving package** of the monorepo: it owns the core
+types and data models that the other packages (`otter-ai-chat-completions`,
+`otter-ai-assistant-provider-stream`) build on — for example, its
+`AssistantMessageStreamFn` defines the core type that the Chat Completions seam
+implements.
+
+The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,
 API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
 conversation is built from, the streaming-event protocol, and a
 generic async stream runtime:
 
-- [`Context`](./packages/otter_ai/src/otter_ai/context.py) — the top-level
+- [`Context`](./packages/otter_ai_core/src/otter_ai_core/context.py) — the top-level
   conversation (`system_prompt`, `messages`, `tools`), JSON-serializable so a
   context can be persisted and replayed elsewhere.
-- [`Message`](./packages/otter_ai/src/otter_ai/messages.py) — a discriminated
+- [`Message`](./packages/otter_ai_core/src/otter_ai_core/messages.py) — a discriminated
   union of `UserMessage`, `AssistantMessage`, and `ToolResultMessage`.
 - Content blocks in `content.py`: `TextContent`, `ImageContent`,
   `ThinkingContent`, `ToolCall`.
-- [`Tool`](./packages/otter_ai/src/otter_ai/tools.py) — tool definitions whose
+- [`Tool`](./packages/otter_ai_core/src/otter_ai_core/tools.py) — tool definitions whose
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
-- [`Usage`](./packages/otter_ai/src/otter_ai/usage.py) and diagnostics for
+- [`Usage`](./packages/otter_ai_core/src/otter_ai_core/usage.py) and diagnostics for
   per-turn accounting.
-- [`events.py`](./packages/otter_ai/src/otter_ai/events.py) — the streaming-event
+- [`events.py`](./packages/otter_ai_core/src/otter_ai_core/events.py) — the streaming-event
   protocol: `AssistantMessageEvent`, `UserMessageEvent`, and
   `ToolResultMessageEvent` families (each a discriminated union on `type`),
   the plain unions `MessageEvent` (assistant + user) and `ContextItemEvent`
   (all three).
-- [`stream.py`](./packages/otter_ai/src/otter_ai/stream.py) — a generic async
+- [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — a generic async
   stream runtime (`Stream` / `StreamWriter` / `create_stream`) plus the typed
   message-stream aliases. See [Generic stream runtime](#generic-stream-runtime).
 
@@ -70,7 +76,7 @@ context can be replayed by a provider package built on top.
 
 ### Opt-in replay normalization
 
-[`normalize.py`](./packages/otter_ai/src/otter_ai/normalize.py) exposes
+[`normalize.py`](./packages/otter_ai_core/src/otter_ai_core/normalize.py) exposes
 **opt-in** utilities that prepare a message list for replay to a model:
 
 - `drop_unreplayable_assistant_turns` — removes assistant turns whose
@@ -85,7 +91,7 @@ tool-execution loop); call them explicitly only when preparing to replay.
 ### Quick example
 
 ```python
-from otter_ai import Context, UserMessage, normalize_messages
+from otter_ai_core import Context, UserMessage, normalize_messages
 
 context = Context(
     system_prompt="You are helpful.",
@@ -102,7 +108,7 @@ replay_ready = normalize_messages(context.messages)
 
 ### Generic stream runtime
 
-[`stream.py`](./packages/otter_ai/src/otter_ai/stream.py) is a faithful
+[`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) is a faithful
 Python/`asyncio` port of pi-ai's `EventStream` push-queue. The runtime is split
 into a consumer and a producer sharing one queue:
 
@@ -125,7 +131,7 @@ doesn't generalize to multi-item streams (`MessageEventStream`/
 ```python
 import asyncio
 
-from otter_ai import AssistantDoneEvent, AssistantMessage, create_stream
+from otter_ai_core import AssistantDoneEvent, AssistantMessage, create_stream
 
 
 async def main() -> None:
