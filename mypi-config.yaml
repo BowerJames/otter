@@ -6,6 +6,7 @@ profiles:
       - code-review
       - dynamic-skills
       - mode
+      - btw
     skills:
       - repo-explorer
     prompts:
