@@ -1,0 +1,112 @@
+{
+  "openai": {
+    "models": {
+      "gpt-4o": {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "limit": {
+          "context": 128000,
+          "output": 16384
+        },
+        "cost": {
+          "input": 2.5,
+          "output": 10.0,
+          "cache_read": 1.25
+        }
+      },
+      "o3": {
+        "id": "o3",
+        "name": "o3",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "limit": {
+          "context": 200000,
+          "output": 100000
+        },
+        "cost": {
+          "input": 2,
+          "output": 8,
+          "cache_read": 0.5
+        }
+      },
+      "text-embedding-3-large": {
+        "id": "text-embedding-3-large",
+        "name": "Embedding",
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        }
+      }
+    }
+  },
+  "zai-coding-plan": {
+    "models": {
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cache_read": 0,
+          "cache_write": 0
+        }
+      },
+      "glm-4.5-air": {
+        "id": "glm-4.5-air",
+        "name": "GLM-4.5-Air",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 131072,
+          "output": 4096
+        },
+        "cost": {
+          "input": 0.14,
+          "output": 0.28
+        }
+      },
+      "no-tools": {
+        "id": "no-tools",
+        "name": "NoTools",
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        }
+      }
+    }
+  }
+}

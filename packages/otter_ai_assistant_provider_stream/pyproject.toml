@@ -1,0 +1,25 @@
+[project]
+name = "otter-ai-assistant-provider-stream"
+dynamic = ["version"]
+description = "Provider/dispatch layer for otter-ai: built-in model catalog, env-key resolution, thinking-level clamping, and the create_assistant_message_stream_by_provider seam"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2",
+    "otter-ai",
+    "otter-ai-chat-completions",
+]
+
+[tool.uv.sources]
+otter-ai = { workspace = true }
+otter-ai-chat-completions = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/otter_ai_assistant_provider_stream"]
+
+# Version is derived from src/otter_ai_assistant_provider_stream/__init__.py (single source of truth).
+[tool.hatch.version]
+path = "src/otter_ai_assistant_provider_stream/__init__.py"
