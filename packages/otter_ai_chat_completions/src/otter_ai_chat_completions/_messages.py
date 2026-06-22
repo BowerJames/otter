@@ -6,7 +6,7 @@ Two responsibilities:
    downgrades images for non-vision models, handles cross-model thinking
    blocks, inserts synthetic tool results for orphaned tool calls, and drops
    errored/aborted assistant turns. It is **deliberately not** a re-export of
-   :func:`otter_ai.normalize_messages`: that public API is opt-in only and the
+   :func:`otter_ai_core.normalize_messages`: that public API is opt-in only and the
    in-package provider always needs a replay-safe list.
 2. :func:`convert_messages` / :func:`convert_tools` / :func:`has_tool_history`
    — pure shaping into Chat Completions request bodies.
@@ -22,7 +22,9 @@ import json
 import time
 from typing import Any
 
-from otter_ai import (
+from otter_ai_chat_completions._compat import ResolvedCompat
+from otter_ai_chat_completions.models import ChatCompletionsModel
+from otter_ai_core import (
     AssistantContent,
     AssistantMessage,
     ImageContent,
@@ -35,8 +37,6 @@ from otter_ai import (
     UserContent,
     UserMessage,
 )
-from otter_ai_chat_completions._compat import ResolvedCompat
-from otter_ai_chat_completions.models import ChatCompletionsModel
 
 _NON_VISION_USER_IMAGE_PLACEHOLDER = "(image omitted: model does not support images)"
 _NON_VISION_TOOL_IMAGE_PLACEHOLDER = (

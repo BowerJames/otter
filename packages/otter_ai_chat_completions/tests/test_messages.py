@@ -7,7 +7,15 @@ from typing import Any
 
 from _helpers import make_model
 
-from otter_ai import (
+from otter_ai_chat_completions import ChatCompletionsCompat
+from otter_ai_chat_completions._compat import ResolvedCompat, resolve_compat
+from otter_ai_chat_completions._messages import (
+    convert_messages,
+    convert_tools,
+    has_tool_history,
+    transform_messages,
+)
+from otter_ai_core import (
     AssistantContent,
     AssistantMessage,
     ImageContent,
@@ -18,14 +26,6 @@ from otter_ai import (
     Usage,
     UsageCost,
     UserMessage,
-)
-from otter_ai_chat_completions import ChatCompletionsCompat
-from otter_ai_chat_completions._compat import ResolvedCompat, resolve_compat
-from otter_ai_chat_completions._messages import (
-    convert_messages,
-    convert_tools,
-    has_tool_history,
-    transform_messages,
 )
 
 
@@ -390,7 +390,7 @@ def test_requires_assistant_after_tool_result_plus_image_reinjection() -> None:
 def test_convert_tools_includes_strict_false_by_default() -> None:
     from pydantic import BaseModel
 
-    from otter_ai import Tool
+    from otter_ai_core import Tool
 
     class Params(BaseModel):
         x: int
@@ -403,7 +403,7 @@ def test_convert_tools_includes_strict_false_by_default() -> None:
 
 
 def test_convert_tools_omits_strict_when_unsupported() -> None:
-    from otter_ai import Tool
+    from otter_ai_core import Tool
 
     tools = [Tool(name="add", description="add", parameters={"type": "object"})]
     out = convert_tools(tools, _compat(supports_strict_mode=False))

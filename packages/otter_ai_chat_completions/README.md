@@ -1,13 +1,13 @@
 # otter-ai-chat-completions
 
-Chat Completions wire-format **contract** package for `otter-ai`.
+Chat Completions wire-format **contract** package for `otter-ai-core`.
 
 ## Scope
 
 This package owns the Chat Completions wire-format contract: the data model
 (`ChatCompletionsModel`), the runtime options bundle, and the seam
 `create_chat_completions_assistant_message_stream` — a concrete
-implementation of `otter_ai.AssistantMessageStreamFn`.
+implementation of `otter_ai_core.AssistantMessageStreamFn`.
 
 It is **provider-agnostic by design**: it performs no provider/base_url
 detection, no env-key resolution, and ships no model catalog.
@@ -28,7 +28,7 @@ globs `packages/*`, so `uv sync` picks this package up automatically.
 ```python
 import asyncio
 
-from otter_ai import Context, UserMessage
+from otter_ai_core import Context, UserMessage
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsModel,

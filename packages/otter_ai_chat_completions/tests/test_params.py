@@ -6,7 +6,6 @@ from typing import Any
 
 from _helpers import make_model
 
-from otter_ai import Context, TextContent, Tool, ToolResultMessage, UserMessage
 from otter_ai_chat_completions import (
     ChatCompletionsCompat,
     ChatCompletionsModel,
@@ -14,6 +13,7 @@ from otter_ai_chat_completions import (
 )
 from otter_ai_chat_completions._compat import resolve_compat
 from otter_ai_chat_completions._params import build_params
+from otter_ai_core import Context, TextContent, Tool, ToolResultMessage, UserMessage
 
 
 def _params(
@@ -266,7 +266,7 @@ def test_openai_prompt_cache_key_none_when_retention_none() -> None:
 
 
 def test_anthropic_cache_control_markers() -> None:
-    from otter_ai import Tool
+    from otter_ai_core import Tool
 
     ctx = Context(
         system_prompt="system",

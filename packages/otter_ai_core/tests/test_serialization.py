@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from otter_ai import (
+from otter_ai_core import (
     AssistantMessage,
     AssistantMessageDiagnostic,
     Context,

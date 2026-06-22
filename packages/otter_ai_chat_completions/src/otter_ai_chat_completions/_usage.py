@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from otter_ai import StopReason, Usage, UsageCost
 from otter_ai_chat_completions.models import ChatCompletionsModel
+from otter_ai_core import StopReason, Usage, UsageCost
 
 
 def calculate_cost(model: ChatCompletionsModel, usage: Usage) -> UsageCost:

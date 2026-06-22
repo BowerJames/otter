@@ -32,7 +32,7 @@ Scope
 Otter defines **no providers, no API registry, and no ``stream()`` dispatch** —
 only this generic runtime and the types that specialize it. :class:`Stream`
 and :class:`StreamWriter` are runtime objects and are **not** JSON-serializable
-(unlike :class:`~otter_ai.context.Context`); the serializable data model is
+(unlike :class:`~otter_ai_core.context.Context`); the serializable data model is
 unchanged.
 """
 
@@ -42,8 +42,8 @@ import asyncio
 from collections.abc import Callable
 from typing import Self
 
-from otter_ai.context import Context
-from otter_ai.events import (
+from otter_ai_core.context import Context
+from otter_ai_core.events import (
     AssistantMessageEvent,
     ContextItemEvent,
     MessageEvent,

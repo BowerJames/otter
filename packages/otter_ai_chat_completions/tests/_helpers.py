@@ -9,13 +9,13 @@ from typing import Any
 import httpx
 import pytest
 
-from otter_ai import Context, UserMessage
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsModel,
     ChatCompletionsModelOptions,
 )
 from otter_ai_chat_completions import stream as stream_module
+from otter_ai_core import Context, UserMessage
 
 
 def make_model(**overrides: Any) -> ChatCompletionsModel:

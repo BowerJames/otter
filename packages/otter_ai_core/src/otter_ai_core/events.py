@@ -1,9 +1,9 @@
 """Streaming event model for building context items.
 
 This module models the events emitted while a context item (an
-:class:`~otter_ai.messages.AssistantMessage`, a
-:class:`~otter_ai.messages.UserMessage`, or a
-:class:`~otter_ai.messages.ToolResultMessage`) is being produced — for example
+:class:`~otter_ai_core.messages.AssistantMessage`, a
+:class:`~otter_ai_core.messages.UserMessage`, or a
+:class:`~otter_ai_core.messages.ToolResultMessage`) is being produced — for example
 by an LLM provider (assistant content), a realtime transcription API (user
 content), or a tool executor (tool results).
 
@@ -44,11 +44,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai.content import ToolCall
-from otter_ai.messages import AssistantMessage, ToolResultMessage, UserMessage
+from otter_ai_core.content import ToolCall
+from otter_ai_core.messages import AssistantMessage, ToolResultMessage, UserMessage
 
 #: ``StopReason`` values that terminate a successful assistant turn.
-#: (See :data:`otter_ai.types.StopReason`; ``error``/``aborted`` terminate via
+#: (See :data:`otter_ai_core.types.StopReason`; ``error``/``aborted`` terminate via
 #: the :data:`EventErrorReason` family instead.)
 AssistantDoneReason = Literal["stop", "length", "tool_use"]
 

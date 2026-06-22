@@ -1,7 +1,7 @@
 """Tool definitions available to the model.
 
 ``Tool.parameters`` is stored as a JSON-Schema ``dict`` so that a
-:class:`~otter_ai.context.Context` stays pure-JSON-serializable, mirroring the
+:class:`~otter_ai_core.context.Context` stays pure-JSON-serializable, mirroring the
 upstream pi-ai model (where parameters are TypeBox schemas, which are
 themselves JSON Schema). For ergonomic construction a Pydantic ``BaseModel``
 *subclass* may be passed instead and is converted via

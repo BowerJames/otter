@@ -17,7 +17,14 @@ from _helpers import (
     sse_response,
 )
 
-from otter_ai import (
+from otter_ai_chat_completions import (
+    ChatCompletionsHooks,
+    OnPayloadEvent,
+    OnResponseEvent,
+    create_chat_completions_assistant_message_stream,
+)
+from otter_ai_chat_completions import stream as stream_module
+from otter_ai_core import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantStartEvent,
@@ -33,13 +40,6 @@ from otter_ai import (
     ThinkingContent,
     ToolCall,
 )
-from otter_ai_chat_completions import (
-    ChatCompletionsHooks,
-    OnPayloadEvent,
-    OnResponseEvent,
-    create_chat_completions_assistant_message_stream,
-)
-from otter_ai_chat_completions import stream as stream_module
 
 
 def _delta_chunk(

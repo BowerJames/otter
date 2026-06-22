@@ -6,7 +6,7 @@ no env-key resolution, and no header injection — those are the consumer's
 responsibility. The stream function (:mod:`otter_ai_chat_completions.stream`)
 reads these values verbatim.
 
-Conventions follow :mod:`otter_ai`: Pydantic v2, ``extra="forbid"``,
+Conventions follow :mod:`otter_ai_core`: Pydantic v2, ``extra="forbid"``,
 snake_case, ``X | None = None`` optionals, JSON round-trippable.
 """
 
@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from otter_ai import Provider
+from otter_ai_core import Provider
 
 #: The single API shape this package speaks. Constant for the whole package;
 #: stored on the model so it flows onto ``AssistantMessage.api`` (inert
@@ -67,7 +67,7 @@ ChatTemplateKwargValue = str | int | float | bool | None | ChatTemplateKwargVar
 class ChatCompletionsCost(BaseModel):
     """Pricing rates in USD per million tokens.
 
-    Used to compute :class:`otter_ai.UsageCost` per turn. This is **not** a
+    Used to compute :class:`otter_ai_core.UsageCost` per turn. This is **not** a
     per-turn accounting record — it is a rate card.
     """
 

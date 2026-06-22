@@ -22,11 +22,6 @@ from _provider_helpers import (
     sse_response,
 )
 
-from otter_ai import (
-    AssistantErrorEvent,
-    AssistantMessageStream,
-    Context,
-)
 from otter_ai_assistant_provider_stream import (
     create_assistant_message_stream_by_provider,
 )
@@ -35,6 +30,11 @@ from otter_ai_assistant_provider_stream.types import (
     ModelProviderConfig,
     ModelProviderOptions,
     ModelProviderOverrides,
+)
+from otter_ai_core import (
+    AssistantErrorEvent,
+    AssistantMessageStream,
+    Context,
 )
 
 # --------------------------------------------------------------------------- #

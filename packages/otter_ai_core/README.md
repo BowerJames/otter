@@ -1,4 +1,4 @@
-# otter-ai
+# otter-ai-core
 
 **Otter AI** — a data-only Pydantic v2 model for representing LLM conversation
 context and the streaming events used to build it. No LLMs, providers, APIs,
@@ -17,23 +17,23 @@ This package lives in the `otter` uv workspace. From the repo root:
 uv sync
 ```
 
-Import it as `otter_ai`.
+Import it as `otter_ai_core`.
 
 ## Context model
 
-A conversation is a [`Context`](./src/otter_ai/context.py): an optional
+A conversation is a [`Context`](./src/otter_ai_core/context.py): an optional
 `system_prompt`, a `messages` list, and optional `tools`. Everything is
 pure-JSON-serializable so a context can be persisted, transferred, and replayed.
 
-- [`Message`](./src/otter_ai/messages.py) — discriminated union of
+- [`Message`](./src/otter_ai_core/messages.py) — discriminated union of
   `UserMessage`, `AssistantMessage`, `ToolResultMessage`.
-- Content blocks in [`content.py`](./src/otter_ai/content.py):
+- Content blocks in [`content.py`](./src/otter_ai_core/content.py):
   `TextContent`, `ImageContent`, `ThinkingContent`, `ToolCall`.
-- [`Tool`](./src/otter_ai/tools.py) — `parameters` accepts a JSON-Schema `dict`
+- [`Tool`](./src/otter_ai_core/tools.py) — `parameters` accepts a JSON-Schema `dict`
   or a Pydantic `BaseModel` subclass.
-- [`Usage`](./src/otter_ai/usage.py) / [`diagnostics.py`](./src/otter_ai/diagnostics.py)
+- [`Usage`](./src/otter_ai_core/usage.py) / [`diagnostics.py`](./src/otter_ai_core/diagnostics.py)
   for per-turn accounting and failure records.
-- [`hook.py`](./src/otter_ai/hook.py) — the generic async
+- [`hook.py`](./src/otter_ai_core/hook.py) — the generic async
   `Hook[TEvent, TResponse]` alias provider packages build hook types on top of.
 
 `AssistantMessage` carries inert provenance (`api`, `provider`, `model`,
@@ -43,7 +43,7 @@ context can be replayed by a provider package built on top.
 
 ### Opt-in replay normalization
 
-[`normalize.py`](./src/otter_ai/normalize.py) exposes **opt-in** utilities that
+[`normalize.py`](./src/otter_ai_core/normalize.py) exposes **opt-in** utilities that
 prepare a message list for replay to a model:
 
 - `drop_unreplayable_assistant_turns` — removes assistant turns whose
@@ -58,7 +58,7 @@ tool-execution loop); call them explicitly only when preparing to replay.
 ### Quick example
 
 ```python
-from otter_ai import Context, UserMessage, normalize_messages
+from otter_ai_core import Context, UserMessage, normalize_messages
 
 context = Context(
     system_prompt="You are helpful.",
@@ -75,7 +75,7 @@ replay_ready = normalize_messages(context.messages)
 
 ## Streaming events
 
-[`events.py`](./src/otter_ai/events.py) models the events emitted while a
+[`events.py`](./src/otter_ai_core/events.py) models the events emitted while a
 context item is being produced — by an LLM provider (assistant content), a
 realtime transcription API (user content), or a tool executor (tool results).
 It is the data-only event protocol; the transport that pushes these events
@@ -83,14 +83,14 @@ lives in a future provider package.
 
 Three per-role families, each a discriminated union over `type`:
 
-- [`AssistantMessageEvent`](./src/otter_ai/events.py) — 12 events (a port of
+- [`AssistantMessageEvent`](./src/otter_ai_core/events.py) — 12 events (a port of
   pi-ai): `start`, `text_start/delta/end`, `thinking_start/delta/end`,
   `tool_call_start/delta/end`, `done`, `error`.
-- [`UserMessageEvent`](./src/otter_ai/events.py) — 6 events: `start`,
+- [`UserMessageEvent`](./src/otter_ai_core/events.py) — 6 events: `start`,
   `text_start/delta/end`, `done`, `error`.
-- [`ToolResultMessageEvent`](./src/otter_ai/events.py) — 6 events (abortable):
+- [`ToolResultMessageEvent`](./src/otter_ai_core/events.py) — 6 events (abortable):
   `start`, `text_start/delta/end`, `done`, `error`.
-- [`ContextItemEvent`](./src/otter_ai/events.py) — the union of all three.
+- [`ContextItemEvent`](./src/otter_ai_core/events.py) — the union of all three.
 
 ### Terminal contract
 
@@ -132,7 +132,7 @@ leaf carries strict `role`/`type` Literals together with `extra="forbid"`.
 ```python
 from pydantic import TypeAdapter
 
-from otter_ai import ContextItemEvent
+from otter_ai_core import ContextItemEvent
 
 adapter = TypeAdapter(ContextItemEvent)
 

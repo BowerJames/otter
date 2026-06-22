@@ -1,16 +1,16 @@
 [project]
 name = "otter-ai-assistant-provider-stream"
 dynamic = ["version"]
-description = "Provider/dispatch layer for otter-ai: built-in model catalog, env-key resolution, thinking-level clamping, and the create_assistant_message_stream_by_provider seam"
+description = "Provider/dispatch layer for otter-ai-core: built-in model catalog, env-key resolution, thinking-level clamping, and the create_assistant_message_stream_by_provider seam"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2",
-    "otter-ai",
+    "otter-ai-core",
     "otter-ai-chat-completions",
 ]
 
 [tool.uv.sources]
-otter-ai = { workspace = true }
+otter-ai-core = { workspace = true }
 otter-ai-chat-completions = { workspace = true }
 
 [build-system]

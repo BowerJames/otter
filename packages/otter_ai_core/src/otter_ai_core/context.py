@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai.messages import Message
-from otter_ai.tools import Tool
+from otter_ai_core.messages import Message
+from otter_ai_core.tools import Tool
 
 
 class Context(BaseModel):

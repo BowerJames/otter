@@ -11,10 +11,10 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai.content import AssistantContent, UserContent
-from otter_ai.diagnostics import AssistantMessageDiagnostic
-from otter_ai.types import Api, Provider, StopReason
-from otter_ai.usage import Usage
+from otter_ai_core.content import AssistantContent, UserContent
+from otter_ai_core.diagnostics import AssistantMessageDiagnostic
+from otter_ai_core.types import Api, Provider, StopReason
+from otter_ai_core.usage import Usage
 
 
 class UserMessage(BaseModel):

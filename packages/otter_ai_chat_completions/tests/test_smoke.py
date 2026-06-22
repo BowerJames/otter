@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 
 import otter_ai_chat_completions as pkg
-from otter_ai import Context, Stream, UserMessage
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsHooks,
@@ -13,6 +12,7 @@ from otter_ai_chat_completions import (
     ChatCompletionsModelOptions,
     create_chat_completions_assistant_message_stream,
 )
+from otter_ai_core import Context, Stream, UserMessage
 
 
 def _options() -> ChatCompletionsModelOptions:
