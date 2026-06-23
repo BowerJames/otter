@@ -43,7 +43,7 @@ from collections.abc import Callable
 from typing import Self
 
 from otter_ai_core.context import Context
-from otter_ai_core.events import (
+from otter_ai_core.model_events import (
     AssistantMessageEvent,
     ContextItemEvent,
     MessageEvent,
@@ -149,7 +149,7 @@ def create_stream[TEvent]() -> tuple[Stream[TEvent], StreamWriter[TEvent]]:
 # --------------------------------------------------------------------------- #
 #
 # Plain assignment (not PEP 695 ``type`` statements) for consistency with
-# ``ContextItemEvent`` in ``events.py``. ``TEvent`` is invariant because
+# ``ContextItemEvent`` in ``model_events.py``. ``TEvent`` is invariant because
 # ``StreamWriter.push`` accepts it, so covariance is not available regardless.
 
 #: Stream of assistant streaming events (single assistant message per stream).

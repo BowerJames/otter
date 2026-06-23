@@ -29,7 +29,14 @@ from otter_ai_core.diagnostics import (
     AssistantMessageDiagnostic,
     DiagnosticErrorInfo,
 )
-from otter_ai_core.events import (
+from otter_ai_core.hook import Hook
+from otter_ai_core.messages import (
+    AssistantMessage,
+    Message,
+    ToolResultMessage,
+    UserMessage,
+)
+from otter_ai_core.model_events import (
     AssistantDoneEvent,
     AssistantDoneReason,
     AssistantErrorEvent,
@@ -61,13 +68,6 @@ from otter_ai_core.events import (
     UserTextDeltaEvent,
     UserTextEndEvent,
     UserTextStartEvent,
-)
-from otter_ai_core.hook import Hook
-from otter_ai_core.messages import (
-    AssistantMessage,
-    Message,
-    ToolResultMessage,
-    UserMessage,
 )
 from otter_ai_core.normalize import (
     drop_unreplayable_assistant_turns,

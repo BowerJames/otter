@@ -60,7 +60,7 @@ generic async stream runtime:
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
 - [`Usage`](./packages/otter_ai_core/src/otter_ai_core/usage.py) and diagnostics for
   per-turn accounting.
-- [`events.py`](./packages/otter_ai_core/src/otter_ai_core/events.py) — the streaming-event
+- [`model_events.py`](./packages/otter_ai_core/src/otter_ai_core/model_events.py) — the streaming-event
   protocol: `AssistantMessageEvent`, `UserMessageEvent`, and
   `ToolResultMessageEvent` families (each a discriminated union on `type`),
   the plain unions `MessageEvent` (assistant + user) and `ContextItemEvent`

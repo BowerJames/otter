@@ -73,9 +73,9 @@ assert restored == context
 replay_ready = normalize_messages(context.messages)
 ```
 
-## Streaming events
+## Model message events
 
-[`events.py`](./src/otter_ai_core/events.py) models the events emitted while a
+[`model_events.py`](./src/otter_ai_core/model_events.py) models the events emitted while a
 context item is being produced — by an LLM provider (assistant content), a
 realtime transcription API (user content), or a tool executor (tool results).
 It is the data-only event protocol; the transport that pushes these events
@@ -83,14 +83,14 @@ lives in a future provider package.
 
 Three per-role families, each a discriminated union over `type`:
 
-- [`AssistantMessageEvent`](./src/otter_ai_core/events.py) — 12 events (a port of
+- [`AssistantMessageEvent`](./src/otter_ai_core/model_events.py) — 12 events (a port of
   pi-ai): `start`, `text_start/delta/end`, `thinking_start/delta/end`,
   `tool_call_start/delta/end`, `done`, `error`.
-- [`UserMessageEvent`](./src/otter_ai_core/events.py) — 6 events: `start`,
+- [`UserMessageEvent`](./src/otter_ai_core/model_events.py) — 6 events: `start`,
   `text_start/delta/end`, `done`, `error`.
-- [`ToolResultMessageEvent`](./src/otter_ai_core/events.py) — 6 events (abortable):
+- [`ToolResultMessageEvent`](./src/otter_ai_core/model_events.py) — 6 events (abortable):
   `start`, `text_start/delta/end`, `done`, `error`.
-- [`ContextItemEvent`](./src/otter_ai_core/events.py) — the union of all three.
+- [`ContextItemEvent`](./src/otter_ai_core/model_events.py) — the union of all three.
 
 ### Terminal contract
 
