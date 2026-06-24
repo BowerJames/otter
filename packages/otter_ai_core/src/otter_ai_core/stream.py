@@ -18,14 +18,11 @@ pi-ai.
 Why no ``result()``
 -------------------
 pi-ai's ``EventStream.result()`` is sugar that drains the stream and returns
-the terminal event's message; it only works because an assistant stream
-produces exactly one message. Otter's :data:`MessageEventStream` and
-:data:`ContextItemStream` can span multiple items — each ``done``/``error``
-closes *one* item and the stream keeps going — so there is no natural single
-"result". :class:`Stream` therefore stays single-param ``Stream[TEvent]``;
-consumers read the terminal ``done``/``error`` event directly. (A provider
-package may add a ``complete_assistant`` helper later without baking it into
-the core type.)
+the terminal event's message. :class:`Stream` deliberately stays a
+single-param ``Stream[TEvent]`` iterator so the runtime is symmetric and
+generic; consumers read the terminal ``done``/``error`` event directly. (A
+provider package may add a ``complete_assistant`` helper later without baking
+it into the core type.)
 
 Scope
 -----
@@ -45,9 +42,6 @@ from typing import Self
 from otter_ai_core.context import Context
 from otter_ai_core.model_events import (
     AssistantMessageEvent,
-    ContextItemEvent,
-    MessageEvent,
-    UserMessageEvent,
 )
 
 
@@ -148,29 +142,15 @@ def create_stream[TEvent]() -> tuple[Stream[TEvent], StreamWriter[TEvent]]:
 # Typed aliases
 # --------------------------------------------------------------------------- #
 #
-# Plain assignment (not PEP 695 ``type`` statements) for consistency with
-# ``ContextItemEvent`` in ``model_events.py``. ``TEvent`` is invariant because
-# ``StreamWriter.push`` accepts it, so covariance is not available regardless.
+# Plain assignment (not PEP 695 ``type`` statements). ``TEvent`` is invariant
+# because ``StreamWriter.push`` accepts it, so covariance is not available
+# regardless.
 
 #: Stream of assistant streaming events (single assistant message per stream).
 AssistantMessageStream = Stream[AssistantMessageEvent]
 
-#: Stream of user streaming events (e.g. realtime transcription of one message).
-UserMessageStream = Stream[UserMessageEvent]
-
-#: Stream of assistant + user message events (no tool results). May span
-#: multiple messages.
-MessageEventStream = Stream[MessageEvent]
-
-#: Stream of all context-item events (assistant + user + tool results).
-#: May span multiple items.
-ContextItemStream = Stream[ContextItemEvent]
-
-#: Producer handles mirroring the stream aliases above.
+#: Producer handle for an :data:`AssistantMessageStream`.
 AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
-UserMessageWriter = StreamWriter[UserMessageEvent]
-MessageEventWriter = StreamWriter[MessageEvent]
-ContextItemWriter = StreamWriter[ContextItemEvent]
 
 #: Function that builds an :data:`AssistantMessageStream`.
 #:

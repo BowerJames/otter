@@ -75,31 +75,24 @@ replay_ready = normalize_messages(context.messages)
 
 ## Model message events
 
-[`model_events.py`](./src/otter_ai_core/model_events.py) models the events emitted while a
-context item is being produced — by an LLM provider (assistant content), a
-realtime transcription API (user content), or a tool executor (tool results).
-It is the data-only event protocol; the transport that pushes these events
-lives in a future provider package.
+[`model_events.py`](./src/otter_ai_core/model_events.py) models the events emitted while an
+assistant message is being produced by an LLM provider. It is the data-only
+event protocol; the transport that pushes these events lives in a provider
+package.
 
-Three per-role families, each a discriminated union over `type`:
+A single discriminated union over `type`:
 
 - [`AssistantMessageEvent`](./src/otter_ai_core/model_events.py) — 12 events (a port of
   pi-ai): `start`, `text_start/delta/end`, `thinking_start/delta/end`,
   `tool_call_start/delta/end`, `done`, `error`.
-- [`UserMessageEvent`](./src/otter_ai_core/model_events.py) — 6 events: `start`,
-  `text_start/delta/end`, `done`, `error`.
-- [`ToolResultMessageEvent`](./src/otter_ai_core/model_events.py) — 6 events (abortable):
-  `start`, `text_start/delta/end`, `done`, `error`.
-- [`ContextItemEvent`](./src/otter_ai_core/model_events.py) — the union of all three.
 
 ### Terminal contract
 
 A stream emits `start` first, then partial updates, and terminates with
 **exactly one** of:
 
-- `done` — the final message. The assistant family carries a `reason`
-  (`"stop"` / `"length"` / `"tool_use"`, mirroring `stop_reason`); user and
-  tool-result `done` carry only the message.
+- `done` — the final message, with a `reason` (`"stop"` / `"length"` /
+  `"tool_use"`, mirroring `stop_reason`).
 - `error` — `reason` of `"error"` or `"aborted"`, with the final message (any
   partial content received before the failure is preserved on it).
 
@@ -108,33 +101,14 @@ message, so a consumer can render state from the latest event alone. Deltas are
 associated with their block via `content_index`; events for different blocks
 are **not** guaranteed to be contiguous.
 
-### Two producer conventions (documented, not enforced)
-
-- **Partials use the list form.** `UserMessage.content` is `str |
-  list[UserContent]`; when streaming, producers build the `list` form so the
-  `content_index` of every `*_delta`/`*_end` is well-defined.
-- **Aborted tool results are marked.** An aborted tool-result partial carries
-  `is_error=True` so it can be fed back to the model as an error. A `done`
-  event may also carry `is_error=True` — that is a tool that *ran and returned
-  an error* (a normal completion), distinct from an abort.
-
-### Why `ContextItemEvent` is a plain union
-
-Pydantic v2 requires each member of a discriminated union to map to a **unique**
-discriminator value. All twelve assistant leaves share `role="assistant"`, so
-discriminating `ContextItemEvent` on `role` is rejected, and a callable
-composite-key discriminator only works on `TypedDict`, not `BaseModel`. The
-plain-union-of-discriminated-unions form routes deterministically because every
-leaf carries strict `role`/`type` Literals together with `extra="forbid"`.
-
 ### Quick example
 
 ```python
 from pydantic import TypeAdapter
 
-from otter_ai_core import ContextItemEvent
+from otter_ai_core import AssistantMessageEvent
 
-adapter = TypeAdapter(ContextItemEvent)
+adapter = TypeAdapter(AssistantMessageEvent)
 
 event = adapter.validate_json(payload)
 match (event.role, event.type):
@@ -142,10 +116,8 @@ match (event.role, event.type):
         print(event.delta, end="")
     case ("assistant", "done"):
         context.messages.append(event.message)
-    case ("user", "done"):
-        context.messages.append(event.message)
-    case ("tool_result", "error"):
-        # Aborted execution; event.error is a (partial) ToolResultMessage.
+    case ("assistant", "error"):
+        # Aborted/errored run; event.error is the (partial) AssistantMessage.
         context.messages.append(event.error)
 ```
 
