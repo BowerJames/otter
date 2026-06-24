@@ -61,10 +61,8 @@ generic async stream runtime:
 - [`Usage`](./packages/otter_ai_core/src/otter_ai_core/usage.py) and diagnostics for
   per-turn accounting.
 - [`model_events.py`](./packages/otter_ai_core/src/otter_ai_core/model_events.py) — the streaming-event
-  protocol: `AssistantMessageEvent`, `UserMessageEvent`, and
-  `ToolResultMessageEvent` families (each a discriminated union on `type`),
-  the plain unions `MessageEvent` (assistant + user) and `ContextItemEvent`
-  (all three).
+  protocol: the `AssistantMessageEvent` family (a discriminated union on `type`),
+  a port of pi-ai's assistant event protocol.
 - [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — a generic async
   stream runtime (`Stream` / `StreamWriter` / `create_stream`) plus the typed
   message-stream aliases. See [Generic stream runtime](#generic-stream-runtime).
@@ -117,13 +115,10 @@ into a consumer and a producer sharing one queue:
   (including the terminal `done`/`error`), then `end()`.
 - `create_stream()` — returns a linked `(Stream, StreamWriter)` pair.
 
-Typed aliases specialize it: `AssistantMessageStream`, `UserMessageStream`,
-`MessageEventStream` (assistant + user), `ContextItemStream` (all three), each
-with a matching `*Writer` alias.
-
-There is **no `result()`** — pi-ai's `result()` is single-item-only sugar that
-doesn't generalize to multi-item streams (`MessageEventStream`/
-`ContextItemStream`); consumers read the terminal `done`/`error` event directly.
+Typed aliases specialize it: `AssistantMessageStream` (and a matching
+`AssistantMessageWriter`), with `AssistantMessageStreamFn` as the producer-side
+seam type. There is **no `result()`** — consumers read the terminal `done`/`error`
+event directly.
 
 `Stream` and `StreamWriter` are runtime objects and are **not** JSON-serializable
 (unlike `Context`); the serializable data model is unchanged.

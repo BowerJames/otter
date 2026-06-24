@@ -13,18 +13,10 @@ from otter_ai_core import (
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextStartEvent,
-    ContextItemStream,
-    ContextItemWriter,
-    MessageEvent,
-    MessageEventStream,
-    MessageEventWriter,
     Stream,
     StreamWriter,
     Usage,
     UsageCost,
-    UserMessage,
-    UserMessageStream,
-    UserMessageWriter,
     create_stream,
 )
 
@@ -197,69 +189,13 @@ async def test_concurrent_producer_consumer() -> None:
     assert received == events
 
 
-async def test_message_event_stream_carries_assistant_and_user() -> None:
-    """``MessageEventStream`` spans assistant + user events (no tool results)."""
-    from otter_ai_core import UserDoneEvent, UserStartEvent
-
-    stream: Stream[MessageEvent]
-    writer: StreamWriter[MessageEvent]
-    stream, writer = create_stream()
-    assistant_partial = _assistant_message()
-    user_message = UserMessage(
-        role="user",
-        content=[{"type": "text", "text": "hello"}],
-        timestamp=2,
-    )
-
-    a_start: MessageEvent = AssistantStartEvent(
-        role="assistant", type="start", partial=assistant_partial
-    )
-    u_start: MessageEvent = UserStartEvent(
-        role="user", type="start", partial=user_message
-    )
-    a_done: MessageEvent = AssistantDoneEvent(
-        role="assistant", type="done", reason="stop", message=assistant_partial
-    )
-    u_done: MessageEvent = UserDoneEvent(role="user", type="done", message=user_message)
-
-    for event in (a_start, u_start, a_done, u_done):
-        writer.push(event)
-    writer.end()
-
-    received = await _collect(stream)
-    assert [type(e) for e in received] == [
-        AssistantStartEvent,
-        UserStartEvent,
-        AssistantDoneEvent,
-        UserDoneEvent,
-    ]
-
-
 def test_type_aliases_are_stream_specializations() -> None:
-    """Each typed alias is usable via an annotated ``create_stream()`` unpack."""
+    """The assistant alias is usable via an annotated ``create_stream()`` unpack."""
     a_stream: AssistantMessageStream
     a_writer: AssistantMessageWriter
     a_stream, a_writer = create_stream()
     assert isinstance(a_stream, Stream)
     assert isinstance(a_writer, StreamWriter)
-
-    u_stream: UserMessageStream
-    u_writer: UserMessageWriter
-    u_stream, u_writer = create_stream()
-    assert isinstance(u_stream, Stream)
-    assert isinstance(u_writer, StreamWriter)
-
-    m_stream: MessageEventStream
-    m_writer: MessageEventWriter
-    m_stream, m_writer = create_stream()
-    assert isinstance(m_stream, Stream)
-    assert isinstance(m_writer, StreamWriter)
-
-    c_stream: ContextItemStream
-    c_writer: ContextItemWriter
-    c_stream, c_writer = create_stream()
-    assert isinstance(c_stream, Stream)
-    assert isinstance(c_writer, StreamWriter)
 
 
 def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
