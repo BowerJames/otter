@@ -16,6 +16,23 @@ generic stream runtime.
 
 from __future__ import annotations
 
+from otter_ai_core.assistant_message_events import (
+    AssistantDoneEvent,
+    AssistantDoneReason,
+    AssistantErrorEvent,
+    AssistantMessageEvent,
+    AssistantStartEvent,
+    AssistantTextDeltaEvent,
+    AssistantTextEndEvent,
+    AssistantTextStartEvent,
+    AssistantThinkingDeltaEvent,
+    AssistantThinkingEndEvent,
+    AssistantThinkingStartEvent,
+    AssistantToolCallDeltaEvent,
+    AssistantToolCallEndEvent,
+    AssistantToolCallStartEvent,
+    EventErrorReason,
+)
 from otter_ai_core.content import (
     AssistantContent,
     ImageContent,
@@ -35,23 +52,6 @@ from otter_ai_core.messages import (
     Message,
     ToolResultMessage,
     UserMessage,
-)
-from otter_ai_core.model_events import (
-    AssistantDoneEvent,
-    AssistantDoneReason,
-    AssistantErrorEvent,
-    AssistantMessageEvent,
-    AssistantStartEvent,
-    AssistantTextDeltaEvent,
-    AssistantTextEndEvent,
-    AssistantTextStartEvent,
-    AssistantThinkingDeltaEvent,
-    AssistantThinkingEndEvent,
-    AssistantThinkingStartEvent,
-    AssistantToolCallDeltaEvent,
-    AssistantToolCallEndEvent,
-    AssistantToolCallStartEvent,
-    EventErrorReason,
 )
 from otter_ai_core.normalize import (
     drop_unreplayable_assistant_turns,

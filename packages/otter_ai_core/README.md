@@ -6,8 +6,7 @@ transports, or `stream()` dispatch live here; only the data structures a
 conversation and an event stream are built from.
 
 The model is a Python port of the data shapes from
-[`@earendil-works/pi-ai`](https://github.com/earendil-works/pi-ai), extended
-with user and tool-result streaming event families.
+[`@earendil-works/pi-ai`](https://github.com/earendil-works/pi-ai).
 
 ## Install
 
@@ -73,16 +72,16 @@ assert restored == context
 replay_ready = normalize_messages(context.messages)
 ```
 
-## Model message events
+## Assistant message events
 
-[`model_events.py`](./src/otter_ai_core/model_events.py) models the events emitted while an
+[`assistant_message_events.py`](./src/otter_ai_core/assistant_message_events.py) models the events emitted while an
 assistant message is being produced by an LLM provider. It is the data-only
 event protocol; the transport that pushes these events lives in a provider
 package.
 
 A single discriminated union over `type`:
 
-- [`AssistantMessageEvent`](./src/otter_ai_core/model_events.py) — 12 events (a port of
+- [`AssistantMessageEvent`](./src/otter_ai_core/assistant_message_events.py) — 12 events (a port of
   pi-ai): `start`, `text_start/delta/end`, `thinking_start/delta/end`,
   `tool_call_start/delta/end`, `done`, `error`.
 

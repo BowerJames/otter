@@ -39,10 +39,10 @@ import asyncio
 from collections.abc import Callable
 from typing import Self
 
-from otter_ai_core.context import Context
-from otter_ai_core.model_events import (
+from otter_ai_core.assistant_message_events import (
     AssistantMessageEvent,
 )
+from otter_ai_core.context import Context
 
 
 class _Core[TEvent]:
