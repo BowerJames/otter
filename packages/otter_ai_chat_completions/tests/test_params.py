@@ -13,7 +13,14 @@ from otter_ai_chat_completions import (
 )
 from otter_ai_chat_completions._compat import resolve_compat
 from otter_ai_chat_completions._params import build_params
-from otter_ai_core import Context, TextContent, Tool, ToolResultMessage, UserMessage
+from otter_ai_core import (
+    Context,
+    ContextItem,
+    TextContent,
+    Tool,
+    ToolResultMessage,
+    UserMessage,
+)
 
 
 def _params(
@@ -24,7 +31,13 @@ def _params(
     return build_params(
         model,
         context
-        or Context(messages=[UserMessage(role="user", content="hi", timestamp=0)]),
+        or Context(
+            items=[
+                ContextItem(
+                    id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+                )
+            ]
+        ),
         resolve_compat(compat),
     )
 
@@ -86,7 +99,11 @@ def test_tools_present_when_context_has_tools() -> None:
         x: int
 
     ctx = Context(
-        messages=[UserMessage(role="user", content="x", timestamp=0)],
+        items=[
+            ContextItem(
+                id="u1", message=UserMessage(role="user", content="x", timestamp=0)
+            )
+        ],
         tools=[Tool(name="add", description="d", parameters=P)],
     )
     params = _params(make_model(), context=ctx)
@@ -96,15 +113,20 @@ def test_tools_present_when_context_has_tools() -> None:
 def test_empty_tools_when_tool_history_present() -> None:
     # Anthropic-via-proxy requires the tools param when tool history exists.
     ctx = Context(
-        messages=[
-            UserMessage(role="user", content="x", timestamp=0),
-            ToolResultMessage(
-                role="tool_result",
-                tool_call_id="c1",
-                tool_name="add",
-                content=[TextContent(type="text", text="1")],
-                is_error=False,
-                timestamp=0,
+        items=[
+            ContextItem(
+                id="u1", message=UserMessage(role="user", content="x", timestamp=0)
+            ),
+            ContextItem(
+                id="t1",
+                message=ToolResultMessage(
+                    role="tool_result",
+                    tool_call_id="c1",
+                    tool_name="add",
+                    content=[TextContent(type="text", text="1")],
+                    is_error=False,
+                    timestamp=0,
+                ),
             ),
         ]
     )
@@ -270,7 +292,11 @@ def test_anthropic_cache_control_markers() -> None:
 
     ctx = Context(
         system_prompt="system",
-        messages=[UserMessage(role="user", content="hi", timestamp=0)],
+        items=[
+            ContextItem(
+                id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+            )
+        ],
         tools=[Tool(name="t", description="d", parameters={"type": "object"})],
     )
     params = _params(
@@ -287,7 +313,13 @@ def test_anthropic_cache_control_markers() -> None:
 
 
 def test_anthropic_cache_control_long_retention_ttl() -> None:
-    ctx = Context(messages=[UserMessage(role="user", content="hi", timestamp=0)])
+    ctx = Context(
+        items=[
+            ContextItem(
+                id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+            )
+        ]
+    )
     params = _params(
         make_model(cache_retention="long"),
         ChatCompletionsCompat(

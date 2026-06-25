@@ -115,40 +115,54 @@ def test_discriminated_union_dispatch_assistant() -> None:
     ctx = Context.model_validate(
         {
             "system_prompt": "s",
-            "messages": [
+            "items": [
                 {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": "hi"}],
-                    "api": "anthropic-messages",
-                    "provider": "anthropic",
-                    "model": "claude-3",
-                    "usage": {
-                        "input": 1,
-                        "output": 1,
-                        "cache_read": 0,
-                        "cache_write": 0,
-                        "total_tokens": 2,
-                        "cost": {
-                            "input": 0,
-                            "output": 0,
+                    "id": "i1",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "hi"}],
+                        "api": "anthropic-messages",
+                        "provider": "anthropic",
+                        "model": "claude-3",
+                        "usage": {
+                            "input": 1,
+                            "output": 1,
                             "cache_read": 0,
                             "cache_write": 0,
-                            "total": 0,
+                            "total_tokens": 2,
+                            "cost": {
+                                "input": 0,
+                                "output": 0,
+                                "cache_read": 0,
+                                "cache_write": 0,
+                                "total": 0,
+                            },
                         },
+                        "stop_reason": "stop",
+                        "timestamp": 1,
                     },
-                    "stop_reason": "stop",
-                    "timestamp": 1,
                 }
             ],
         }
     )
-    assert isinstance(ctx.messages[0], AssistantMessage)
+    assert isinstance(ctx.items[0].message, AssistantMessage)
 
 
 def test_unknown_role_rejected() -> None:
     with pytest.raises(ValidationError):
         Context.model_validate(
-            {"messages": [{"role": "system", "content": "x", "timestamp": 0}]}
+            {
+                "items": [
+                    {
+                        "id": "i1",
+                        "message": {
+                            "role": "system",
+                            "content": "x",
+                            "timestamp": 0,
+                        },
+                    }
+                ]
+            }
         )
 
 
@@ -176,5 +190,5 @@ def test_tool_extra_fields_forbidden() -> None:
 def test_context_defaults() -> None:
     ctx = Context()
     assert ctx.system_prompt is None
-    assert ctx.messages == []
+    assert ctx.items == []
     assert ctx.tools is None
