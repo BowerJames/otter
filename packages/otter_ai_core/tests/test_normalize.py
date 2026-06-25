@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from otter_ai_core import (
     AssistantMessage,
+    Context,
+    ContextItem,
     Message,
     TextContent,
     ToolCall,
@@ -197,12 +199,11 @@ def test_normalize_drops_then_fills() -> None:
 
 
 def test_normalize_output_round_trips() -> None:
-    from otter_ai_core import Context
-
     messages: list[Message] = [
         _assistant(tool_calls=[_tool_call("t1")]),
     ]
     normalized = normalize_messages(messages)
-    ctx = Context(messages=normalized)
+    items = [ContextItem(id=str(i), message=m) for i, m in enumerate(normalized)]
+    ctx = Context(items=items)
     restored = Context.model_validate_json(ctx.model_dump_json())
-    assert restored.messages == normalized
+    assert [i.message for i in restored.items] == normalized

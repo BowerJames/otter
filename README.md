@@ -50,8 +50,12 @@ conversation is built from, the streaming-event protocol, and a
 generic async stream runtime:
 
 - [`Context`](./packages/otter_ai_core/src/otter_ai_core/context.py) — the top-level
-  conversation (`system_prompt`, `messages`, `tools`), JSON-serializable so a
+  conversation (`system_prompt`, `items`, `tools`), JSON-serializable so a
   context can be persisted and replayed elsewhere.
+- [`ContextItem`](./packages/otter_ai_core/src/otter_ai_core/context_item.py) — the
+  `{id, message}` wrapper layer between `Context` and `Message`. The `id` is
+  caller/provider-supplied; it is **not** generated inside assistant message
+  streams (e.g. Chat Completions).
 - [`Message`](./packages/otter_ai_core/src/otter_ai_core/messages.py) — a discriminated
   union of `UserMessage`, `AssistantMessage`, and `ToolResultMessage`.
 - Content blocks in `content.py`: `TextContent`, `ImageContent`,
@@ -89,11 +93,16 @@ tool-execution loop); call them explicitly only when preparing to replay.
 ### Quick example
 
 ```python
-from otter_ai_core import Context, UserMessage, normalize_messages
+from otter_ai_core import Context, ContextItem, UserMessage, normalize_messages
 
 context = Context(
     system_prompt="You are helpful.",
-    messages=[UserMessage(role="user", content="Hi!", timestamp=0)],
+    items=[
+        ContextItem(
+            id="u1",
+            message=UserMessage(role="user", content="Hi!", timestamp=0),
+        )
+    ],
 )
 
 # A Context round-trips through plain JSON.
@@ -101,7 +110,7 @@ restored = Context.model_validate_json(context.model_dump_json())
 assert restored == context
 
 # Opt-in replay prep (only when you intend to send to a model elsewhere):
-replay_ready = normalize_messages(context.messages)
+replay_ready = normalize_messages([item.message for item in context.items])
 ```
 
 ### Generic stream runtime

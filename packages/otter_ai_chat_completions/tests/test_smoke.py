@@ -12,7 +12,7 @@ from otter_ai_chat_completions import (
     ChatCompletionsModelOptions,
     create_chat_completions_assistant_message_stream,
 )
-from otter_ai_core import Context, Stream, UserMessage
+from otter_ai_core import Context, ContextItem, Stream, UserMessage
 
 
 def _options() -> ChatCompletionsModelOptions:
@@ -73,7 +73,11 @@ async def test_seam_returns_stream_synchronously() -> None:
     options = _options()
     context = Context(
         system_prompt="hi",
-        messages=[UserMessage(role="user", content="hello", timestamp=0)],
+        items=[
+            ContextItem(
+                id="u1", message=UserMessage(role="user", content="hello", timestamp=0)
+            )
+        ],
     )
     stream = create_chat_completions_assistant_message_stream(options, context)
     assert isinstance(stream, Stream)

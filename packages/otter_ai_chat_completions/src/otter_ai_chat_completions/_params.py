@@ -282,7 +282,8 @@ def build_params(
 ) -> dict[str, Any]:
     """Build the Chat Completions streaming request body (pre-hook)."""
     cache_retention = _resolve_cache_retention(model)
-    messages = convert_messages(model, context.system_prompt, context.messages, compat)
+    source_messages = [item.message for item in context.items]
+    messages = convert_messages(model, context.system_prompt, source_messages, compat)
     cache_control = _get_compat_cache_control(compat, cache_retention)
 
     params: dict[str, Any] = {
@@ -323,7 +324,7 @@ def build_params(
         params["tools"] = convert_tools(list(context.tools), compat)
         if compat.zai_tool_stream:
             params["tool_stream"] = True
-    elif has_tool_history(context.messages):
+    elif has_tool_history(source_messages):
         # Anthropic-via-proxy requires the tools param when tool history exists.
         params["tools"] = []
 
