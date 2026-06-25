@@ -113,8 +113,8 @@ def create_chat_completions_assistant_message_stream(
     :data:`~otter_ai_core.AssistantMessageStreamFn` contract — it never raises.
 
     ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`); when
-    omitted a fresh, unset event is created (the stream then runs to
-    completion unless one is never set).
+    omitted a fresh, unset event is created and the stream runs to
+    completion (the event is never set unless a caller holds a reference).
     """
     if abort is None:
         abort = asyncio.Event()

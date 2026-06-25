@@ -138,10 +138,11 @@ class ChatCompletionsModel(BaseModel):
     function reads it verbatim. Per-call mutation is via
     ``model.model_copy(update={...})``.
 
-    Runtime handles (hooks, abort signal) do **not** live here — they cannot
+    Runtime handles (hooks) do **not** live here — they cannot
     be carried by a serializable data model. They are bundled with the model
     in :class:`otter_ai_chat_completions.options.ChatCompletionsModelOptions`,
-    which is the seam's first argument.
+    which is the seam's first argument; the cooperative-abort signal is the
+    seam's third argument (an :class:`asyncio.Event`).
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -42,8 +42,8 @@ from typing import Self
 class _Core[TEvent]:
     """Shared queue state linking a :class:`Stream` to its :class:`StreamWriter`.
 
-    ``None`` is the termination sentinel pushed by :meth:`StreamWriter.end` /
-    :meth:`Stream.aclose`; it is safe because events are never ``None``.
+    ``None`` is the termination sentinel pushed by :meth:`StreamWriter.end`;
+    it is safe because events are never ``None``.
     """
 
     __slots__ = ("queue", "done")
@@ -92,7 +92,7 @@ class StreamWriter[TEvent]:
     def push(self, event: TEvent) -> None:
         """Enqueue an event.
 
-        No-op once :meth:`end` (or :meth:`Stream.aclose`) has run.
+        No-op once :meth:`end` has run.
         """
         if self._core.done:
             return

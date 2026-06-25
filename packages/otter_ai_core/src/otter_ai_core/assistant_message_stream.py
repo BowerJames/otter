@@ -29,13 +29,13 @@ AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
 #:
 #: The first argument carries the provider's per-call configuration. A future
 #: dispatch layer would key on the model's ``api`` (read off the configuration)
-#: and invoke the registered function with ``(options, context)``. Otter
+#: and invoke the registered function with ``(options, context, abort)``. Otter
 #: defines no dispatch today — this alias is the contract a provider package
 #: and a dispatch layer will agree on.
 #:
 #: ``TOptions`` is open because the realistic shape is a provider-specific
 #: **options bundle** — pure-data config (model id, temperature, max tokens,
-#: API key, …) bundled with runtime handles (hooks, abort signals) that cannot
+#: API key, …) bundled with runtime handles (hooks) that cannot
 #: travel out-of-band (a closure is per-call and defeats registry-keyed lookup;
 #: registry metadata is per-registration, not per-call). A provider that needs
 #: nothing beyond the model may specialize ``TOptions`` to a bare ``Model``
