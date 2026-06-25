@@ -9,7 +9,7 @@ from otter_ai_core.tools import Tool
 
 
 class Context(BaseModel):
-    """A full conversation: optional system prompt, messages, and tools.
+    """A full conversation: optional system prompt, items, and tools.
 
     Designed to be pure-JSON-serializable (``model_dump_json()`` /
     ``model_validate_json()``) so a context can be persisted, transferred, or
