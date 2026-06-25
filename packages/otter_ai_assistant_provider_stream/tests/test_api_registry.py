@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 from otter_ai_assistant_provider_stream import (
@@ -48,7 +49,9 @@ class TestBuiltInApi:
 
 class TestRuntimeRegistration:
     def test_register_custom_fn(self) -> None:
-        def fn(_options: object, _context: Context) -> AssistantMessageStream:
+        def fn(
+            _options: object, _context: Context, _abort: asyncio.Event
+        ) -> AssistantMessageStream:
             raise AssertionError
 
         register_api_stream_fn("custom-api", fn)
@@ -59,10 +62,12 @@ class TestRuntimeRegistration:
         assert get_api_stream_fn("never-registered") is None
 
     def test_register_overwrites(self) -> None:
-        def first(_o: object, _c: Context) -> AssistantMessageStream:
+        def first(_o: object, _c: Context, _a: asyncio.Event) -> AssistantMessageStream:
             raise AssertionError
 
-        def second(_o: object, _c: Context) -> AssistantMessageStream:
+        def second(
+            _o: object, _c: Context, _a: asyncio.Event
+        ) -> AssistantMessageStream:
             raise AssertionError
 
         register_api_stream_fn("overwritable", first)
@@ -76,7 +81,9 @@ class TestDispatchUsesRegisteredFn:
     async def test_custom_fn_dispatched(self) -> None:
         seen: list[Context] = []
 
-        def fake_fn(_options: object, context: Context) -> AssistantMessageStream:
+        def fake_fn(
+            _options: object, context: Context, _abort: asyncio.Event
+        ) -> AssistantMessageStream:
             seen.append(context)
             stream: AssistantMessageStream
             writer: object

@@ -7,7 +7,6 @@ Defines the caller-facing config (``ModelProviderConfig`` /
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -112,12 +111,15 @@ class ModelProviderOptions:
     """Bundle passed to :func:`create_assistant_message_stream_by_provider`.
 
     Mirrors :class:`~otter_ai_chat_completions.ChatCompletionsModelOptions`:
-    the pure-data config lives on :attr:`model`; runtime handles (hooks,
-    abort signal) sit alongside it because they cannot live on a serializable
-    Pydantic model. The defaults let a "no hooks / no explicit abort" caller
-    construct this with just the model.
+    the pure-data config lives on :attr:`model`; runtime handles (hooks) sit
+    alongside it because they cannot live on a serializable Pydantic model.
+    The defaults let a "no hooks" caller construct this with just the model.
+
+    The abort signal is **not** part of this bundle: it is supplied as the
+    seam's third argument (an :class:`asyncio.Event`) and is the single source
+    of truth for cooperative abort, threaded through to the dispatched
+    provider stream fn.
     """
 
     model: ModelProviderConfig
     hooks: ChatCompletionsHooks = field(default_factory=ChatCompletionsHooks)
-    abort_signal: asyncio.Event = field(default_factory=asyncio.Event)

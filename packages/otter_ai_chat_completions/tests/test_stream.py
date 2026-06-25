@@ -390,9 +390,11 @@ async def test_abort_emits_aborted_error_event(monkeypatch: pytest.MonkeyPatch) 
         return sse_response([_delta_chunk({"content": "x"}, finish_reason="stop")])
 
     install_fake_transport(monkeypatch, handler)
-    options = make_options()
-    options.abort_signal.set()
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    abort = asyncio.Event()
+    abort.set()
+    stream = create_chat_completions_assistant_message_stream(
+        make_options(), simple_context(), abort
+    )
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)

@@ -1,6 +1,6 @@
 """Streaming event model for building assistant messages.
 
-This module models the events emitted while an assistant message is being
+This module models the events emitted while a singular assistant message is being
 produced by an LLM provider.
 
 It is **data-only**: no transport, no provider registry, no ``stream()``

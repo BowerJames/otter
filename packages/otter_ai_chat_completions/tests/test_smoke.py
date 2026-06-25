@@ -54,23 +54,15 @@ def test_options_defaults() -> None:
     assert isinstance(options.hooks, ChatCompletionsHooks)
     assert options.hooks.on_payload is None
     assert options.hooks.on_response is None
-    assert isinstance(options.abort_signal, asyncio.Event)
-    assert not options.abort_signal.is_set()
 
 
 def test_options_defaults_are_independent() -> None:
     # The ``default_factory`` pattern must give each construction fresh
-    # runtime handles — a shared-mutable default would alias hooks/abort_signal
-    # across instances. Pin that contract.
+    # hooks — a shared-mutable default would alias hooks across instances.
+    # Pin that contract.
     a = _options()
     b = _options()
     assert a.hooks is not b.hooks
-    assert a.abort_signal is not b.abort_signal
-
-    # Mutating one must not affect the other.
-    a.abort_signal.set()
-    assert a.abort_signal.is_set()
-    assert not b.abort_signal.is_set()
 
 
 async def test_seam_returns_stream_synchronously() -> None:
@@ -85,8 +77,8 @@ async def test_seam_returns_stream_synchronously() -> None:
     )
     stream = create_chat_completions_assistant_message_stream(options, context)
     assert isinstance(stream, Stream)
-    # A producer task was scheduled and is tracked. Drain it so the test does
-    # not leak the task (and to assert it completes rather than hanging).
-    await stream.aclose()
-    # Let the scheduled producer reach its error path.
+    # A producer task was scheduled and is tracked. Drain the stream to
+    # completion (the no-API-key producer emits its error event and ends
+    # itself) so the test neither leaks the task nor hangs.
+    _ = [event async for event in stream]
     await asyncio.sleep(0)
