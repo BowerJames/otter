@@ -33,6 +33,11 @@ from otter_ai_core.assistant_message_events import (
     AssistantToolCallStartEvent,
     EventErrorReason,
 )
+from otter_ai_core.assistant_message_stream import (
+    AssistantMessageStream,
+    AssistantMessageStreamFn,
+    AssistantMessageWriter,
+)
 from otter_ai_core.content import (
     AssistantContent,
     ImageContent,
@@ -59,9 +64,6 @@ from otter_ai_core.normalize import (
     normalize_messages,
 )
 from otter_ai_core.stream import (
-    AssistantMessageStream,
-    AssistantMessageStreamFn,
-    AssistantMessageWriter,
     Stream,
     StreamWriter,
     create_stream,

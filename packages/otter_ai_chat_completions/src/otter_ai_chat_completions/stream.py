@@ -14,7 +14,7 @@ writer. The seam **never raises** — request/model/runtime failures are encoded
 as :class:`~otter_ai_core.AssistantErrorEvent` (with ``stop_reason`` of ``"error"``
 or ``"aborted"`` and ``error_message`` set).
 
-Cooperative abort is honoured via ``options.abort_signal`` (an
+Cooperative abort is honoured via the ``abort`` argument (an
 :class:`asyncio.Event`), checked between SSE chunks and around the request
 send. On abort the producer emits an :class:`~otter_ai_core.AssistantErrorEvent`
 with ``reason="aborted"`` and stops, preserving any partial content.
@@ -101,7 +101,9 @@ _producer_tasks: set[asyncio.Task[None]] = set()
 
 
 def create_chat_completions_assistant_message_stream(
-    options: ChatCompletionsModelOptions, context: Context
+    options: ChatCompletionsModelOptions,
+    context: Context,
+    abort: asyncio.Event | None = None,
 ) -> AssistantMessageStream:
     """Build an :class:`~otter_ai_core.AssistantMessageStream` for a Chat
     Completions model.
@@ -109,11 +111,17 @@ def create_chat_completions_assistant_message_stream(
     Synchronous; returns immediately and spawns its producer via
     :func:`asyncio.create_task`. Honours the
     :data:`~otter_ai_core.AssistantMessageStreamFn` contract — it never raises.
+
+    ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`); when
+    omitted a fresh, unset event is created (the stream then runs to
+    completion unless one is never set).
     """
+    if abort is None:
+        abort = asyncio.Event()
     stream: AssistantMessageStream
     writer: AssistantMessageWriter
     stream, writer = create_stream()
-    task = asyncio.create_task(_run(writer, options, context))
+    task = asyncio.create_task(_run(writer, options, context, abort))
     _producer_tasks.add(task)
     task.add_done_callback(_producer_tasks.discard)
     return stream
@@ -128,12 +136,13 @@ async def _run(
     writer: AssistantMessageWriter,
     options: ChatCompletionsModelOptions,
     context: Context,
+    abort: asyncio.Event,
 ) -> None:
     output = _skeleton(options)
     try:
-        await _produce(writer, output, options, context)
+        await _produce(writer, output, options, context, abort)
     except Exception as exc:  # noqa: BLE001 — the seam must never raise.
-        output.stop_reason = "aborted" if options.abort_signal.is_set() else "error"
+        output.stop_reason = "aborted" if abort.is_set() else "error"
         output.error_message = _format_error(exc)
         writer.push(
             AssistantErrorEvent(
@@ -152,6 +161,7 @@ async def _produce(
     output: AssistantMessage,
     options: ChatCompletionsModelOptions,
     context: Context,
+    abort: asyncio.Event,
 ) -> None:
     model = options.model
     api_key = model.api_key
@@ -188,7 +198,7 @@ async def _produce(
     client = _create_client(model, api_key, headers, timeout_seconds)
     async with client:
         response = await _send_with_retries(
-            client, params, options, max_retries, max_retry_delay_seconds
+            client, params, options, abort, max_retries, max_retry_delay_seconds
         )
         if options.hooks.on_response is not None:
             await options.hooks.on_response(
@@ -200,7 +210,7 @@ async def _produce(
             )
 
         writer.push(AssistantStartEvent(role="assistant", type="start", partial=output))
-        await _consume_stream(writer, output, response, options, model)
+        await _consume_stream(writer, output, response, options, model, abort)
 
 
 # --------------------------------------------------------------------------- #
@@ -212,6 +222,7 @@ async def _send_with_retries(
     client: httpx.AsyncClient,
     params: dict[str, Any],
     options: ChatCompletionsModelOptions,
+    abort: asyncio.Event,
     max_retries: int,
     max_retry_delay_seconds: float,
 ) -> httpx.Response:
@@ -228,7 +239,7 @@ async def _send_with_retries(
     request = client.build_request("POST", "chat/completions", content=body)
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
-        if options.abort_signal.is_set():
+        if abort.is_set():
             raise RuntimeError("Request was aborted")
         try:
             response = await client.send(request, stream=True)
@@ -237,7 +248,7 @@ async def _send_with_retries(
             if attempt >= max_retries:
                 raise
             await _sleep_or_abort(
-                options, _backoff_seconds(attempt, max_retry_delay_seconds)
+                abort, _backoff_seconds(attempt, max_retry_delay_seconds)
             )
             continue
 
@@ -251,7 +262,7 @@ async def _send_with_retries(
                 )
             if delay is None:
                 delay = _backoff_seconds(attempt, max_retry_delay_seconds)
-            await _sleep_or_abort(options, min(delay, max_retry_delay_seconds))
+            await _sleep_or_abort(abort, min(delay, max_retry_delay_seconds))
             continue
 
         if response.status_code >= 400:
@@ -296,7 +307,7 @@ def _backoff_seconds(attempt: int, cap: float) -> float:
     return random.uniform(0, base)
 
 
-async def _sleep_or_abort(options: ChatCompletionsModelOptions, seconds: float) -> None:
+async def _sleep_or_abort(abort: asyncio.Event, seconds: float) -> None:
     """Sleep, but raise immediately if the abort signal fires during the delay.
 
     A retry backoff interrupted by an abort must surface the abort on the spot
@@ -306,7 +317,7 @@ async def _sleep_or_abort(options: ChatCompletionsModelOptions, seconds: float) 
         return
     try:
         await asyncio.wait_for(
-            asyncio.create_task(_wait_for_abort(options)), timeout=seconds
+            asyncio.create_task(_wait_for_abort(abort)), timeout=seconds
         )
     except TimeoutError:
         return
@@ -314,8 +325,8 @@ async def _sleep_or_abort(options: ChatCompletionsModelOptions, seconds: float) 
     raise RuntimeError("Request was aborted")
 
 
-async def _wait_for_abort(options: ChatCompletionsModelOptions) -> None:
-    await options.abort_signal.wait()
+async def _wait_for_abort(abort: asyncio.Event) -> None:
+    await abort.wait()
 
 
 # --------------------------------------------------------------------------- #
@@ -351,6 +362,7 @@ async def _consume_stream(
     response: httpx.Response,
     options: ChatCompletionsModelOptions,
     model: ChatCompletionsModel,
+    abort: asyncio.Event,
 ) -> None:
     blocks: list[AssistantContent] = output.content  # the live list
     state = _BlockState()
@@ -423,7 +435,7 @@ async def _consume_stream(
     has_finish_reason = False
     try:
         async for payload in iter_sse_events(response):
-            if options.abort_signal.is_set():
+            if abort.is_set():
                 raise RuntimeError("Request was aborted")
             if payload == "[DONE]":
                 break
@@ -468,7 +480,7 @@ async def _consume_stream(
 
     # Post-stream validation — each condition raises to route through the
     # producer's error path.
-    if options.abort_signal.is_set():
+    if abort.is_set():
         raise RuntimeError("Request was aborted")
     if output.stop_reason == "aborted":
         raise RuntimeError("Request was aborted")

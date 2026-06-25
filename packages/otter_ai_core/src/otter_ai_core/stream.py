@@ -3,8 +3,8 @@
 A faithful Python/``asyncio`` port of the ``EventStream`` push-queue from
 ``@earendil-works/pi-ai``. This module provides the *runtime* — an async
 single-consumer queue split into a consumer :class:`Stream` and a producer
-:class:`StreamWriter` — plus the typed stream aliases a provider package built
-on top will import.
+:class:`StreamWriter`. The typed message-stream aliases live in
+:mod:`otter_ai_core.assistant_message_stream`.
 
 Producer contract (matches pi-ai)
 ---------------------------------
@@ -27,22 +27,16 @@ it into the core type.)
 Scope
 -----
 Otter defines **no providers, no API registry, and no ``stream()`` dispatch** —
-only this generic runtime and the types that specialize it. :class:`Stream`
-and :class:`StreamWriter` are runtime objects and are **not** JSON-serializable
-(unlike :class:`~otter_ai_core.context.Context`); the serializable data model is
+only this generic runtime. :class:`Stream` and :class:`StreamWriter` are
+runtime objects and are **not** JSON-serializable (unlike
+:class:`~otter_ai_core.context.Context`); the serializable data model is
 unchanged.
 """
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from typing import Self
-
-from otter_ai_core.assistant_message_events import (
-    AssistantMessageEvent,
-)
-from otter_ai_core.context import Context
 
 
 class _Core[TEvent]:
@@ -81,18 +75,6 @@ class Stream[TEvent]:
         if item is None:
             raise StopAsyncIteration
         return item
-
-    async def aclose(self) -> None:
-        """Mark the stream done and unblock any pending consumer ``await``.
-
-        Idempotent. Any events still queued after this point are discarded by
-        the consumer (iteration stops at the sentinel). The producer's
-        subsequent :meth:`StreamWriter.push` calls become no-ops.
-        """
-        if self._core.done:
-            return
-        self._core.done = True
-        self._core.queue.put_nowait(None)
 
 
 class StreamWriter[TEvent]:
@@ -136,41 +118,3 @@ def create_stream[TEvent]() -> tuple[Stream[TEvent], StreamWriter[TEvent]]:
     """
     core = _Core[TEvent]()
     return Stream[TEvent](core), StreamWriter[TEvent](core)
-
-
-# --------------------------------------------------------------------------- #
-# Typed aliases
-# --------------------------------------------------------------------------- #
-#
-# Plain assignment (not PEP 695 ``type`` statements). ``TEvent`` is invariant
-# because ``StreamWriter.push`` accepts it, so covariance is not available
-# regardless.
-
-#: Stream of assistant streaming events (single assistant message per stream).
-AssistantMessageStream = Stream[AssistantMessageEvent]
-
-#: Producer handle for an :data:`AssistantMessageStream`.
-AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
-
-#: Function that builds an :data:`AssistantMessageStream`.
-#:
-#: Producer-side seam between a provider package and a future dispatch layer
-#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai, with the model and
-#: options slots collapsed into one: ``TOptions``).
-#:
-#: The first argument carries the provider's per-call configuration. A future
-#: dispatch layer would key on the model's ``api`` (read off the configuration)
-#: and invoke the registered function with ``(options, context)``. Otter
-#: defines no dispatch today — this alias is the contract a provider package
-#: and a dispatch layer will agree on.
-#:
-#: ``TOptions`` is open because the realistic shape is a provider-specific
-#: **options bundle** — pure-data config (model id, temperature, max tokens,
-#: API key, …) bundled with runtime handles (hooks, abort signals) that cannot
-#: travel out-of-band (a closure is per-call and defeats registry-keyed lookup;
-#: registry metadata is per-registration, not per-call). A provider that needs
-#: nothing beyond the model may specialize ``TOptions`` to a bare ``Model``
-#: type, but the options-bundle form is the intended pattern.
-type AssistantMessageStreamFn[TOptions] = Callable[
-    [TOptions, Context], AssistantMessageStream
-]

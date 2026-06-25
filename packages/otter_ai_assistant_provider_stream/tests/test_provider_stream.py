@@ -35,6 +35,7 @@ from otter_ai_core import (
     AssistantErrorEvent,
     AssistantMessageStream,
     Context,
+    create_stream,
 )
 
 # --------------------------------------------------------------------------- #
@@ -201,21 +202,18 @@ class TestOverrides:
 
 
 class TestRuntimeHandlesPassthrough:
-    def test_hooks_and_abort_signal_passed_through(self) -> None:
+    def test_hooks_passed_through(self) -> None:
         from otter_ai_chat_completions import ChatCompletionsHooks
 
         hooks = ChatCompletionsHooks()
-        abort = asyncio.Event()
-        options = ModelProviderOptions(model=_config(), hooks=hooks, abort_signal=abort)
+        options = ModelProviderOptions(model=_config(), hooks=hooks)
         resolved = _resolve_options(options)
         assert resolved.hooks is hooks
-        assert resolved.abort_signal is abort
 
     def test_defaults_are_independent(self) -> None:
         a = ModelProviderOptions(model=_config())
         b = ModelProviderOptions(model=_config())
         assert a.hooks is not b.hooks
-        assert a.abort_signal is not b.abort_signal
 
 
 # --------------------------------------------------------------------------- #
@@ -375,12 +373,32 @@ class TestEndToEnd:
         )
         assert received["auth"] == "Bearer sk-from-env"
 
-    async def test_abort_signal_passed_through(
+    async def test_abort_signal_threaded_to_dispatched_fn(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # No transport needed: assert the abort signal object is the same one
-        # the inner options carry.
+        # The seam's ``abort`` 3rd arg is threaded through to the dispatched
+        # provider stream fn (it no longer lives on the options bundle).
+        from otter_ai_assistant_provider_stream import register_api_stream_fn
+
+        seen: list[object] = []
+
+        def fake_fn(
+            _options: object, _context: Context, abort: asyncio.Event
+        ) -> AssistantMessageStream:
+            seen.append(abort)
+            stream: AssistantMessageStream
+            writer: object
+            stream, writer = create_stream()
+            writer.end()
+            return stream
+
+        register_api_stream_fn("abort-test-api", fake_fn)
+        options = ModelProviderOptions(
+            model=_config(api="abort-test-api", api_key="sk")
+        )
         abort = asyncio.Event()
-        options = ModelProviderOptions(model=_config(api_key="sk"), abort_signal=abort)
-        resolved = _resolve_options(options)
-        assert resolved.abort_signal is abort
+        stream = create_assistant_message_stream_by_provider(
+            options, simple_context(), abort
+        )
+        _ = [event async for event in stream]
+        assert seen == [abort]

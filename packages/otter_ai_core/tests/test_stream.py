@@ -139,36 +139,6 @@ async def test_end_is_idempotent() -> None:
     assert received == events  # exactly the pushed events, nothing extra
 
 
-async def test_aclose_unblocks_pending_consumer_and_stops() -> None:
-    """Consumer-side ``aclose`` ends iteration from the consumer's side."""
-    stream: Stream[AssistantMessageEvent]
-    writer: StreamWriter[AssistantMessageEvent]
-    stream, writer = create_stream()
-    # No events pushed, no end() called: a bare ``async for`` would block.
-    # Have the consumer close itself from another task.
-    task = asyncio.create_task(_collect(stream))
-    await asyncio.sleep(0)  # let the consumer await the empty queue
-    await stream.aclose()
-
-    received = await asyncio.wait_for(task, timeout=1.0)
-    assert received == []
-
-
-async def test_aclose_then_push_is_noop() -> None:
-    stream: Stream[AssistantMessageEvent]
-    writer: StreamWriter[AssistantMessageEvent]
-    stream, writer = create_stream()
-    await stream.aclose()
-
-    events = _assistant_events()
-    for event in events:
-        writer.push(event)  # producer closed out from the consumer side
-
-    # Consumer already closed: iteration yields nothing.
-    received = await asyncio.wait_for(_collect(stream), timeout=1.0)
-    assert received == []
-
-
 async def test_concurrent_producer_consumer() -> None:
     """Producer pushes from a task while consumer drains concurrently."""
     stream: Stream[AssistantMessageEvent]
@@ -210,7 +180,9 @@ def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
         Context,
     )
 
-    def make_stream(options: object, context: Context) -> AssistantMessageStream:
+    def make_stream(
+        options: object, context: Context, abort: asyncio.Event
+    ) -> AssistantMessageStream:
         stream: AssistantMessageStream
         _writer: AssistantMessageWriter
         stream, _writer = create_stream()

@@ -18,6 +18,7 @@ stream and learns of failure by reading its terminal event.
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 from otter_ai_assistant_provider_stream.api_registry import get_api_stream_fn
@@ -68,13 +69,21 @@ _DIRECT_OVERRIDE_FIELDS: tuple[str, ...] = (
 
 
 def create_assistant_message_stream_by_provider(
-    options: ModelProviderOptions, context: Context
+    options: ModelProviderOptions,
+    context: Context,
+    abort: asyncio.Event | None = None,
 ) -> AssistantMessageStream:
     """Build an :class:`~otter_ai_core.AssistantMessageStream` for a catalog model.
 
     Synchronous; never raises. Resolution/dispatch failures are encoded as an
     :class:`~otter_ai_core.AssistantErrorEvent` on the returned stream.
+
+    ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`);
+    when omitted a fresh, unset event is created. It is threaded through to
+    the dispatched provider stream fn.
     """
+    if abort is None:
+        abort = asyncio.Event()
     try:
         cc_options = _resolve_options(options)
         fn = get_api_stream_fn(options.model.api)
@@ -82,7 +91,7 @@ def create_assistant_message_stream_by_provider(
             raise RuntimeError(
                 f"No stream fn registered for api: {options.model.api!r}"
             )
-        return fn(cc_options, context)
+        return fn(cc_options, context, abort)
     except Exception as exc:  # noqa: BLE001 — the seam must never raise.
         return _error_stream(options.model, exc)
 
@@ -123,7 +132,6 @@ def _resolve_options(options: ModelProviderOptions) -> ChatCompletionsModelOptio
     return ChatCompletionsModelOptions(
         model=model,
         hooks=options.hooks,
-        abort_signal=options.abort_signal,
     )
 
 
