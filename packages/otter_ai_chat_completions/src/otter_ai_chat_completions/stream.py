@@ -198,7 +198,7 @@ async def _produce(
     client = _create_client(model, api_key, headers, timeout_seconds)
     async with client:
         response = await _send_with_retries(
-            client, params, options, abort, max_retries, max_retry_delay_seconds
+            client, params, abort, max_retries, max_retry_delay_seconds
         )
         if options.hooks.on_response is not None:
             await options.hooks.on_response(
@@ -210,7 +210,7 @@ async def _produce(
             )
 
         writer.push(AssistantStartEvent(role="assistant", type="start", partial=output))
-        await _consume_stream(writer, output, response, options, model, abort)
+        await _consume_stream(writer, output, response, model, abort)
 
 
 # --------------------------------------------------------------------------- #
@@ -221,7 +221,6 @@ async def _produce(
 async def _send_with_retries(
     client: httpx.AsyncClient,
     params: dict[str, Any],
-    options: ChatCompletionsModelOptions,
     abort: asyncio.Event,
     max_retries: int,
     max_retry_delay_seconds: float,
@@ -360,7 +359,6 @@ async def _consume_stream(
     writer: AssistantMessageWriter,
     output: AssistantMessage,
     response: httpx.Response,
-    options: ChatCompletionsModelOptions,
     model: ChatCompletionsModel,
     abort: asyncio.Event,
 ) -> None:

@@ -88,6 +88,6 @@ async-only. See `hooks.py`.
 
 ## Abort
 
-Cooperative via `options.abort_signal: asyncio.Event`. The future transport
-checks `is_set()` between SSE chunks and emits an `AssistantErrorEvent` with
-`reason="aborted"` when set.
+Cooperative via the seam's third argument, `abort: asyncio.Event`. The
+transport checks `is_set()` between SSE chunks and emits an
+`AssistantErrorEvent` with `reason="aborted"` when set.
