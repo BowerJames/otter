@@ -47,7 +47,13 @@ from otter_ai_core.content import (
     UserContent,
 )
 from otter_ai_core.context import Context
-from otter_ai_core.context_item import ContextItem
+from otter_ai_core.context_item import (
+    AssistantContextItem,
+    ContextItem,
+    ToolResultContextItem,
+    UserContextItem,
+    context_item,
+)
 from otter_ai_core.diagnostics import (
     AssistantMessageDiagnostic,
     DiagnosticErrorInfo,
@@ -122,8 +128,12 @@ __all__ = [
     "ToolResultMessage",
     "UserMessage",
     # context
+    "AssistantContextItem",
     "Context",
     "ContextItem",
+    "ToolResultContextItem",
+    "UserContextItem",
+    "context_item",
     # normalize (opt-in)
     "drop_unreplayable_assistant_turns",
     "fill_missing_tool_results",
