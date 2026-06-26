@@ -5,7 +5,6 @@ from __future__ import annotations
 from otter_ai_core import (
     AssistantMessage,
     Context,
-    ContextItem,
     Message,
     TextContent,
     ToolCall,
@@ -13,6 +12,7 @@ from otter_ai_core import (
     Usage,
     UsageCost,
     UserMessage,
+    context_item,
     drop_unreplayable_assistant_turns,
     fill_missing_tool_results,
     normalize_messages,
@@ -203,7 +203,7 @@ def test_normalize_output_round_trips() -> None:
         _assistant(tool_calls=[_tool_call("t1")]),
     ]
     normalized = normalize_messages(messages)
-    items = [ContextItem(id=str(i), message=m) for i, m in enumerate(normalized)]
+    items = [context_item(message=m, id=str(i)) for i, m in enumerate(normalized)]
     ctx = Context(items=items)
     restored = Context.model_validate_json(ctx.model_dump_json())
-    assert [i.message for i in restored.items] == normalized
+    assert [i.to_message() for i in restored.items] == normalized

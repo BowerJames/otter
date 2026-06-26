@@ -21,7 +21,7 @@ from otter_ai_chat_completions import (
     ChatCompletionsModel,
 )
 from otter_ai_chat_completions import stream as stream_module
-from otter_ai_core import Context, ContextItem, UserMessage
+from otter_ai_core import Context, UserMessage, context_item
 
 
 def model_kwargs(**overrides: Any) -> dict[str, Any]:
@@ -54,8 +54,8 @@ def simple_context(text: str = "hello") -> Context:
     return Context(
         system_prompt=None,
         items=[
-            ContextItem(
-                id="u1", message=UserMessage(role="user", content=text, timestamp=0)
+            context_item(
+                message=UserMessage(role="user", content=text, timestamp=0), id="u1"
             )
         ],
     )

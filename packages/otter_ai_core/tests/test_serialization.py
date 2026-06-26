@@ -6,7 +6,6 @@ from otter_ai_core import (
     AssistantMessage,
     AssistantMessageDiagnostic,
     Context,
-    ContextItem,
     DiagnosticErrorInfo,
     TextContent,
     ThinkingContent,
@@ -16,6 +15,7 @@ from otter_ai_core import (
     Usage,
     UsageCost,
     UserMessage,
+    context_item,
 )
 
 
@@ -48,14 +48,13 @@ def _rich_context() -> Context:
             )
         ],
         items=[
-            ContextItem(
-                id="u1",
+            context_item(
                 message=UserMessage(
                     role="user", content="What time is it?", timestamp=1_700_000_000_000
                 ),
+                id="u1",
             ),
-            ContextItem(
-                id="a1",
+            context_item(
                 message=AssistantMessage(
                     role="assistant",
                     content=[
@@ -87,9 +86,9 @@ def _rich_context() -> Context:
                     stop_reason="tool_use",
                     timestamp=1_700_000_001_000,
                 ),
+                id="a1",
             ),
-            ContextItem(
-                id="t1",
+            context_item(
                 message=ToolResultMessage(
                     role="tool_result",
                     tool_call_id="t1",
@@ -99,6 +98,7 @@ def _rich_context() -> Context:
                     is_error=False,
                     timestamp=1_700_000_002_000,
                 ),
+                id="t1",
             ),
         ],
     )
@@ -115,7 +115,7 @@ def test_context_roundtrip_json() -> None:
 def test_context_roundtrip_preserves_field_shapes() -> None:
     restored = Context.model_validate_json(_rich_context().model_dump_json())
 
-    assistant = restored.items[1].message
+    assistant = restored.items[1].to_message()
     assert isinstance(assistant, AssistantMessage)
     assert isinstance(assistant.content[0], ThinkingContent)
     assert assistant.content[0].thinking_signature == "sig"
@@ -125,7 +125,7 @@ def test_context_roundtrip_preserves_field_shapes() -> None:
     assert assistant.diagnostics is not None
     assert assistant.diagnostics[0].details == {"attempt": 2}
 
-    tool_result = restored.items[2].message
+    tool_result = restored.items[2].to_message()
     assert isinstance(tool_result, ToolResultMessage)
     assert tool_result.details == {"raw": 1234}
 
