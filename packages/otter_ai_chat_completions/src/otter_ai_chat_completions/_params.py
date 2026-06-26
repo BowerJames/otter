@@ -282,7 +282,7 @@ def build_params(
 ) -> dict[str, Any]:
     """Build the Chat Completions streaming request body (pre-hook)."""
     cache_retention = _resolve_cache_retention(model)
-    source_messages = [item.message for item in context.items]
+    source_messages = [item.to_message() for item in context.items]
     messages = convert_messages(model, context.system_prompt, source_messages, compat)
     cache_control = _get_compat_cache_control(compat, cache_retention)
 

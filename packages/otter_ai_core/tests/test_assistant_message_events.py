@@ -22,12 +22,12 @@ from otter_ai_core import (
     AssistantToolCallEndEvent,
     AssistantToolCallStartEvent,
     Context,
-    ContextItem,
     TextContent,
     ThinkingContent,
     ToolCall,
     Usage,
     UsageCost,
+    context_item,
 )
 
 _ASSISTANT_ADAPTER: TypeAdapter[AssistantMessageEvent] = TypeAdapter(
@@ -309,6 +309,6 @@ def test_context_can_hold_messages_built_from_streamed_done_events() -> None:
             _assistant_partial(stop_reason="tool_use")
         ),
     ).message
-    ctx = Context(items=[ContextItem(id="a1", message=asst)])
+    ctx = Context(items=[context_item(message=asst, id="a1")])
     restored = Context.model_validate_json(ctx.model_dump_json())
-    assert [i.message for i in restored.items] == [asst]
+    assert [i.to_message() for i in restored.items] == [asst]

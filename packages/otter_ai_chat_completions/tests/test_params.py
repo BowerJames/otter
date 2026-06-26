@@ -15,11 +15,11 @@ from otter_ai_chat_completions._compat import resolve_compat
 from otter_ai_chat_completions._params import build_params
 from otter_ai_core import (
     Context,
-    ContextItem,
     TextContent,
     Tool,
     ToolResultMessage,
     UserMessage,
+    context_item,
 )
 
 
@@ -33,8 +33,9 @@ def _params(
         context
         or Context(
             items=[
-                ContextItem(
-                    id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+                context_item(
+                    message=UserMessage(role="user", content="hi", timestamp=0),
+                    id="u1",
                 )
             ]
         ),
@@ -100,8 +101,8 @@ def test_tools_present_when_context_has_tools() -> None:
 
     ctx = Context(
         items=[
-            ContextItem(
-                id="u1", message=UserMessage(role="user", content="x", timestamp=0)
+            context_item(
+                message=UserMessage(role="user", content="x", timestamp=0), id="u1"
             )
         ],
         tools=[Tool(name="add", description="d", parameters=P)],
@@ -114,11 +115,10 @@ def test_empty_tools_when_tool_history_present() -> None:
     # Anthropic-via-proxy requires the tools param when tool history exists.
     ctx = Context(
         items=[
-            ContextItem(
-                id="u1", message=UserMessage(role="user", content="x", timestamp=0)
+            context_item(
+                message=UserMessage(role="user", content="x", timestamp=0), id="u1"
             ),
-            ContextItem(
-                id="t1",
+            context_item(
                 message=ToolResultMessage(
                     role="tool_result",
                     tool_call_id="c1",
@@ -127,6 +127,7 @@ def test_empty_tools_when_tool_history_present() -> None:
                     is_error=False,
                     timestamp=0,
                 ),
+                id="t1",
             ),
         ]
     )
@@ -293,8 +294,8 @@ def test_anthropic_cache_control_markers() -> None:
     ctx = Context(
         system_prompt="system",
         items=[
-            ContextItem(
-                id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+            context_item(
+                message=UserMessage(role="user", content="hi", timestamp=0), id="u1"
             )
         ],
         tools=[Tool(name="t", description="d", parameters={"type": "object"})],
@@ -315,8 +316,8 @@ def test_anthropic_cache_control_markers() -> None:
 def test_anthropic_cache_control_long_retention_ttl() -> None:
     ctx = Context(
         items=[
-            ContextItem(
-                id="u1", message=UserMessage(role="user", content="hi", timestamp=0)
+            context_item(
+                message=UserMessage(role="user", content="hi", timestamp=0), id="u1"
             )
         ]
     )
