@@ -21,9 +21,6 @@ from otter_ai_core.messages import (
     UserMessage,
 )
 
-#: The message type a context item wraps. Bound per-subclass so
-#: :meth:`BaseContextItem.to_message` narrows to the concrete message type.
-
 
 class BaseContextItem[MsgT: BaseModel](BaseModel):
     """Base for all context items.
@@ -85,11 +82,10 @@ def context_item(message: Message, id: str) -> ContextItem:
     ``ContextItem(id=..., message=...)`` near-verbatim to
     ``context_item(message=..., id=...)`` without splatting message fields.
     """
-    role = message.role
-    if role == "user":
-        return UserContextItem.from_message(message, id=id)  # type: ignore[arg-type]
-    if role == "assistant":
-        return AssistantContextItem.from_message(message, id=id)  # type: ignore[arg-type]
-    if role == "tool_result":
-        return ToolResultContextItem.from_message(message, id=id)  # type: ignore[arg-type]
-    raise ValueError(f"Unknown message role: {role!r}")
+    if isinstance(message, UserMessage):
+        return UserContextItem.from_message(message, id=id)
+    if isinstance(message, AssistantMessage):
+        return AssistantContextItem.from_message(message, id=id)
+    if isinstance(message, ToolResultMessage):
+        return ToolResultContextItem.from_message(message, id=id)
+    raise ValueError(f"Unknown message role: {message.role!r}")
