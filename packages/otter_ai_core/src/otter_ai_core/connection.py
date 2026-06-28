@@ -193,7 +193,7 @@ def create_connection[TClient, TEvent]() -> tuple[
 #: :class:`Connection` synchronously — never raising, exactly like the stream
 #: seam. The first argument is a provider-specific options bundle
 #: (``TOptions``), the second a :class:`~otter_ai_core.context.Context`, and
-#: the third an ``asyncio.Event`` cooperative-abort signal.
+#: the third an ``asyncio.Event`` cooperative-cancel signal.
 #:
 #: ``TClient`` and ``TEvent`` are the connection's outbound and inbound event
 #: types. A typed specialisation fixes them (e.g. to ``ClientEvent`` /
