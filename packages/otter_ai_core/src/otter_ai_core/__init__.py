@@ -19,6 +19,12 @@ It defines **no LLMs, providers, APIs, transports, API registry, or
 
 from __future__ import annotations
 
+from otter_ai_core.connection import (
+    Connection,
+    ConnectionBackend,
+    ConnectionFn,
+    create_connection,
+)
 from otter_ai_core.context import (
     AssistantContent,
     AssistantContextItem,
@@ -99,4 +105,9 @@ __all__ = [
     "Stream",
     "StreamWriter",
     "create_stream",
+    # connection runtime
+    "Connection",
+    "ConnectionBackend",
+    "ConnectionFn",
+    "create_connection",
 ]
