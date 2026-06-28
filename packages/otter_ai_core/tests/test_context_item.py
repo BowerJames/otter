@@ -17,6 +17,7 @@ from otter_ai_core import (
     UserMessage,
     context_item,
 )
+from otter_ai_core.context import Role
 
 
 def _usage() -> Usage:
@@ -77,7 +78,7 @@ def test_from_message_user_preserves_fields_and_sets_id() -> None:
     item = UserContextItem.from_message(msg, id="u1")
     assert isinstance(item, UserContextItem)
     assert item.id == "u1"
-    assert item.role == "user"
+    assert item.role == Role.User
     assert item.content == msg.content
     assert item.timestamp == msg.timestamp
 
@@ -87,7 +88,7 @@ def test_from_message_assistant_preserves_fields_and_sets_id() -> None:
     item = AssistantContextItem.from_message(msg, id="a1")
     assert isinstance(item, AssistantContextItem)
     assert item.id == "a1"
-    assert item.role == "assistant"
+    assert item.role == Role.Assistant
     assert item.content == msg.content
     assert item.model == msg.model
     assert item.response_model == msg.response_model
@@ -99,7 +100,7 @@ def test_from_message_tool_result_preserves_fields_and_sets_id() -> None:
     item = ToolResultContextItem.from_message(msg, id="t1")
     assert isinstance(item, ToolResultContextItem)
     assert item.id == "t1"
-    assert item.role == "tool_result"
+    assert item.role == Role.ToolResult
     assert item.tool_call_id == msg.tool_call_id
     assert item.tool_name == msg.tool_name
     assert item.details == msg.details

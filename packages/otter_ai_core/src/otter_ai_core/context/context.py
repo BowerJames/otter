@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context_item import ContextItem
+from otter_ai_core.context.context_item import ContextItem
 from otter_ai_core.tools import Tool
 
 

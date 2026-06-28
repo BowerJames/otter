@@ -84,18 +84,18 @@ def map_stop_reason(reason: Any) -> tuple[StopReason, str | None]:
     never produced here — it only arises from the cooperative-abort path.
     """
     if reason is None:
-        return "stop", None
+        return StopReason.Stop, None
     if reason in ("stop", "end"):
-        return "stop", None
+        return StopReason.Stop, None
     if reason == "length":
-        return "length", None
+        return StopReason.Length, None
     if reason in ("function_call", "tool_calls"):
-        return "tool_use", None
+        return StopReason.ToolUse, None
     if reason == "content_filter":
-        return "error", "Provider finish_reason: content_filter"
+        return StopReason.Error, "Provider finish_reason: content_filter"
     if reason == "network_error":
-        return "error", "Provider finish_reason: network_error"
-    return "error", f"Provider finish_reason: {reason}"
+        return StopReason.Error, "Provider finish_reason: network_error"
+    return StopReason.Error, f"Provider finish_reason: {reason}"
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:

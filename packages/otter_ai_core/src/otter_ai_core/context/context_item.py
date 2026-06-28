@@ -14,7 +14,7 @@ from typing import Annotated, ClassVar, Self, cast
 
 from pydantic import BaseModel, Field
 
-from otter_ai_core.messages import (
+from otter_ai_core.context.messages import (
     AssistantMessage,
     Message,
     ToolResultMessage,

@@ -16,8 +16,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from otter_ai_core import Provider
-
 #: The single API shape this package speaks. Constant for the whole package;
 #: stored on the model so it flows onto ``AssistantMessage.api`` (inert
 #: provenance in otter).
@@ -153,7 +151,7 @@ class ChatCompletionsModel(BaseModel):
     #: Provenance only. NOT read for behaviour in this package — no detection,
     #: no env-keying, no header injection. Copied onto
     #: ``AssistantMessage.provider``.
-    provider: Provider
+    provider: str
     base_url: str
     api: ChatCompletionsApi = "chat-completions"
 

@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context_item import ContextItem
+from otter_ai_core.context.context_item import ContextItem
 
 
 class ContextItemAddEvent(BaseModel):

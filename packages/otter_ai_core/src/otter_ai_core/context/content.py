@@ -10,9 +10,17 @@ There are two discriminated unions:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ContentType(StrEnum):
+    Text = "text"
+    Image = "image"
+    Thinking = "thinking"
+    ToolCall = "tool_call"
 
 
 class TextContent(BaseModel):
@@ -20,7 +28,7 @@ class TextContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["text"]
+    type: Literal[ContentType.Text]
     text: str
     #: Opaque provider-specific text signature (e.g. an OpenAI responses text
     #: item id). Inert in otter; preserved for replay elsewhere.
@@ -32,7 +40,7 @@ class ImageContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["image"]
+    type: Literal[ContentType.Image]
     #: Base64-encoded image data.
     data: str
     #: MIME type, e.g. ``"image/jpeg"``, ``"image/png"``.
@@ -44,7 +52,7 @@ class ThinkingContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["thinking"]
+    type: Literal[ContentType.Thinking]
     thinking: str
     #: Opaque provider signature required to replay reasoning across turns.
     #: Inert in otter; preserved for replay elsewhere.
@@ -59,7 +67,7 @@ class ToolCall(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["tool_call"]
+    type: Literal[ContentType.ToolCall]
     id: str
     name: str
     #: Parsed tool arguments. Values are arbitrary JSON-compatible structures.
