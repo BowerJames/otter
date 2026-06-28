@@ -35,15 +35,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from otter_ai_core.context import Role
 from otter_ai_core.context.content import ToolCall
-from otter_ai_core.context.messages import AssistantMessage
+from otter_ai_core.context.messages import AssistantMessage, StopReason
 
-#: ``StopReason`` values that terminate a successful assistant turn.
-#: (See :data:`otter_ai_core.context.messages.StopReason`; ``error``/``aborted``
-#: terminate via the :data:`EventErrorReason` type instead.)
-AssistantDoneReason = Literal["stop", "length", "tool_use"]
+# Reason for the message to terminate with a ``done`` event.
+AssistantDoneReason = Literal[StopReason.Stop, StopReason.Length, StopReason.ToolUse]
 
 #: Reason an event stream terminated with an ``error`` event.
-EventErrorReason = Literal["error", "aborted"]
+EventErrorReason = Literal[StopReason.Error, StopReason.Aborted]
 
 
 # --------------------------------------------------------------------------- #

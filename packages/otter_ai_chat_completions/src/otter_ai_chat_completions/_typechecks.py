@@ -2,8 +2,9 @@
 
 Asserts that this package's seam
 :func:`create_chat_completions_assistant_message_stream` conforms to
-:data:`otter_ai_core.AssistantMessageStreamFn`, parameterized by this package's
-options bundle (:class:`ChatCompletionsModelOptions`).
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`,
+parameterized by this package's options bundle
+(:class:`ChatCompletionsModelOptions`).
 
 mypy is the real enforcer; the entire body is guarded by ``if TYPE_CHECKING:``
 so the module contributes nothing at runtime and never imports at runtime. It
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from otter_ai_chat_completions.stream import (
         create_chat_completions_assistant_message_stream,
     )
-    from otter_ai_core import AssistantMessageStreamFn
+    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
 
     _check: AssistantMessageStreamFn[ChatCompletionsModelOptions] = (
         create_chat_completions_assistant_message_stream

@@ -8,6 +8,15 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from otter_ai_core import (
+    Context,
+    TextContent,
+    ThinkingContent,
+    ToolCall,
+    Usage,
+    UsageCost,
+    context_item,
+)
+from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
@@ -21,13 +30,6 @@ from otter_ai_core import (
     AssistantToolCallDeltaEvent,
     AssistantToolCallEndEvent,
     AssistantToolCallStartEvent,
-    Context,
-    TextContent,
-    ThinkingContent,
-    ToolCall,
-    Usage,
-    UsageCost,
-    context_item,
 )
 
 _ASSISTANT_ADAPTER: TypeAdapter[AssistantMessageEvent] = TypeAdapter(
@@ -262,8 +264,9 @@ def test_assistant_done_has_reason_field() -> None:
 
 def test_assistant_error_round_trip_through_union() -> None:
     import otter_ai_core
+    from otter_ai_core.assistant_message_stream import AssistantErrorEvent
 
-    err = otter_ai_core.AssistantErrorEvent(
+    err = AssistantErrorEvent(
         role="assistant",
         type="error",
         reason="aborted",

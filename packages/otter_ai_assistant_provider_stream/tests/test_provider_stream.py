@@ -31,11 +31,10 @@ from otter_ai_assistant_provider_stream.types import (
     ModelProviderOptions,
     ModelProviderOverrides,
 )
-from otter_ai_core import (
+from otter_ai_core import Context, create_stream
+from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
     AssistantMessageStream,
-    Context,
-    create_stream,
 )
 
 # --------------------------------------------------------------------------- #

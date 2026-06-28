@@ -2,8 +2,9 @@
 
 Asserts that this package's dispatch seam
 :func:`create_assistant_message_stream_by_provider` conforms to
-:data:`otter_ai_core.AssistantMessageStreamFn`, parameterized by this package's
-options bundle (:class:`ModelProviderOptions`).
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`,
+parameterized by this package's options bundle
+(:class:`ModelProviderOptions`).
 
 mypy is the real enforcer; the entire body is guarded by ``if TYPE_CHECKING:``
 so the module contributes nothing at runtime and never imports at runtime. It
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
         create_assistant_message_stream_by_provider,
     )
     from otter_ai_assistant_provider_stream.types import ModelProviderOptions
-    from otter_ai_core import AssistantMessageStreamFn
+    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
 
     _check: AssistantMessageStreamFn[ModelProviderOptions] = (
         create_assistant_message_stream_by_provider
