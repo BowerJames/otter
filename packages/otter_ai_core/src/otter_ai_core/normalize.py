@@ -15,8 +15,8 @@ knowledge and live outside this data-only package.
 
 from __future__ import annotations
 
-from otter_ai_core.content import TextContent, ToolCall
-from otter_ai_core.messages import AssistantMessage, Message, ToolResultMessage
+from otter_ai_core.context.content import TextContent, ToolCall
+from otter_ai_core.context.messages import AssistantMessage, Message, ToolResultMessage
 
 #: ``stop_reason`` values whose turns are not safe to replay.
 _UNREPLAYABLE_STOP_REASONS = frozenset({"error", "aborted"})

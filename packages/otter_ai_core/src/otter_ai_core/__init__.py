@@ -38,33 +38,30 @@ from otter_ai_core.assistant_message_stream import (
     AssistantMessageStreamFn,
     AssistantMessageWriter,
 )
-from otter_ai_core.content import (
+from otter_ai_core.context import (
     AssistantContent,
+    AssistantContextItem,
+    AssistantMessage,
+    AssistantMessageDiagnostic,
+    Context,
+    ContextItem,
+    DiagnosticErrorInfo,
     ImageContent,
+    Message,
+    StopReason,
     TextContent,
     ThinkingContent,
     ToolCall,
-    UserContent,
-)
-from otter_ai_core.context import Context
-from otter_ai_core.context_item import (
-    AssistantContextItem,
-    ContextItem,
     ToolResultContextItem,
+    ToolResultMessage,
+    Usage,
+    UsageCost,
+    UserContent,
     UserContextItem,
+    UserMessage,
     context_item,
 )
-from otter_ai_core.diagnostics import (
-    AssistantMessageDiagnostic,
-    DiagnosticErrorInfo,
-)
 from otter_ai_core.hook import Hook
-from otter_ai_core.messages import (
-    AssistantMessage,
-    Message,
-    ToolResultMessage,
-    UserMessage,
-)
 from otter_ai_core.normalize import (
     drop_unreplayable_assistant_turns,
     fill_missing_tool_results,
@@ -76,18 +73,12 @@ from otter_ai_core.stream import (
     create_stream,
 )
 from otter_ai_core.tools import Tool, tool_from_pydantic
-from otter_ai_core.types import Api, Provider, StopReason
-from otter_ai_core.usage import Usage, UsageCost
 
 __version__ = "0.1.0"
 
 __all__ = [
     # version
     "__version__",
-    # metadata / literals
-    "Api",
-    "Provider",
-    "StopReason",
     # hooks
     "Hook",
     # usage
@@ -125,6 +116,7 @@ __all__ = [
     # messages
     "AssistantMessage",
     "Message",
+    "StopReason",
     "ToolResultMessage",
     "UserMessage",
     # context

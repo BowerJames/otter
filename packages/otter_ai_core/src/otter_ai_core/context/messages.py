@@ -7,14 +7,23 @@ A :data:`Message` is a discriminated union over ``role`` with members
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.content import AssistantContent, UserContent
-from otter_ai_core.diagnostics import AssistantMessageDiagnostic
-from otter_ai_core.types import Api, Provider, StopReason
-from otter_ai_core.usage import Usage
+from otter_ai_core.context.content import AssistantContent, UserContent
+from otter_ai_core.context.diagnostics import AssistantMessageDiagnostic
+from otter_ai_core.context.role import Role
+from otter_ai_core.context.usage import Usage
+
+
+class StopReason(StrEnum):
+    Stop = "stop"
+    Length = "length"
+    ToolUse = "tool_use"
+    Error = "error"
+    Aborted = "aborted"
 
 
 class UserMessage(BaseModel):
@@ -26,7 +35,7 @@ class UserMessage(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["user"]
+    role: Literal[Role.User]
     content: str | list[UserContent]
     #: Unix timestamp in milliseconds.
     timestamp: int
@@ -43,10 +52,10 @@ class AssistantMessage(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     content: list[AssistantContent]
-    api: Api
-    provider: Provider
+    api: str
+    provider: str
     model: str
     #: Concrete model id when the upstream differs from the one requested
     #: (e.g. an ``"auto"`` routing model resolving to a specific provider model).
@@ -70,7 +79,7 @@ class ToolResultMessage(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["tool_result"]
+    role: Literal[Role.ToolResult]
     tool_call_id: str
     tool_name: str
     content: list[UserContent]

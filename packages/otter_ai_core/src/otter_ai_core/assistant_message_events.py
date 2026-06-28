@@ -33,12 +33,13 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.content import ToolCall
-from otter_ai_core.messages import AssistantMessage
+from otter_ai_core.context import Role
+from otter_ai_core.context.content import ToolCall
+from otter_ai_core.context.messages import AssistantMessage
 
 #: ``StopReason`` values that terminate a successful assistant turn.
-#: (See :data:`otter_ai_core.types.StopReason`; ``error``/``aborted`` terminate via
-#: the :data:`EventErrorReason` type instead.)
+#: (See :data:`otter_ai_core.context.messages.StopReason`; ``error``/``aborted``
+#: terminate via the :data:`EventErrorReason` type instead.)
 AssistantDoneReason = Literal["stop", "length", "tool_use"]
 
 #: Reason an event stream terminated with an ``error`` event.
@@ -59,7 +60,7 @@ class AssistantStartEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["start"]
     partial: AssistantMessage
 
@@ -69,7 +70,7 @@ class AssistantTextStartEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["text_start"]
     content_index: int
     partial: AssistantMessage
@@ -80,7 +81,7 @@ class AssistantTextDeltaEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["text_delta"]
     content_index: int
     delta: str
@@ -92,7 +93,7 @@ class AssistantTextEndEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["text_end"]
     content_index: int
     content: str
@@ -104,7 +105,7 @@ class AssistantThinkingStartEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["thinking_start"]
     content_index: int
     partial: AssistantMessage
@@ -115,7 +116,7 @@ class AssistantThinkingDeltaEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["thinking_delta"]
     content_index: int
     delta: str
@@ -127,7 +128,7 @@ class AssistantThinkingEndEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["thinking_end"]
     content_index: int
     content: str
@@ -139,7 +140,7 @@ class AssistantToolCallStartEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["tool_call_start"]
     content_index: int
     partial: AssistantMessage
@@ -154,7 +155,7 @@ class AssistantToolCallDeltaEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["tool_call_delta"]
     content_index: int
     delta: str
@@ -166,7 +167,7 @@ class AssistantToolCallEndEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["tool_call_end"]
     content_index: int
     tool_call: ToolCall
@@ -178,7 +179,7 @@ class AssistantDoneEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["done"]
     reason: AssistantDoneReason
     message: AssistantMessage
@@ -194,7 +195,7 @@ class AssistantErrorEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    role: Literal["assistant"]
+    role: Literal[Role.Assistant]
     type: Literal["error"]
     reason: EventErrorReason
     error: AssistantMessage
