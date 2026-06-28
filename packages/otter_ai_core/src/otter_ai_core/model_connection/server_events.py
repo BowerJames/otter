@@ -43,7 +43,7 @@ class ContextItemAddedEvent(BaseModel):
 
     type: Literal[ServerEventTypes.ContextItemAdded]
     item_id: str
-    Role: Role
+    role: Role
     item: ContextItem
 
 
