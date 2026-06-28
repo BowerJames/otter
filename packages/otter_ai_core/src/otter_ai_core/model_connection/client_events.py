@@ -9,6 +9,7 @@ from otter_ai_core.context.context_item import ContextItem
 class ClientEventTypes(StrEnum):
     AddContextItem = "context_item.add"
     CreateResponse = "response.create"
+    AbortResponse = "response.abort"
 
 
 class ContextItemAddEvent(BaseModel):
@@ -27,9 +28,15 @@ class ResponseCreate(BaseModel):
 
     type: Literal[ClientEventTypes.CreateResponse]
 
+class AbortResponseEvent(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[ClientEventTypes.AbortResponse]
+
 
 #: Discriminated union of all model connection client events.
 ClientEvent = Annotated[
-    ContextItemAddEvent | ResponseCreate,
+    ContextItemAddEvent | ResponseCreate | AbortResponseEvent,
     Field(discriminator="type"),
 ]
