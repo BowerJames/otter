@@ -1,20 +1,26 @@
-"""Otter AI — LLM context data model and generic stream runtime.
+"""Otter AI — LLM context data model and generic stream/connection runtimes.
 
 This package provides:
 
 * a Pydantic v2 model for representing LLM conversation context (``Context``,
-  messages, content blocks, tools, usage); and
+  messages, content blocks, tools, usage);
 * a provider-agnostic async stream runtime (``Stream`` / ``StreamWriter`` /
-  ``create_stream``).
+  ``create_stream``); and
+* a provider-agnostic async bidirectional connection runtime
+  (``Connection`` / ``ConnectionBackend`` / ``create_connection``), the
+  bidirectional peer of the stream runtime for APIs that maintain a live
+  connection (Realtime / Responses).
 
 The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
 family) and the **typed stream aliases** (``AssistantMessageStream`` /
 ``AssistantMessageWriter`` / the ``AssistantMessageStreamFn`` seam) live under
 the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
-top level.
+top level. The ``ConnectionFn`` seam type — the bidirectional peer of
+``AssistantMessageStreamFn`` — is defined alongside the connection runtime in
+:mod:`otter_ai_core.connection`.
 
 It defines **no LLMs, providers, APIs, transports, API registry, or
-``stream()`` dispatch** — only the data model and the generic stream runtime.
+``stream()`` dispatch** — only the data model and the generic runtimes.
 """
 
 from __future__ import annotations
