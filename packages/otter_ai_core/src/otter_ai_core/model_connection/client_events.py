@@ -29,7 +29,7 @@ class ResponseCreate(BaseModel):
 
 
 #: Discriminated union of all model connection client events.
-ModelConnectionClientEvent = Annotated[
+ClientEvent = Annotated[
     ContextItemAddEvent | ResponseCreate,
     Field(discriminator="type"),
 ]
