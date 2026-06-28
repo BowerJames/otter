@@ -70,6 +70,7 @@ from otter_ai_core import (
     AssistantToolCallEndEvent,
     AssistantToolCallStartEvent,
     Context,
+    StopReason,
     TextContent,
     ThinkingContent,
     ToolCall,
@@ -142,7 +143,7 @@ async def _run(
     try:
         await _produce(writer, output, options, context, abort)
     except Exception as exc:  # noqa: BLE001 — the seam must never raise.
-        output.stop_reason = "aborted" if abort.is_set() else "error"
+        output.stop_reason = StopReason.Aborted if abort.is_set() else StopReason.Error
         output.error_message = _format_error(exc)
         writer.push(
             AssistantErrorEvent(
