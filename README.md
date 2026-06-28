@@ -40,14 +40,17 @@ All packages and dev dependencies share a single `.venv` at the root.
 `otter-ai-core` is the **driving package** of the monorepo: it owns the core
 types and data models that the other packages (`otter-ai-chat-completions`,
 `otter-ai-assistant-provider-stream`) build on — for example, its
-`AssistantMessageStreamFn` defines the core type that the Chat Completions seam
-implements.
+`AssistantMessageStreamFn` (under the `assistant_message_stream` subpackage)
+defines the core type that the Chat Completions seam implements.
 
 The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,
 API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
-conversation is built from, the streaming-event protocol, and a
-generic async stream runtime:
+conversation is built from, plus a generic async stream runtime. The
+assistant-message-stream **event protocol** (`AssistantMessageEvent` family)
+and the **typed stream aliases** (`AssistantMessageStream` /
+`AssistantMessageWriter` / the `AssistantMessageStreamFn` seam) live under the
+`otter_ai_core.assistant_message_stream` subpackage, not the top level.
 
 - [`Context`](./packages/otter_ai_core/src/otter_ai_core/context.py) — the top-level
   conversation (`system_prompt`, `items`, `tools`), JSON-serializable so a
@@ -64,12 +67,13 @@ generic async stream runtime:
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
 - [`Usage`](./packages/otter_ai_core/src/otter_ai_core/usage.py) and diagnostics for
   per-turn accounting.
-- [`assistant_message_events.py`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_events.py) — the streaming-event
-  protocol: the `AssistantMessageEvent` family (a discriminated union on `type`),
-  a port of pi-ai's assistant event protocol.
+- [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream/) — the
+  streaming-event protocol: the `AssistantMessageEvent` family (a
+  discriminated union on `type`), a port of pi-ai's assistant event protocol;
+  plus the typed stream aliases. Imported from `otter_ai_core.assistant_message_stream`.
 - [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — a generic async
-  stream runtime (`Stream` / `StreamWriter` / `create_stream`) plus the typed
-  message-stream aliases. See [Generic stream runtime](#generic-stream-runtime).
+  stream runtime (`Stream` / `StreamWriter` / `create_stream`). See
+  [Generic stream runtime](#generic-stream-runtime).
 
 `AssistantMessage` also carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,
@@ -126,8 +130,9 @@ into a consumer and a producer sharing one queue:
 
 Typed aliases specialize it: `AssistantMessageStream` (and a matching
 `AssistantMessageWriter`), with `AssistantMessageStreamFn` as the producer-side
-seam type. There is **no `result()`** — consumers read the terminal `done`/`error`
-event directly.
+seam type — all imported from `otter_ai_core.assistant_message_stream`. There
+is **no `result()`** — consumers read the terminal `done`/`error` event
+directly.
 
 `Stream` and `StreamWriter` are runtime objects and are **not** JSON-serializable
 (unlike `Context`); the serializable data model is unchanged.
@@ -135,7 +140,8 @@ event directly.
 ```python
 import asyncio
 
-from otter_ai_core import AssistantDoneEvent, AssistantMessage, create_stream
+from otter_ai_core import AssistantMessage, create_stream
+from otter_ai_core.assistant_message_stream import AssistantDoneEvent
 
 
 async def main() -> None:

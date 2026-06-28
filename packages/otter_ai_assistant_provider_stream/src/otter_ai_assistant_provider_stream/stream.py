@@ -1,7 +1,8 @@
 """The provider-dispatch seam.
 
 :func:`create_assistant_message_stream_by_provider` is a concrete value of
-:data:`otter_ai_core.AssistantMessageStreamFn` that resolves a
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn` that
+resolves a
 :class:`~otter_ai_assistant_provider_stream.types.ModelProviderConfig` against
 the catalog + env + thinking-clamp registries, builds a fully-populated
 :class:`~otter_ai_chat_completions.ChatCompletionsModelOptions`, and dispatches
@@ -9,9 +10,9 @@ to the api stream fn registered for the model's ``api``.
 
 The seam **never raises**. Request/model/runtime failures (unknown model,
 unknown api, missing api key) are encoded as an
-:class:`~otter_ai_core.AssistantErrorEvent` carrying a best-effort skeleton
-:class:`~otter_ai_core.AssistantMessage`, mirroring pi-ai's
-``createLazyLoadErrorMessage`` pattern. This honours the
+:class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` carrying
+a best-effort skeleton :class:`~otter_ai_core.AssistantMessage`, mirroring
+pi-ai's ``createLazyLoadErrorMessage`` pattern. This honours the
 ``AssistantMessageStreamFn`` contract: the caller always receives a live
 stream and learns of failure by reading its terminal event.
 """
@@ -39,14 +40,16 @@ from otter_ai_chat_completions import (
     ChatCompletionsModelOptions,
 )
 from otter_ai_core import (
-    AssistantErrorEvent,
     AssistantMessage,
-    AssistantMessageStream,
-    AssistantMessageWriter,
     Context,
     Usage,
     UsageCost,
     create_stream,
+)
+from otter_ai_core.assistant_message_stream import (
+    AssistantErrorEvent,
+    AssistantMessageStream,
+    AssistantMessageWriter,
 )
 
 #: Fields on :class:`ModelProviderOverrides` that map 1:1 onto mutable
@@ -73,10 +76,13 @@ def create_assistant_message_stream_by_provider(
     context: Context,
     abort: asyncio.Event | None = None,
 ) -> AssistantMessageStream:
-    """Build an :class:`~otter_ai_core.AssistantMessageStream` for a catalog model.
+    """Build an
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+    for a catalog model.
 
-    Synchronous; never raises. Resolution/dispatch failures are encoded as an
-    :class:`~otter_ai_core.AssistantErrorEvent` on the returned stream.
+    Synchronous; never raises. Resolution/dispatch failures are encoded as
+    an :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`
+    on the returned stream.
 
     ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`);
     when omitted a fresh, unset event is created. It is threaded through to

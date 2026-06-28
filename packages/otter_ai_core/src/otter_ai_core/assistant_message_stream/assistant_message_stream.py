@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Callable
 
-from otter_ai_core.assistant_message_events import (
+from otter_ai_core.assistant_message_stream.assistant_message_events import (
     AssistantMessageEvent,
 )
 from otter_ai_core.context import Context

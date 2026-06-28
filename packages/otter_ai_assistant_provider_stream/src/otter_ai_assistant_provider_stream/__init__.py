@@ -7,7 +7,7 @@ This package adds the dispatch layer :mod:`otter_ai_core` deliberately omits:
 * thinking-level clamping (port of pi-ai's ``clampThinkingLevel``);
 * three runtime registries (providers, catalog, api stream fns);
 * the seam :func:`create_assistant_message_stream_by_provider`, a concrete
-  value of :data:`otter_ai_core.AssistantMessageStreamFn`.
+  value of :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`.
 
 Importing the package auto-registers the built-ins (mirrors pi-ai's
 ``index.ts``, not ``base.ts``): ``openai`` and ``zai`` work immediately.

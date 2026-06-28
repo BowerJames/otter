@@ -27,7 +27,7 @@ from otter_ai_assistant_provider_stream.providers import (
 )
 from otter_ai_assistant_provider_stream.types import DEFAULT_API
 from otter_ai_chat_completions import create_chat_completions_assistant_message_stream
-from otter_ai_core import AssistantMessageStreamFn
+from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
 
 #: The default chat-completions stream fn registered under ``DEFAULT_API``.
 _DEFAULT_STREAM_FN: AssistantMessageStreamFn[Any] = (

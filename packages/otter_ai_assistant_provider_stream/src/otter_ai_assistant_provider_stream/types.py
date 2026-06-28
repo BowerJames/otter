@@ -101,7 +101,7 @@ class ModelProviderConfig(BaseModel):
     thinking_level: ThinkingLevel = "low"
     #: Explicit API key. When ``None`` the env var registered for the
     #: provider is consulted; if that is also unset the seam raises (encoded
-    #: as an :class:`~otter_ai_core.AssistantErrorEvent`).
+    #: as an :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`).
     api_key: str | None = None
     overrides: ModelProviderOverrides | None = None
 

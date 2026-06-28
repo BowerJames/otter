@@ -5,19 +5,21 @@ from __future__ import annotations
 import asyncio
 
 from otter_ai_core import (
-    AssistantDoneEvent,
     AssistantMessage,
+    Stream,
+    StreamWriter,
+    Usage,
+    UsageCost,
+    create_stream,
+)
+from otter_ai_core.assistant_message_stream import (
+    AssistantDoneEvent,
     AssistantMessageEvent,
     AssistantMessageStream,
     AssistantMessageWriter,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextStartEvent,
-    Stream,
-    StreamWriter,
-    Usage,
-    UsageCost,
-    create_stream,
 )
 
 
@@ -175,10 +177,8 @@ def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
     trivially-conforming two-argument function binds under an annotation
     referencing it.
     """
-    from otter_ai_core import (
-        AssistantMessageStreamFn,
-        Context,
-    )
+    from otter_ai_core import Context
+    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
 
     def make_stream(
         options: object, context: Context, abort: asyncio.Event

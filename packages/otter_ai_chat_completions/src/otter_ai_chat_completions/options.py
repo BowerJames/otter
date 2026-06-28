@@ -16,7 +16,8 @@ class ChatCompletionsModelOptions:
     (hooks) that cannot live on a serializable Pydantic model. This bundle is
     the seam's first argument; the stream function is a value of
     ``AssistantMessageStreamFn[ChatCompletionsModelOptions]``. This bundle
-    realises :data:`otter_ai_core.AssistantMessageStreamFn`'s ``TOptions``.
+    realises :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`'s
+    ``TOptions``.
 
     The abort signal is **not** part of this bundle: it is supplied as the
     seam's third argument (an :class:`asyncio.Event`) and is the single source

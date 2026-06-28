@@ -3,41 +3,22 @@
 This package provides:
 
 * a Pydantic v2 model for representing LLM conversation context (``Context``,
-  messages, content blocks, tools, usage) and the streaming events used to
-  build it; and
+  messages, content blocks, tools, usage); and
 * a provider-agnostic async stream runtime (``Stream`` / ``StreamWriter`` /
-  ``create_stream``) plus the typed message-stream aliases a provider package
-  built on top will import.
+  ``create_stream``).
+
+The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
+family) and the **typed stream aliases** (``AssistantMessageStream`` /
+``AssistantMessageWriter`` / the ``AssistantMessageStreamFn`` seam) live under
+the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
+top level.
 
 It defines **no LLMs, providers, APIs, transports, API registry, or
-``stream()`` dispatch** — only the data model, the event protocol, and the
-generic stream runtime.
+``stream()`` dispatch** — only the data model and the generic stream runtime.
 """
 
 from __future__ import annotations
 
-from otter_ai_core.assistant_message_events import (
-    AssistantDoneEvent,
-    AssistantDoneReason,
-    AssistantErrorEvent,
-    AssistantMessageEvent,
-    AssistantStartEvent,
-    AssistantTextDeltaEvent,
-    AssistantTextEndEvent,
-    AssistantTextStartEvent,
-    AssistantThinkingDeltaEvent,
-    AssistantThinkingEndEvent,
-    AssistantThinkingStartEvent,
-    AssistantToolCallDeltaEvent,
-    AssistantToolCallEndEvent,
-    AssistantToolCallStartEvent,
-    EventErrorReason,
-)
-from otter_ai_core.assistant_message_stream import (
-    AssistantMessageStream,
-    AssistantMessageStreamFn,
-    AssistantMessageWriter,
-)
 from otter_ai_core.context import (
     AssistantContent,
     AssistantContextItem,
@@ -87,22 +68,6 @@ __all__ = [
     # diagnostics
     "AssistantMessageDiagnostic",
     "DiagnosticErrorInfo",
-    # events
-    "AssistantDoneEvent",
-    "AssistantDoneReason",
-    "AssistantErrorEvent",
-    "AssistantMessageEvent",
-    "AssistantStartEvent",
-    "AssistantTextDeltaEvent",
-    "AssistantTextEndEvent",
-    "AssistantTextStartEvent",
-    "AssistantThinkingDeltaEvent",
-    "AssistantThinkingEndEvent",
-    "AssistantThinkingStartEvent",
-    "AssistantToolCallDeltaEvent",
-    "AssistantToolCallEndEvent",
-    "AssistantToolCallStartEvent",
-    "EventErrorReason",
     # content
     "AssistantContent",
     "ImageContent",
@@ -130,11 +95,8 @@ __all__ = [
     "drop_unreplayable_assistant_turns",
     "fill_missing_tool_results",
     "normalize_messages",
-    # stream runtime + aliases
+    # stream runtime
     "Stream",
     "StreamWriter",
     "create_stream",
-    "AssistantMessageStream",
-    "AssistantMessageStreamFn",
-    "AssistantMessageWriter",
 ]

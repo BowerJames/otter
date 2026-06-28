@@ -25,6 +25,12 @@ from otter_ai_chat_completions import (
 )
 from otter_ai_chat_completions import stream as stream_module
 from otter_ai_core import (
+    StopReason,
+    TextContent,
+    ThinkingContent,
+    ToolCall,
+)
+from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantStartEvent,
@@ -36,9 +42,6 @@ from otter_ai_core import (
     AssistantToolCallDeltaEvent,
     AssistantToolCallEndEvent,
     AssistantToolCallStartEvent,
-    TextContent,
-    ThinkingContent,
-    ToolCall,
 )
 
 
@@ -91,7 +94,7 @@ async def test_text_stream_emits_full_event_sequence(
     assert isinstance(events[-2], AssistantTextEndEvent)
     done = events[-1]
     assert isinstance(done, AssistantDoneEvent)
-    assert done.reason == "stop"
+    assert done.reason == StopReason.Stop
     assert any(
         isinstance(b, TextContent) and b.text == "Hello" for b in done.message.content
     )
@@ -216,7 +219,7 @@ async def test_tool_call_stream_finalizes_parsed_arguments(
         type="tool_call", id="call_1", name="add", arguments={"x": 1}
     )
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
-    assert done.reason == "tool_use"
+    assert done.reason == StopReason.ToolUse
     assert done.message.content[0] == ToolCall(
         type="tool_call", id="call_1", name="add", arguments={"x": 1}
     )
@@ -339,7 +342,7 @@ async def test_length_finish_reason_mapped(monkeypatch: pytest.MonkeyPatch) -> N
     )
     events = await collect(stream)
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
-    assert done.reason == "length"
+    assert done.reason == StopReason.Length
 
 
 # --------------------------------------------------------------------------- #
@@ -358,7 +361,7 @@ async def test_missing_api_key_emits_error_event(
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
-    assert err.reason == "error"
+    assert err.reason == StopReason.Error
     assert "No API key" in (err.error.error_message or "")
 
 
@@ -398,8 +401,8 @@ async def test_abort_emits_aborted_error_event(monkeypatch: pytest.MonkeyPatch) 
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
-    assert err.reason == "aborted"
-    assert err.error.stop_reason == "aborted"
+    assert err.reason == StopReason.Aborted
+    assert err.error.stop_reason == StopReason.Aborted
 
 
 async def test_no_finish_reason_emits_error(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -17,7 +17,8 @@ from otter_ai_assistant_provider_stream.types import (
     ModelProviderConfig,
     ModelProviderOptions,
 )
-from otter_ai_core import AssistantMessageStream, Context, create_stream
+from otter_ai_core import Context, create_stream
+from otter_ai_core.assistant_message_stream import AssistantMessageStream
 
 
 def _make_options(api: str = "custom-api") -> ModelProviderOptions:
