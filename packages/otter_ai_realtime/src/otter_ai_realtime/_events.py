@@ -304,10 +304,7 @@ class InboundTranslator:
         ]
 
     def _on_fc_args_done(self, frame: dict[str, Any]) -> list[ServerEvent]:
-        events = self._finalize_tool_call(frame)
-        if events:
-            return events
-        return []
+        return self._finalize_tool_call(frame)
 
     def _on_output_item_done(self, frame: dict[str, Any]) -> list[ServerEvent]:
         assert self._partial is not None
@@ -405,6 +402,8 @@ class InboundTranslator:
         partial.stop_reason = StopReason.Error
         partial.error_message = message
         self._partial = None
+        self._open_tool_index = None
+        self._tool_args.clear()
         self._finalized_tool_indices.clear()
         return [
             ResponseErrorEvent(
