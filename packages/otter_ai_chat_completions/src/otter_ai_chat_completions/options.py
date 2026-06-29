@@ -1,4 +1,4 @@
-"""The seam's first argument: model + runtime handles."""
+"""The builder's sole argument: model + runtime handles."""
 
 from __future__ import annotations
 
