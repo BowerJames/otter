@@ -6,17 +6,20 @@ implementation of
 for the Chat Completions wire format. It is a faithful async/:mod:`httpx` port
 of pi-ai's ``streamOpenAICompletions``.
 
-The seam is **synchronous**: it returns the
+The seam is a **builder**: it closes over the per-call ``options`` bundle and
+returns an
+:class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`
+(the options-bound producer). That producer is **synchronous**: it returns the
 :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
-immediately and schedules its producer via :func:`asyncio.create_task`. The
-producer pushes every streaming event, including the terminal
+immediately and schedules its work via :func:`asyncio.create_task`. The producer
+pushes every streaming event, including the terminal
 ``done``/:class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`,
-then calls ``end()`` on the writer. The seam **never raises** —
+then calls ``end()`` on the writer. The producer **never raises** —
 request/model/runtime failures are encoded as
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` (with
 ``stop_reason`` of ``"error"`` or ``"aborted"`` and ``error_message`` set).
 
-Cooperative abort is honoured via the ``abort`` argument (an
+Cooperative abort is honoured via the producer's ``abort`` argument (an
 :class:`asyncio.Event`), checked between SSE chunks and around the request
 send. On abort the producer emits an
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` with
@@ -71,6 +74,7 @@ from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageStream,
+    AssistantMessageStreamFn,
     AssistantMessageWriter,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
@@ -108,31 +112,37 @@ _producer_tasks: set[asyncio.Task[None]] = set()
 
 def create_chat_completions_assistant_message_stream(
     options: ChatCompletionsModelOptions,
-    context: Context,
-    abort: asyncio.Event | None = None,
-) -> AssistantMessageStream:
+) -> AssistantMessageStreamFn:
     """Build an
-    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`
     for a Chat Completions model.
 
-    Synchronous; returns immediately and spawns its producer via
-    :func:`asyncio.create_task`. Honours the
-    :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`
-    contract — it never raises.
+    A concrete value of
+    :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`:
+    closes over ``options`` and returns the options-bound producer. The
+    returned producer is synchronous — it returns the
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+    immediately and spawns its work via :func:`asyncio.create_task` — and
+    honours the builder contract: it never raises.
 
-    ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`); when
-    omitted a fresh, unset event is created and the stream runs to
-    completion (the event is never set unless a caller holds a reference).
+    ``abort`` (the producer's second argument) is the cooperative-abort signal
+    (an :class:`asyncio.Event`); it is **required** — the producer checks it
+    between SSE chunks and around the request send, and on abort emits an
+    :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` with
+    ``reason="aborted"``. Callers with no abort hook pass a fresh, unset
+    :class:`asyncio.Event`.
     """
-    if abort is None:
-        abort = asyncio.Event()
-    stream: AssistantMessageStream
-    writer: AssistantMessageWriter
-    stream, writer = create_stream()
-    task = asyncio.create_task(_run(writer, options, context, abort))
-    _producer_tasks.add(task)
-    task.add_done_callback(_producer_tasks.discard)
-    return stream
+
+    def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
+        stream: AssistantMessageStream
+        writer: AssistantMessageWriter
+        stream, writer = create_stream()
+        task = asyncio.create_task(_run(writer, options, context, abort))
+        _producer_tasks.add(task)
+        task.add_done_callback(_producer_tasks.discard)
+        return stream
+
+    return stream_fn
 
 
 # --------------------------------------------------------------------------- #

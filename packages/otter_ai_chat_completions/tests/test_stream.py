@@ -15,13 +15,13 @@ from _helpers import (
     make_options,
     simple_context,
     sse_response,
+    start_stream,
 )
 
 from otter_ai_chat_completions import (
     ChatCompletionsHooks,
     OnPayloadEvent,
     OnResponseEvent,
-    create_chat_completions_assistant_message_stream,
 )
 from otter_ai_chat_completions import stream as stream_module
 from otter_ai_core import (
@@ -82,9 +82,7 @@ async def test_text_stream_emits_full_event_sequence(
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
 
     assert isinstance(events[0], AssistantStartEvent)
@@ -119,7 +117,7 @@ async def test_response_id_and_response_model_captured(
     options = make_options(
         model=make_options().model.model_copy(update={"id": "gpt-4o"})
     )
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     events = await collect(stream)
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
     assert done.message.response_id == "resp-abc"
@@ -145,9 +143,7 @@ async def test_thinking_stream_uses_reasoning_content_field(
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
 
     thinking_deltas = [e for e in events if isinstance(e, AssistantThinkingDeltaEvent)]
@@ -175,9 +171,7 @@ async def test_thinking_first_nonempty_field_wins(
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     thinking_deltas = [e for e in events if isinstance(e, AssistantThinkingDeltaEvent)]
     assert [d.delta for d in thinking_deltas] == ["a"]
@@ -206,9 +200,7 @@ async def test_tool_call_stream_finalizes_parsed_arguments(
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
 
     assert isinstance(events[1], AssistantToolCallStartEvent)
@@ -250,9 +242,7 @@ async def test_multiple_concurrent_tool_calls_tracked_by_index(
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
 
     ends = [e for e in events if isinstance(e, AssistantToolCallEndEvent)]
@@ -292,9 +282,7 @@ async def test_usage_parsed_from_chunk(monkeypatch: pytest.MonkeyPatch) -> None:
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
     assert done.message.usage.input == 90  # 100 - 10 cache_read
@@ -321,9 +309,7 @@ async def test_usage_fallback_on_choice(monkeypatch: pytest.MonkeyPatch) -> None
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
     assert done.message.usage.input == 7
@@ -337,9 +323,7 @@ async def test_length_finish_reason_mapped(monkeypatch: pytest.MonkeyPatch) -> N
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     done = next(e for e in events if isinstance(e, AssistantDoneEvent))
     assert done.reason == StopReason.Length
@@ -357,7 +341,7 @@ async def test_missing_api_key_emits_error_event(
     options = make_options(
         model=make_options().model.model_copy(update={"api_key": None})
     )
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
@@ -372,9 +356,7 @@ async def test_http_error_status_emits_error_event(
         return error_response(500, "server boom")
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
@@ -395,9 +377,7 @@ async def test_abort_emits_aborted_error_event(monkeypatch: pytest.MonkeyPatch) 
     install_fake_transport(monkeypatch, handler)
     abort = asyncio.Event()
     abort.set()
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context(), abort
-    )
+    stream = start_stream(make_options(), simple_context(), abort)
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
@@ -413,9 +393,7 @@ async def test_no_finish_reason_emits_error(monkeypatch: pytest.MonkeyPatch) -> 
         return sse_response(chunks)
 
     install_fake_transport(monkeypatch, handler)
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
@@ -442,7 +420,7 @@ async def test_on_payload_can_replace_body(monkeypatch: pytest.MonkeyPatch) -> N
         return new_body
 
     options = make_options(hooks=ChatCompletionsHooks(on_payload=on_payload))
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     await collect(stream)
     assert captured["body"].get("injected") is True
 
@@ -459,7 +437,7 @@ async def test_on_response_observed(monkeypatch: pytest.MonkeyPatch) -> None:
         seen["status"] = event.status
 
     options = make_options(hooks=ChatCompletionsHooks(on_response=on_response))
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     await collect(stream)
     assert seen["status"] == 200
 
@@ -484,7 +462,7 @@ async def test_retry_then_success(monkeypatch: pytest.MonkeyPatch) -> None:
     options = make_options(
         model=make_options().model.model_copy(update={"max_retries": 2})
     )
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     events = await collect(stream)
     assert calls["n"] == 2
     assert isinstance(events[-1], AssistantDoneEvent)
@@ -502,7 +480,7 @@ async def test_retry_after_exceeding_cap_fails_immediately(
     options = make_options(
         model=make_options().model.model_copy(update={"max_retries": 3})
     )
-    stream = create_chat_completions_assistant_message_stream(options, simple_context())
+    stream = start_stream(options, simple_context())
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)
@@ -525,9 +503,7 @@ async def test_producer_task_tracked_during_run_and_discarded_after(
 
     install_fake_transport(monkeypatch, handler)
 
-    stream = create_chat_completions_assistant_message_stream(
-        make_options(), simple_context()
-    )
+    stream = start_stream(make_options(), simple_context())
     await collect(stream)
     # Give the done callback a beat to run.
     for _ in range(10):

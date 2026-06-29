@@ -56,7 +56,8 @@ context = Context(
     messages=[UserMessage(role="user", content="Hi!", timestamp=0)],
 )
 
-stream = create_chat_completions_assistant_message_stream(options, context)
+stream_fn = create_chat_completions_assistant_message_stream(options)
+stream = stream_fn(context, asyncio.Event())
 # NOTE: in this version the seam body raises NotImplementedError; the
 # transport + translation land in a follow-on PR. See "Status" above.
 
@@ -88,6 +89,6 @@ async-only. See `hooks.py`.
 
 ## Abort
 
-Cooperative via the seam's third argument, `abort: asyncio.Event`. The
-transport checks `is_set()` between SSE chunks and emits an
-`AssistantErrorEvent` with `reason="aborted"` when set.
+Cooperative via the returned producer's second argument,
+`abort: asyncio.Event`. The transport checks `is_set()` between SSE chunks and
+emits an `AssistantErrorEvent` with `reason="aborted"` when set.

@@ -9,8 +9,11 @@ the catalog + env + thinking-clamp registries, builds a fully-populated
 :class:`~otter_ai_chat_completions.ChatCompletionsModelOptions`, and dispatches
 to the api stream fn registered for the model's ``api``.
 
-The seam **never raises**. Request/model/runtime failures (unknown model,
-unknown api, missing api key) are encoded as an
+The seam is a **builder**: it closes over ``options`` and returns an
+:class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`.
+That returned producer **never raises** — resolution/dispatch happens lazily
+when the producer is invoked, and any failure (unknown model, unknown api,
+missing api key) is encoded as an
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` carrying
 a best-effort skeleton :class:`~otter_ai_core.AssistantMessage`, mirroring
 pi-ai's ``createLazyLoadErrorMessage`` pattern. This honours the
@@ -50,6 +53,7 @@ from otter_ai_core import (
 from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
     AssistantMessageStream,
+    AssistantMessageStreamFn,
     AssistantMessageWriter,
 )
 
@@ -74,33 +78,37 @@ _DIRECT_OVERRIDE_FIELDS: tuple[str, ...] = (
 
 def create_assistant_message_stream_by_provider(
     options: ModelProviderOptions,
-    context: Context,
-    abort: asyncio.Event | None = None,
-) -> AssistantMessageStream:
+) -> AssistantMessageStreamFn:
     """Build an
-    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`
     for a catalog model.
 
-    Synchronous; never raises. Resolution/dispatch failures are encoded as
-    an :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`
-    on the returned stream.
+    A concrete value of
+    :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`:
+    closes over ``options`` and returns the options-bound producer. The
+    returned producer never raises — resolution/dispatch happens when it is
+    invoked, and any failure is encoded as an
+    :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` on the
+    returned stream.
 
-    ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`);
-    when omitted a fresh, unset event is created. It is threaded through to
-    the dispatched provider stream fn.
+    ``abort`` (the producer's second argument) is the cooperative-abort signal
+    (an :class:`asyncio.Event`); it is threaded through to the dispatched
+    provider stream fn.
     """
-    if abort is None:
-        abort = asyncio.Event()
-    try:
-        cc_options = _resolve_options(options)
-        fn = get_api_stream_fn(options.model.api)
-        if fn is None:
-            raise RuntimeError(
-                f"No stream fn registered for api: {options.model.api!r}"
-            )
-        return fn(cc_options, context, abort)
-    except Exception as exc:  # noqa: BLE001 — the seam must never raise.
-        return _error_stream(options.model, exc)
+
+    def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
+        try:
+            cc_options = _resolve_options(options)
+            fn = get_api_stream_fn(options.model.api)
+            if fn is None:
+                raise RuntimeError(
+                    f"No stream fn registered for api: {options.model.api!r}"
+                )
+            return fn(cc_options)(context, abort)
+        except Exception as exc:  # noqa: BLE001 — the producer must never raise.
+            return _error_stream(options.model, exc)
+
+    return stream_fn
 
 
 # --------------------------------------------------------------------------- #

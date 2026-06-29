@@ -11,9 +11,11 @@ from otter_ai_core.stream import Stream, StreamWriter
 # Typed aliases
 # --------------------------------------------------------------------------- #
 #
-# Plain assignment (not PEP 695 ``type`` statements). ``TEvent`` is invariant
-# because ``StreamWriter.push`` accepts it, so covariance is not available
-# regardless.
+# The two plain aliases (``AssistantMessageStream`` / ``AssistantMessageWriter``)
+# are specialized via ``TypeVar``-invariant assignment (``StreamWriter.push``
+# accepts ``TEvent``, so the alias is invariant regardless). The two seam
+# aliases use PEP 695 ``type`` statements; ``AssistantMessageStreamFn`` must be
+# defined first because ``AssistantMessageStreamFnBuilder`` references it.
 
 #: Stream of assistant streaming events (single assistant message per stream).
 AssistantMessageStream = Stream[AssistantMessageEvent]
@@ -21,17 +23,35 @@ AssistantMessageStream = Stream[AssistantMessageEvent]
 #: Producer handle for an :data:`AssistantMessageStream`.
 AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
 
-#: Function that builds an :data:`AssistantMessageStream`.
+#: The options-bound producer: a callable that takes a :class:`Context` and an
+#: ``asyncio.Event`` abort signal and returns an :data:`AssistantMessageStream`.
+#:
+#: This is the post-binding shape — the options bundle has already been
+#: resolved/closed over, so only the conversation state and the abort signal
+#: remain. A concrete :data:`AssistantMessageStreamFnBuilder` *returns* one of
+#: these after binding its options; a dispatch layer then invokes the returned
+#: function with ``(context, abort)`` to obtain the live stream.
+#:
+#: The :class:`Context` carries the conversation state and any other runtime
+#: data the producer needs to generate the assistant message. The
+#: ``asyncio.Event`` is the cooperative-abort signal: the producer should
+#: monitor it and terminate the stream gracefully if it is set, so the consumer
+#: can handle cancellation cleanly.
+type AssistantMessageStreamFn = Callable[
+    [Context, asyncio.Event], AssistantMessageStream
+]
+
+#: Builder of an :data:`AssistantMessageStreamFn`.
 #:
 #: Producer-side seam between a provider package and a future dispatch layer
-#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai, with the model and
-#: options slots collapsed into one: ``TOptions``).
-#:
-#: The first argument carries the provider's per-call configuration. A future
-#: dispatch layer would key on the model's ``api`` (read off the configuration)
-#: and invoke the registered function with ``(options, context, abort)``. Otter
-#: defines no dispatch today — this alias is the contract a provider package
-#: and a dispatch layer will agree on.
+#: (mirrors ``StreamFunction`` in @earendil-works/pi-ai). It takes the
+#: provider's per-call options bundle and returns an
+#: :data:`AssistantMessageStreamFn` with the options closed over. A future
+#: dispatch layer would key on the model's ``api`` (read off the options)
+#: and invoke the registered builder with ``options`` to obtain the bound
+#: producer, then call that producer with ``(context, abort)``. Otter defines
+#: no dispatch today — this alias is the contract a provider package and a
+#: dispatch layer will agree on.
 #:
 #: ``TOptions`` is open because the realistic shape is a provider-specific
 #: **options bundle** — pure-data config (model id, temperature, max tokens,
@@ -40,27 +60,12 @@ AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
 #: registry metadata is per-registration, not per-call). A provider that needs
 #: nothing beyond the model may specialize ``TOptions`` to a bare ``Model``
 #: type, but the options-bundle form is the intended pattern.
-#:
-#: The second argument is a :class:`Context` instance, which carries the conversation
-#: state and any other runtime data the provider needs to generate the assistant
-#: message.
-#:
-#: The third argument is an ``asyncio.Event`` that represents an abort
-#: signal. The producer should monitor this event and terminate the stream
-#: gracefully if it is set, ensuring that the consumer can handle
-#: cancellation gracefully.
+#
+#: The builder is a *builder* — it does not itself produce a stream. Binding
+#: the options is distinct from driving a specific conversation, which keeps a
+#: registered builder reusable across many calls and lets the dispatch layer
+#: hand callers the bound :data:`AssistantMessageStreamFn` directly.
 
 type AssistantMessageStreamFnBuilder[TOptions] = Callable[
-    [TOptions, Context, asyncio.Event], AssistantMessageStream
-]
-
-#: The options-bound form of :data:`AssistantMessageStreamFnBuilder`: a producer
-#: whose options bundle has already been resolved/closed over, so only the
-#: :class:`Context` and the abort signal remain. It is the post-binding shape a
-#: dispatch layer would hand a caller that no longer needs to see the options
-#: slot. Concrete provider seams today are values of
-#: :data:`AssistantMessageStreamFnBuilder`; this alias is exported for parity
-#: and future bound-call sites.
-type AssistantMessageStreamFn = Callable[
-    [Context, asyncio.Event], AssistantMessageStream
+    [TOptions], AssistantMessageStreamFn
 ]

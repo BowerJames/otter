@@ -116,9 +116,9 @@ class ModelProviderOptions:
     The defaults let a "no hooks" caller construct this with just the model.
 
     The abort signal is **not** part of this bundle: it is supplied as the
-    seam's third argument (an :class:`asyncio.Event`) and is the single source
-    of truth for cooperative abort, threaded through to the dispatched
-    provider stream fn.
+    second argument to the builder's returned producer (an
+    :class:`asyncio.Event`) and is the single source of truth for cooperative
+    abort, threaded through to the dispatched provider stream fn.
     """
 
     model: ModelProviderConfig
