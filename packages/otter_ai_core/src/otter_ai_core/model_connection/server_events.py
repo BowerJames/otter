@@ -27,6 +27,8 @@ class ServerEventTypes(StrEnum):
     ResponseDone = "response.done"
     ResponseError = "response.error"
     ResponseAborted = "response.aborted"
+    ConnectionError = "connection.error"
+
 
 ResponseStopReasons = Literal[StopReason.Stop, StopReason.ToolUse, StopReason.Length]
 
@@ -62,6 +64,7 @@ class ResponseStartedEvent(BaseModel):
     role: Literal[Role.Assistant]
     partial: AssistantMessage
 
+
 class ResponseTextStartEvent(BaseModel):
     """The assistant has started generating a text content item.
 
@@ -80,6 +83,7 @@ class ResponseTextStartEvent(BaseModel):
     content_index: int
     partial: AssistantMessage
 
+
 class ResponseTextUpdatedEvent(BaseModel):
     """The assistant has updated an in-progress text content item.
 
@@ -96,6 +100,7 @@ class ResponseTextUpdatedEvent(BaseModel):
     content_index: int
     partial: AssistantMessage
 
+
 class ResponseTextDoneEvent(BaseModel):
     """The assistant has finished generating a text content item.
 
@@ -111,6 +116,7 @@ class ResponseTextDoneEvent(BaseModel):
     content_type: Literal[ContentType.Text]
     content_index: int
     partial: AssistantMessage
+
 
 class ResponseThinkingStartEvent(BaseModel):
     """The assistant has started generating a thinking (reasoning) content item.
@@ -130,6 +136,7 @@ class ResponseThinkingStartEvent(BaseModel):
     content_index: int
     partial: AssistantMessage
 
+
 class ResponseThinkingUpdateEvent(BaseModel):
     """The assistant has updated an in-progress thinking content item.
 
@@ -145,6 +152,7 @@ class ResponseThinkingUpdateEvent(BaseModel):
     content_type: Literal[ContentType.Thinking]
     content_index: int
     partial: AssistantMessage
+
 
 class ResponseThinkingDoneEvent(BaseModel):
     """The assistant has finished generating a thinking content item.
@@ -265,6 +273,30 @@ class ResponseAbortedEvent(BaseModel):
     partial: AssistantMessage
 
 
+class ConnectionErrorEvent(BaseModel):
+    """A connection-level failure outside any single response.
+
+    Unlike :class:`ResponseErrorEvent` / :class:`ResponseAbortedEvent` (which
+    describe the outcome of one response), this fires when the underlying
+    transport itself fails — e.g. a WebSocket connect/handshake failure or a
+    mid-session transport error. It carries no ``partial`` assistant message
+    because the failure occurs outside a response.
+
+    After emitting this the backend calls ``end()``; the caller's inbound
+    iteration stops. A graceful teardown (caller ``close()`` or the external
+    ``abort`` signal) does **not** emit this event — only failures do.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[ServerEventTypes.ConnectionError]
+    #: Human-readable failure description.
+    message: str
+    #: Coarse failure category, e.g. ``"connect_failed"`` /
+    #: ``"handshake_failed"`` / ``"transport_error"``.
+    reason: str
+
+
 ServerEvent = (
     ContextItemAddedEvent
     | ResponseStartedEvent
@@ -280,6 +312,6 @@ ServerEvent = (
     | ResponseDoneEvent
     | ResponseErrorEvent
     | ResponseAbortedEvent
+    | ConnectionErrorEvent
 )
 """Discriminated union of all server-to-client response stream events."""
-  
