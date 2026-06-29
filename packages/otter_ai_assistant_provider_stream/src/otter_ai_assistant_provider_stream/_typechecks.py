@@ -20,8 +20,8 @@ asserted type, but a function definition's type is a function type
 (``def (...) -> ...``), never identical to a ``Callable[[...], ...]`` alias even
 when structurally equivalent — so ``assert_type`` rejects conforming functions.
 Annotation assignment checks *assignability* (conformance), which is the
-semantics we want here. (Same idiom as
-``otter_ai_core``'s ``test_assistant_message_stream_fn_accepts_conforming_callable``.)
+semantics we want here. (Same idiom as ``otter_ai_core``'s
+``test_assistant_message_stream_fn_builder_returns_conforming_callable``.)
 """
 
 from __future__ import annotations

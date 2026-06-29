@@ -71,7 +71,8 @@ context = Context(
     system_prompt="You are helpful.",
     messages=[UserMessage(role="user", content="Hi!", timestamp=0)],
 )
-stream = create_assistant_message_stream_by_provider(options, context)
+stream_fn = create_assistant_message_stream_by_provider(options)
+stream = stream_fn(context, asyncio.Event())
 
 
 async def consume() -> None:

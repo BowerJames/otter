@@ -20,11 +20,9 @@ from _provider_helpers import (
     install_fake_transport,
     simple_context,
     sse_response,
+    start_stream,
 )
 
-from otter_ai_assistant_provider_stream import (
-    create_assistant_message_stream_by_provider,
-)
 from otter_ai_assistant_provider_stream.stream import _resolve_options
 from otter_ai_assistant_provider_stream.types import (
     ModelProviderConfig,
@@ -35,6 +33,7 @@ from otter_ai_core import Context, create_stream
 from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
     AssistantMessageStream,
+    AssistantMessageStreamFn,
 )
 
 # --------------------------------------------------------------------------- #
@@ -229,9 +228,7 @@ class TestNeverRaises:
         options = ModelProviderOptions(
             model=ModelProviderConfig(model="no-such", provider="zai", api_key="sk")
         )
-        events = await _drain(
-            create_assistant_message_stream_by_provider(options, Context())
-        )
+        events = await _drain(start_stream(options, Context()))
         assert len(events) == 1
         assert isinstance(events[0], AssistantErrorEvent)
         msg = events[0].error.error_message
@@ -244,9 +241,7 @@ class TestNeverRaises:
         options = ModelProviderOptions(
             model=ModelProviderConfig(model="glm-5.2", provider="zai")
         )
-        events = await _drain(
-            create_assistant_message_stream_by_provider(options, Context())
-        )
+        events = await _drain(start_stream(options, Context()))
         assert len(events) == 1
         assert isinstance(events[0], AssistantErrorEvent)
         msg = events[0].error.error_message
@@ -258,9 +253,7 @@ class TestNeverRaises:
                 model="glm-5.2", provider="zai", api_key="sk", api="no-such-api"
             )
         )
-        events = await _drain(
-            create_assistant_message_stream_by_provider(options, Context())
-        )
+        events = await _drain(start_stream(options, Context()))
         assert len(events) == 1
         assert isinstance(events[0], AssistantErrorEvent)
         msg = events[0].error.error_message
@@ -270,9 +263,7 @@ class TestNeverRaises:
         options = ModelProviderOptions(
             model=ModelProviderConfig(model="no-such", provider="zai", api_key="sk")
         )
-        events = await _drain(
-            create_assistant_message_stream_by_provider(options, Context())
-        )
+        events = await _drain(start_stream(options, Context()))
         assert isinstance(events[0], AssistantErrorEvent)
         err = events[0].error
         assert err.provider == "zai"
@@ -321,9 +312,7 @@ class TestEndToEnd:
         options = ModelProviderOptions(
             model=_config(api_key="sk-explicit", thinking_level="off")
         )
-        stream = create_assistant_message_stream_by_provider(
-            options, simple_context("hello")
-        )
+        stream = start_stream(options, simple_context("hello"))
 
         events = await collect(stream)
         # Transport was hit with the resolved key.
@@ -348,9 +337,7 @@ class TestEndToEnd:
                 ),
             )
         )
-        await collect(
-            create_assistant_message_stream_by_provider(options, simple_context())
-        )
+        await collect(start_stream(options, simple_context()))
         body = received["body"]
         assert body["temperature"] == 0.42
         assert body["max_completion_tokens"] == 123
@@ -367,37 +354,37 @@ class TestEndToEnd:
                 model="glm-5.2", provider="zai", thinking_level="off"
             )
         )
-        await collect(
-            create_assistant_message_stream_by_provider(options, simple_context())
-        )
+        await collect(start_stream(options, simple_context()))
         assert received["auth"] == "Bearer sk-from-env"
 
     async def test_abort_signal_threaded_to_dispatched_fn(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # The seam's ``abort`` 3rd arg is threaded through to the dispatched
-        # provider stream fn (it no longer lives on the options bundle).
+        # The dispatched provider stream fn receives the caller's ``abort``.
+        # The seam is a builder; dispatch calls ``fn(cc_options)(context, abort)``,
+        # so the inner producer (registered here as ``fake_fn``) captures abort.
         from otter_ai_assistant_provider_stream import register_api_stream_fn
 
         seen: list[object] = []
 
-        def fake_fn(
-            _options: object, _context: Context, abort: asyncio.Event
-        ) -> AssistantMessageStream:
-            seen.append(abort)
-            stream: AssistantMessageStream
-            writer: object
-            stream, writer = create_stream()
-            writer.end()
-            return stream
+        def fake_fn(_options: object) -> AssistantMessageStreamFn:
+            def inner(
+                _context: Context, abort: asyncio.Event
+            ) -> AssistantMessageStream:
+                seen.append(abort)
+                stream: AssistantMessageStream
+                writer: object
+                stream, writer = create_stream()
+                writer.end()
+                return stream
+
+            return inner
 
         register_api_stream_fn("abort-test-api", fake_fn)
         options = ModelProviderOptions(
             model=_config(api="abort-test-api", api_key="sk")
         )
         abort = asyncio.Event()
-        stream = create_assistant_message_stream_by_provider(
-            options, simple_context(), abort
-        )
+        stream = start_stream(options, simple_context(), abort)
         _ = [event async for event in stream]
         assert seen == [abort]

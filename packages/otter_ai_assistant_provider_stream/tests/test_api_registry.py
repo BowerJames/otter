@@ -18,7 +18,10 @@ from otter_ai_assistant_provider_stream.types import (
     ModelProviderOptions,
 )
 from otter_ai_core import Context, create_stream
-from otter_ai_core.assistant_message_stream import AssistantMessageStream
+from otter_ai_core.assistant_message_stream import (
+    AssistantMessageStream,
+    AssistantMessageStreamFn,
+)
 
 
 def _make_options(api: str = "custom-api") -> ModelProviderOptions:
@@ -50,9 +53,7 @@ class TestBuiltInApi:
 
 class TestRuntimeRegistration:
     def test_register_custom_fn(self) -> None:
-        def fn(
-            _options: object, _context: Context, _abort: asyncio.Event
-        ) -> AssistantMessageStream:
+        def fn(_options: object) -> AssistantMessageStreamFn:
             raise AssertionError
 
         register_api_stream_fn("custom-api", fn)
@@ -63,12 +64,10 @@ class TestRuntimeRegistration:
         assert get_api_stream_fn("never-registered") is None
 
     def test_register_overwrites(self) -> None:
-        def first(_o: object, _c: Context, _a: asyncio.Event) -> AssistantMessageStream:
+        def first(_o: object) -> AssistantMessageStreamFn:
             raise AssertionError
 
-        def second(
-            _o: object, _c: Context, _a: asyncio.Event
-        ) -> AssistantMessageStream:
+        def second(_o: object) -> AssistantMessageStreamFn:
             raise AssertionError
 
         register_api_stream_fn("overwritable", first)
@@ -82,21 +81,25 @@ class TestDispatchUsesRegisteredFn:
     async def test_custom_fn_dispatched(self) -> None:
         seen: list[Context] = []
 
-        def fake_fn(
-            _options: object, context: Context, _abort: asyncio.Event
-        ) -> AssistantMessageStream:
-            seen.append(context)
-            stream: AssistantMessageStream
-            writer: object
-            stream, writer = create_stream()
-            writer.end()
-            return stream
+        def fake_fn(_options: object) -> AssistantMessageStreamFn:
+            def inner(
+                context: Context, _abort: asyncio.Event
+            ) -> AssistantMessageStream:
+                seen.append(context)
+                stream: AssistantMessageStream
+                writer: object
+                stream, writer = create_stream()
+                writer.end()
+                return stream
+
+            return inner
 
         register_api_stream_fn("custom-api", fake_fn)
         options = _make_options(api="custom-api")
         context = Context()
 
-        returned = create_assistant_message_stream_by_provider(options, context)
+        stream_fn = create_assistant_message_stream_by_provider(options)
+        returned = stream_fn(context, asyncio.Event())
         assert seen == [context]
 
         # The returned stream is the one the registered fn built (drains empty).

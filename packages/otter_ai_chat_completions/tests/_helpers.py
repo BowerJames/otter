@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Sequence
 from typing import Any
@@ -13,9 +14,11 @@ from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsModel,
     ChatCompletionsModelOptions,
+    create_chat_completions_assistant_message_stream,
 )
 from otter_ai_chat_completions import stream as stream_module
 from otter_ai_core import Context, UserMessage, context_item
+from otter_ai_core.assistant_message_stream import AssistantMessageStream
 
 
 def make_model(**overrides: Any) -> ChatCompletionsModel:
@@ -51,6 +54,26 @@ def simple_context(text: str = "hello") -> Context:
             )
         ],
     )
+
+
+def start_stream(
+    options: ChatCompletionsModelOptions,
+    context: Context,
+    abort: asyncio.Event | None = None,
+) -> AssistantMessageStream:
+    """Two-step convenience for behavioural tests: build the stream fn, then call it.
+
+    The seam is a builder — ``create_chat_completions_assistant_message_stream``
+    takes ``options`` and returns an ``AssistantMessageStreamFn``, which is then
+    called with ``(context, abort)``. Behavioural tests rarely care about the
+    abort signal, so this helper defaults it to a fresh, unset
+    :class:`asyncio.Event`. The seam contract itself is pinned by
+    ``test_smoke.test_seam_returns_stream_synchronously`` (inline two-step) and
+    by ``_typechecks.py``.
+    """
+    if abort is None:
+        abort = asyncio.Event()
+    return create_chat_completions_assistant_message_stream(options)(context, abort)
 
 
 def sse_response(

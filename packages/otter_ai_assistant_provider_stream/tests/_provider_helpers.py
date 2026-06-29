@@ -9,6 +9,7 @@ wheel.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Sequence
 from typing import Any
@@ -16,12 +17,16 @@ from typing import Any
 import httpx
 import pytest
 
+from otter_ai_assistant_provider_stream import (
+    create_assistant_message_stream_by_provider,
+)
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsModel,
 )
 from otter_ai_chat_completions import stream as stream_module
 from otter_ai_core import Context, UserMessage, context_item
+from otter_ai_core.assistant_message_stream import AssistantMessageStream
 
 
 def model_kwargs(**overrides: Any) -> dict[str, Any]:
@@ -59,6 +64,24 @@ def simple_context(text: str = "hello") -> Context:
             )
         ],
     )
+
+
+def start_stream(
+    options: Any,
+    context: Context,
+    abort: asyncio.Event | None = None,
+) -> AssistantMessageStream:
+    """Two-step convenience: build the provider-dispatch stream fn, then call it.
+
+    The seam is a builder — ``create_assistant_message_stream_by_provider``
+    takes ``options`` and returns an ``AssistantMessageStreamFn``, which is then
+    called with ``(context, abort)``. Behavioural tests rarely exercise the
+    abort signal, so this helper defaults it to a fresh, unset
+    :class:`asyncio.Event`.
+    """
+    if abort is None:
+        abort = asyncio.Event()
+    return create_assistant_message_stream_by_provider(options)(context, abort)
 
 
 def sse_response(
