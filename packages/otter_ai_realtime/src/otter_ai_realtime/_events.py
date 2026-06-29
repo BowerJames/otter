@@ -125,6 +125,11 @@ class InboundTranslator:
         self._open_tool_index: int | None = None
         #: content_index -> accumulated argument string.
         self._tool_args: dict[int, str] = {}
+        #: Tool-call content indices whose ``done`` event has already been
+        #: emitted. The Realtime API fires *both* ``function_call_arguments.
+        #: done`` and ``output_item.done`` for a function call; without this
+        #: guard the second would duplicate the first.
+        self._finalized_tool_indices: set[int] = set()
 
     # -- public ---------------------------------------------------------- #
 
@@ -185,6 +190,7 @@ class InboundTranslator:
         )
         self._open_tool_index = None
         self._tool_args.clear()
+        self._finalized_tool_indices.clear()
         return [
             ResponseStartedEvent(
                 type="response.started", role="assistant", partial=self._partial
@@ -315,6 +321,10 @@ class InboundTranslator:
         idx = self._resolve_tool_index(frame)
         if idx is None:
             return []
+        # Idempotent: the Realtime API fires both function_call_arguments.done
+        # and output_item.done for the same call — emit done only once.
+        if idx in self._finalized_tool_indices:
+            return []
         block = self._partial.content[idx]
         assert isinstance(block, ToolCall)
         raw = frame.get("arguments")
@@ -326,6 +336,7 @@ class InboundTranslator:
         if isinstance(frame.get("name"), str):
             block.name = frame["name"]
         self._open_tool_index = None
+        self._finalized_tool_indices.add(idx)
         return [
             ResponseToolCallDoneEvent(
                 type="response.tool_call.done",
@@ -354,6 +365,7 @@ class InboundTranslator:
         self._partial = None
         self._open_tool_index = None
         self._tool_args.clear()
+        self._finalized_tool_indices.clear()
         return [
             ResponseDoneEvent(
                 type="response.done",
@@ -370,11 +382,12 @@ class InboundTranslator:
         self._partial = None
         self._open_tool_index = None
         self._tool_args.clear()
+        self._finalized_tool_indices.clear()
         return [
             ResponseAbortedEvent(
                 type="response.aborted",
                 role="assistant",
-                reason="aborted",
+                reason=StopReason.Aborted,
                 partial=partial,
             )
         ]
@@ -392,9 +405,13 @@ class InboundTranslator:
         partial.stop_reason = StopReason.Error
         partial.error_message = message
         self._partial = None
+        self._finalized_tool_indices.clear()
         return [
             ResponseErrorEvent(
-                type="response.error", role="assistant", reason="error", partial=partial
+                type="response.error",
+                role="assistant",
+                reason=StopReason.Error,
+                partial=partial,
             )
         ]
 

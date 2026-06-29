@@ -95,6 +95,23 @@ def fc_args_done(call_id: str, name: str, arguments: str) -> dict[str, Any]:
     }
 
 
+def output_item_done(call_id: str, name: str, arguments: str) -> dict[str, Any]:
+    """The Realtime ``response.output_item.done`` for a function call.
+
+    The real API fires BOTH this and ``function_call_arguments.done`` for the
+    same call — the translator must dedupe the done event.
+    """
+    return {
+        "type": "response.output_item.done",
+        "item": {
+            "type": "function_call",
+            "call_id": call_id,
+            "name": name,
+            "arguments": arguments,
+        },
+    }
+
+
 def response_created(resp_id: str = "resp_1") -> dict[str, Any]:
     return {"type": "response.created", "response": {"id": resp_id}}
 
@@ -155,11 +172,11 @@ class FakeRealtimeWS:
         self.closed = True
 
 
-def collect(translator_or_translator: Any, frames: list[dict[str, Any]]) -> list[Any]:
+def collect(translator: Any, frames: list[dict[str, Any]]) -> list[Any]:
     """Feed ``frames`` through an :class:`InboundTranslator`, collecting events."""
     out: list[Any] = []
     for frame in frames:
-        out.extend(translator_or_translator.feed(frame))
+        out.extend(translator.feed(frame))
     return out
 
 
@@ -182,6 +199,7 @@ __all__ = [
     "fc_item_added",
     "make_model",
     "make_options",
+    "output_item_done",
     "response_cancelled",
     "response_completed",
     "response_created",
