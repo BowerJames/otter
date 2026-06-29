@@ -1,8 +1,9 @@
 """The provider-dispatch seam.
 
-:func:`create_assistant_message_stream_by_provider` is a concrete value of
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn` that
-resolves a
+:func:`create_assistant_message_stream_by_provider` is a concrete value
+of
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`
+that resolves a
 :class:`~otter_ai_assistant_provider_stream.types.ModelProviderConfig` against
 the catalog + env + thinking-clamp registries, builds a fully-populated
 :class:`~otter_ai_chat_completions.ChatCompletionsModelOptions`, and dispatches
@@ -13,8 +14,8 @@ unknown api, missing api key) are encoded as an
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` carrying
 a best-effort skeleton :class:`~otter_ai_core.AssistantMessage`, mirroring
 pi-ai's ``createLazyLoadErrorMessage`` pattern. This honours the
-``AssistantMessageStreamFn`` contract: the caller always receives a live
-stream and learns of failure by reading its terminal event.
+``AssistantMessageStreamFnBuilder`` contract: the caller always receives a
+live stream and learns of failure by reading its terminal event.
 """
 
 from __future__ import annotations

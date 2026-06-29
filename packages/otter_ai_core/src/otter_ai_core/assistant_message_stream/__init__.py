@@ -7,7 +7,8 @@ used to build a single assistant message:
   — a Python port of the ``AssistantMessageEvent`` protocol from
   ``@earendil-works/pi-ai``; and
 * the typed aliases :data:`AssistantMessageStream`, :data:`AssistantMessageWriter`,
-  and the producer-side seam type :data:`AssistantMessageStreamFn`, which
+  and the producer-side seam type :data:`AssistantMessageStreamFnBuilder`
+  (plus its options-bound form :data:`AssistantMessageStreamFn`), which
   specialize the generic stream runtime in :mod:`otter_ai_core.stream`.
 
 It is a supported import surface (Strategy A — two-layer facade): callers may
@@ -35,6 +36,7 @@ from .assistant_message_events import (
 from .assistant_message_stream import (
     AssistantMessageStream,
     AssistantMessageStreamFn,
+    AssistantMessageStreamFnBuilder,
     AssistantMessageWriter,
 )
 
@@ -42,6 +44,7 @@ __all__ = [
     # typed aliases
     "AssistantMessageStream",
     "AssistantMessageStreamFn",
+    "AssistantMessageStreamFnBuilder",
     "AssistantMessageWriter",
     # events
     "AssistantDoneEvent",

@@ -185,7 +185,7 @@ def create_connection[TClient, TEvent]() -> tuple[
 
 
 #: Bidirectional peer of
-#: :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`.
+#: :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`.
 #:
 #: A concrete value resolves provider config against whatever registries it
 #: needs, opens a transport (e.g. a WebSocket for a realtime API), wires the

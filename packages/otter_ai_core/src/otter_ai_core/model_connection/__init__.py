@@ -8,7 +8,7 @@ to concrete unions:
 * :data:`ModelConnection` — ``Connection[ClientEvent, ServerEvent]``.
 * :data:`ModelConnectionFn` — ``ConnectionFn[TOptions, ClientEvent, ServerEvent]``,
   the bidirectional peer of
-  :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`.
+  :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`.
 * :data:`ClientEvent` / :data:`ServerEvent` — the discriminated unions a
   caller and a backend exchange, plus their member event classes.
 

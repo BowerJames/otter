@@ -4,8 +4,8 @@ Defines the data model (:class:`ChatCompletionsModel`, cost, compat), the
 runtime options bundle (model + hooks + abort signal), and the seam
 :func:`create_chat_completions_assistant_message_stream` — a concrete
 implementation of
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn` for
-the Chat Completions wire format.
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`
+for the Chat Completions wire format.
 
 Scope: this package owns the Chat Completions wire-format contract only.
 Provider-specific configuration (compat flags, static headers, env-key

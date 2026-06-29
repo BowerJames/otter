@@ -13,10 +13,10 @@ This package provides:
 
 The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
 family) and the **typed stream aliases** (``AssistantMessageStream`` /
-``AssistantMessageWriter`` / the ``AssistantMessageStreamFn`` seam) live under
+``AssistantMessageWriter`` / the ``AssistantMessageStreamFnBuilder`` seam) live under
 the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
 top level. The ``ConnectionFn`` seam type — the bidirectional peer of
-``AssistantMessageStreamFn`` — is defined alongside the connection runtime in
+``AssistantMessageStreamFnBuilder`` — is defined alongside the connection runtime in
 :mod:`otter_ai_core.connection`.
 
 It defines **no LLMs, providers, APIs, transports, API registry, or

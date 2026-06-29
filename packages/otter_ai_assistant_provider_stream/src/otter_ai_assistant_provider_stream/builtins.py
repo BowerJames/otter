@@ -27,10 +27,12 @@ from otter_ai_assistant_provider_stream.providers import (
 )
 from otter_ai_assistant_provider_stream.types import DEFAULT_API
 from otter_ai_chat_completions import create_chat_completions_assistant_message_stream
-from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
+from otter_ai_core.assistant_message_stream import (
+    AssistantMessageStreamFnBuilder,
+)
 
 #: The default chat-completions stream fn registered under ``DEFAULT_API``.
-_DEFAULT_STREAM_FN: AssistantMessageStreamFn[Any] = (
+_DEFAULT_STREAM_FN: AssistantMessageStreamFnBuilder[Any] = (
     create_chat_completions_assistant_message_stream
 )
 
@@ -53,7 +55,7 @@ def register_built_ins() -> None:
         register_api_stream_fn(DEFAULT_API, _DEFAULT_STREAM_FN)
 
 
-def get_default_api_stream_fn() -> AssistantMessageStreamFn[Any] | None:
+def get_default_api_stream_fn() -> AssistantMessageStreamFnBuilder[Any] | None:
     """The stream fn currently registered under :data:`DEFAULT_API`."""
     return get_api_stream_fn(DEFAULT_API)
 

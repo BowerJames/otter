@@ -2,7 +2,7 @@
 
 Asserts that this package's seam
 :func:`create_chat_completions_assistant_message_stream` conforms to
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`,
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`,
 parameterized by this package's options bundle
 (:class:`ChatCompletionsModelOptions`).
 
@@ -33,8 +33,10 @@ if TYPE_CHECKING:
     from otter_ai_chat_completions.stream import (
         create_chat_completions_assistant_message_stream,
     )
-    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
+    from otter_ai_core.assistant_message_stream import (
+        AssistantMessageStreamFnBuilder,
+    )
 
-    _check: AssistantMessageStreamFn[ChatCompletionsModelOptions] = (
+    _check: AssistantMessageStreamFnBuilder[ChatCompletionsModelOptions] = (
         create_chat_completions_assistant_message_stream
     )

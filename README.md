@@ -40,8 +40,9 @@ All packages and dev dependencies share a single `.venv` at the root.
 `otter-ai-core` is the **driving package** of the monorepo: it owns the core
 types and data models that the other packages (`otter-ai-chat-completions`,
 `otter-ai-assistant-provider-stream`) build on — for example, its
-`AssistantMessageStreamFn` (under the `assistant_message_stream` subpackage)
-defines the core type that the Chat Completions seam implements.
+`AssistantMessageStreamFnBuilder` (under the `assistant_message_stream`
+subpackage) defines the core producer-seam type that the Chat Completions
+seam implements.
 
 The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,
@@ -49,8 +50,9 @@ API registry, or `stream()` dispatch** — only the Pydantic v2 data structures 
 conversation is built from, plus a generic async stream runtime. The
 assistant-message-stream **event protocol** (`AssistantMessageEvent` family)
 and the **typed stream aliases** (`AssistantMessageStream` /
-`AssistantMessageWriter` / the `AssistantMessageStreamFn` seam) live under the
-`otter_ai_core.assistant_message_stream` subpackage, not the top level.
+`AssistantMessageWriter` / the `AssistantMessageStreamFnBuilder` seam) live
+under the `otter_ai_core.assistant_message_stream` subpackage, not the top
+level.
 
 - [`Context`](./packages/otter_ai_core/src/otter_ai_core/context.py) — the top-level
   conversation (`system_prompt`, `items`, `tools`), JSON-serializable so a
@@ -129,8 +131,9 @@ into a consumer and a producer sharing one queue:
 - `create_stream()` — returns a linked `(Stream, StreamWriter)` pair.
 
 Typed aliases specialize it: `AssistantMessageStream` (and a matching
-`AssistantMessageWriter`), with `AssistantMessageStreamFn` as the producer-side
-seam type — all imported from `otter_ai_core.assistant_message_stream`. There
+`AssistantMessageWriter`), with `AssistantMessageStreamFnBuilder` as the
+producer-side seam type — all imported from
+`otter_ai_core.assistant_message_stream`. There
 is **no `result()`** — consumers read the terminal `done`/`error` event
 directly.
 

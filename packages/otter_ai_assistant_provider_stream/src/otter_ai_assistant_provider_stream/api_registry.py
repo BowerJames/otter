@@ -7,25 +7,27 @@ split yet). Seeded with ``"chat-completions"`` ->
 by :func:`register_built_ins`.
 
 A future provider package (e.g. an otter ``anthropic`` package) would
-register its own ``AssistantMessageStreamFn`` here under a new api string,
-without this package changing.
+register its own ``AssistantMessageStreamFnBuilder`` here under a new api
+string, without this package changing.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
+from otter_ai_core.assistant_message_stream import (
+    AssistantMessageStreamFnBuilder,
+)
 
 #: Module-level registry: api -> stream fn.
-# ``AssistantMessageStreamFn`` is generic in ``TOptions``; the registry holds fns
-# for heterogeneous option bundles, so the option slot is ``Any``.
-_api_fns: dict[str, AssistantMessageStreamFn[Any]] = {}
+# ``AssistantMessageStreamFnBuilder`` is generic in ``TOptions``; the registry
+# holds fns for heterogeneous option bundles, so the option slot is ``Any``.
+_api_fns: dict[str, AssistantMessageStreamFnBuilder[Any]] = {}
 
 
 def register_api_stream_fn(
     api: str,
-    fn: AssistantMessageStreamFn[Any],
+    fn: AssistantMessageStreamFnBuilder[Any],
 ) -> None:
     """Register (or overwrite) the stream fn for an api string."""
     _api_fns[api] = fn
@@ -33,7 +35,7 @@ def register_api_stream_fn(
 
 def get_api_stream_fn(
     api: str,
-) -> AssistantMessageStreamFn[Any] | None:
+) -> AssistantMessageStreamFnBuilder[Any] | None:
     """Look up the stream fn registered for ``api``."""
     return _api_fns.get(api)
 

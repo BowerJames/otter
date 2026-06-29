@@ -2,7 +2,7 @@
 
 Asserts that this package's dispatch seam
 :func:`create_assistant_message_stream_by_provider` conforms to
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`,
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`,
 parameterized by this package's options bundle
 (:class:`ModelProviderOptions`).
 
@@ -33,8 +33,10 @@ if TYPE_CHECKING:
         create_assistant_message_stream_by_provider,
     )
     from otter_ai_assistant_provider_stream.types import ModelProviderOptions
-    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
+    from otter_ai_core.assistant_message_stream import (
+        AssistantMessageStreamFnBuilder,
+    )
 
-    _check: AssistantMessageStreamFn[ModelProviderOptions] = (
+    _check: AssistantMessageStreamFnBuilder[ModelProviderOptions] = (
         create_assistant_message_stream_by_provider
     )
