@@ -7,7 +7,7 @@ Chat Completions wire-format **contract** package for `otter-ai-core`.
 This package owns the Chat Completions wire-format contract: the data model
 (`ChatCompletionsModel`), the runtime options bundle, and the seam
 `create_chat_completions_assistant_message_stream` — a concrete
-implementation of `otter_ai_core.AssistantMessageStreamFn`.
+implementation of `otter_ai_core.AssistantMessageStreamFnBuilder`.
 
 It is **provider-agnostic by design**: it performs no provider/base_url
 detection, no env-key resolution, and ships no model catalog.

@@ -50,6 +50,17 @@ AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
 #: gracefully if it is set, ensuring that the consumer can handle
 #: cancellation gracefully.
 
-type AssistantMessageStreamFn[TOptions] = Callable[
+type AssistantMessageStreamFnBuilder[TOptions] = Callable[
     [TOptions, Context, asyncio.Event], AssistantMessageStream
+]
+
+#: The options-bound form of :data:`AssistantMessageStreamFnBuilder`: a producer
+#: whose options bundle has already been resolved/closed over, so only the
+#: :class:`Context` and the abort signal remain. It is the post-binding shape a
+#: dispatch layer would hand a caller that no longer needs to see the options
+#: slot. Concrete provider seams today are values of
+#: :data:`AssistantMessageStreamFnBuilder`; this alias is exported for parity
+#: and future bound-call sites.
+type AssistantMessageStreamFn = Callable[
+    [Context, asyncio.Event], AssistantMessageStream
 ]

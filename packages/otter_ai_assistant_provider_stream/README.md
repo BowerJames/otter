@@ -8,7 +8,7 @@ This package owns the **dispatch layer** that `otter-ai-core` deliberately omits
 a built-in model catalog (generated from [models.dev]), env-key resolution,
 thinking-level clamping, three runtime registries, and the seam
 `create_assistant_message_stream_by_provider` — a concrete value of
-`otter_ai_core.AssistantMessageStreamFn`.
+`otter_ai_core.AssistantMessageStreamFnBuilder`.
 
 It dispatches through [`otter-ai-chat-completions`](../otter_ai_chat_completions);
 a future provider package registers additional api stream fns without this

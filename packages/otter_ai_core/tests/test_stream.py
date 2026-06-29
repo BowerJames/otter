@@ -171,14 +171,16 @@ def test_type_aliases_are_stream_specializations() -> None:
 
 
 def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
-    """``AssistantMessageStreamFn`` is the producer-side seam type.
+    """``AssistantMessageStreamFnBuilder`` is the producer-side seam type.
 
     mypy is the real enforcer; this just checks the alias is importable and a
-    trivially-conforming two-argument function binds under an annotation
-    referencing it.
+    trivially-conforming three-argument (options, context, abort) function
+    binds under an annotation referencing it.
     """
     from otter_ai_core import Context
-    from otter_ai_core.assistant_message_stream import AssistantMessageStreamFn
+    from otter_ai_core.assistant_message_stream import (
+        AssistantMessageStreamFnBuilder,
+    )
 
     def make_stream(
         options: object, context: Context, abort: asyncio.Event
@@ -188,5 +190,5 @@ def test_assistant_message_stream_fn_accepts_conforming_callable() -> None:
         stream, _writer = create_stream()
         return stream
 
-    fn: AssistantMessageStreamFn[object] = make_stream
+    fn: AssistantMessageStreamFnBuilder[object] = make_stream
     assert callable(fn)

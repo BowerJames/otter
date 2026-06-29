@@ -1,10 +1,10 @@
-"""The Chat Completions ``AssistantMessageStreamFn`` seam.
+"""The Chat Completions ``AssistantMessageStreamFnBuilder`` seam.
 
 :func:`create_chat_completions_assistant_message_stream` is a concrete
 implementation of
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFn` for
-the Chat Completions wire format. It is a faithful async/:mod:`httpx` port of
-pi-ai's ``streamOpenAICompletions``.
+:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`
+for the Chat Completions wire format. It is a faithful async/:mod:`httpx` port
+of pi-ai's ``streamOpenAICompletions``.
 
 The seam is **synchronous**: it returns the
 :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
@@ -117,7 +117,7 @@ def create_chat_completions_assistant_message_stream(
 
     Synchronous; returns immediately and spawns its producer via
     :func:`asyncio.create_task`. Honours the
-    :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`
+    :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`
     contract — it never raises.
 
     ``abort`` is the cooperative-abort signal (an :class:`asyncio.Event`); when
