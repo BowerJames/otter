@@ -171,17 +171,18 @@ def test_connection_fn_accepts_conforming_callable() -> None:
 
     mypy is the real enforcer; this checks the alias is importable and a
     trivially-conforming callable binds under an annotation referencing it.
+    ``ConnectionFn`` is the *options-bound* producer
+    (``Callable[[Context, asyncio.Event], Connection[TClient, TEvent]]``);
+    its builder peer is :data:`ModelConnectionFnBuilder`.
     """
     conn: Connection[str, int]
     conn, _backend = create_connection()
 
-    def make_connection(
-        options: object, context: Context, abort: asyncio.Event
-    ) -> Connection[str, int]:
+    def make_connection(context: Context, abort: asyncio.Event) -> Connection[str, int]:
         inner: Connection[str, int]
         inner, _ = create_connection()
         return inner
 
-    fn: ConnectionFn[object, str, int] = make_connection
+    fn: ConnectionFn[str, int] = make_connection
     assert callable(fn)
     assert isinstance(conn, Connection)

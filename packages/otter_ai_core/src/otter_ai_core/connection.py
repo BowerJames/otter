@@ -199,6 +199,6 @@ def create_connection[TClient, TEvent]() -> tuple[
 #: types. A typed specialisation fixes them (e.g. to ``ClientEvent`` /
 #: ``ServerEvent`` in ``model_connection``); this generic alias is the
 #: contract a provider package and a dispatch layer will agree on.
-type ConnectionFn[TOptions, TClient, TEvent] = Callable[
-    [TOptions, Context, asyncio.Event], Connection[TClient, TEvent]
+type ConnectionFn[TClient, TEvent] = Callable[
+    [Context, asyncio.Event], Connection[TClient, TEvent]
 ]

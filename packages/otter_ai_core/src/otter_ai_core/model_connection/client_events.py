@@ -28,8 +28,8 @@ class ResponseCreate(BaseModel):
 
     type: Literal[ClientEventTypes.CreateResponse]
 
-class AbortResponseEvent(BaseModel):
 
+class AbortResponseEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal[ClientEventTypes.AbortResponse]

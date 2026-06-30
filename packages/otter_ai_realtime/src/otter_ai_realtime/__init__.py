@@ -4,8 +4,9 @@ Defines the data model (:class:`RealtimeModel`, :class:`RealtimeCost`,
 :class:`RealtimeSessionConfig`), the runtime options bundle
 (:class:`RealtimeModelOptions` = model + session config + hooks), and the
 seam :func:`create_realtime_model_connection` — a concrete implementation of
-:data:`otter_ai_core.model_connection.ModelConnectionFn` for OpenAI-Realtime-
-format APIs (a WebSocket transport with ``session.update`` /
+:data:`otter_ai_core.model_connection.ModelConnectionFnBuilder` (parameterised
+by :class:`RealtimeModelOptions`) for OpenAI-Realtime-format APIs (a WebSocket
+transport with ``session.update`` /
 ``conversation.item.create`` / ``response.*`` events).
 
 The package is **generic**: it covers any provider that follows the OpenAI
