@@ -14,6 +14,7 @@ from _realtime_helpers import (
     response_completed,
     response_created,
     simple_context,
+    start_connection,
     text_frame_delta,
     text_frame_done,
     user_text,
@@ -24,7 +25,6 @@ from otter_ai_core.model_connection import (
     ConnectionErrorEvent,
     ResponseDoneEvent,
 )
-from otter_ai_realtime import create_realtime_model_connection
 
 
 async def _drain(conn: Any) -> list[Any]:
@@ -48,7 +48,7 @@ async def test_happy_path_emits_session_update_replay_and_response(
     _install_fake(monkeypatch, fake)
 
     ctx = simple_context(user_text("seed hello"), system_prompt="be helpful")
-    conn = create_realtime_model_connection(make_options(), ctx)
+    conn = start_connection(make_options(), ctx)
 
     # Let the backend open + send session.update + replay, then drive a response.
     fake.feed(
@@ -90,7 +90,7 @@ async def test_connect_failure_emits_connection_error(
         raise OSError("refused")
 
     monkeypatch.setattr(transport, "connect_ws", _connect)
-    conn = create_realtime_model_connection(make_options(), simple_context())
+    conn = start_connection(make_options(), simple_context())
     events = await _drain(conn)
 
     assert len(events) == 1
@@ -101,7 +101,7 @@ async def test_connect_failure_emits_connection_error(
 
 async def test_missing_api_key_emits_connection_error() -> None:
     options = make_options(model=make_model(api_key=None))
-    conn = create_realtime_model_connection(options, simple_context())
+    conn = start_connection(options, simple_context())
     events = await _drain(conn)
     assert len(events) == 1
     assert isinstance(events[0], ConnectionErrorEvent)
@@ -116,7 +116,7 @@ async def test_mid_session_transport_error_emits_connection_error(
     fake = FakeRealtimeWS()
     _install_fake(monkeypatch, fake)
 
-    conn = create_realtime_model_connection(make_options(), simple_context())
+    conn = start_connection(make_options(), simple_context())
     await asyncio.sleep(0)  # let the backend open + send session.update
 
     # Simulate a transport error mid-stream.
@@ -136,7 +136,7 @@ async def test_abort_tears_down_gracefully_no_error_event(
     _install_fake(monkeypatch, fake)
 
     abort = asyncio.Event()
-    conn = create_realtime_model_connection(make_options(), simple_context(), abort)
+    conn = start_connection(make_options(), simple_context(), abort)
     await asyncio.sleep(0)
 
     abort.set()
@@ -152,7 +152,7 @@ async def test_close_ends_connection_gracefully(
     fake = FakeRealtimeWS()
     _install_fake(monkeypatch, fake)
 
-    conn = create_realtime_model_connection(make_options(), simple_context())
+    conn = start_connection(make_options(), simple_context())
     await asyncio.sleep(0)
 
     conn.close()
@@ -169,7 +169,7 @@ async def test_response_abort_client_event_sends_cancel_and_stays_open(
     fake = FakeRealtimeWS()
     _install_fake(monkeypatch, fake)
 
-    conn = create_realtime_model_connection(make_options(), simple_context())
+    conn = start_connection(make_options(), simple_context())
     await asyncio.sleep(0)
 
     # Push a per-response abort.
@@ -197,7 +197,7 @@ async def test_on_connect_observer_fires(monkeypatch: pytest.MonkeyPatch) -> Non
 
     options = make_options()
     options.hooks.on_connect = on_connect
-    conn = create_realtime_model_connection(options, simple_context())
+    conn = start_connection(options, simple_context())
     await asyncio.sleep(0)
     conn.close()
     await _drain(conn)

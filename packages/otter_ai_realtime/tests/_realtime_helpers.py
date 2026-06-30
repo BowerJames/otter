@@ -49,6 +49,25 @@ def make_options(**overrides: Any) -> RealtimeModelOptions:
     return RealtimeModelOptions(**opts)
 
 
+def start_connection(
+    options: RealtimeModelOptions,
+    context: Context,
+    abort: asyncio.Event | None = None,
+) -> Any:
+    """Two-step seam invocation: ``builder(options)(context, abort)``.
+
+    The seam is now a :data:`ModelConnectionFnBuilder`: it takes only the
+    options bundle and returns the bound producer, which the caller invokes
+    with ``(context, abort)``. This helper keeps the connection tests readable
+    and defaults ``abort`` to a fresh, unset event (matching the pre-builder
+    convenience).
+    """
+    from otter_ai_realtime import create_realtime_model_connection
+
+    connection_fn = create_realtime_model_connection(options)
+    return connection_fn(context, abort if abort is not None else asyncio.Event())
+
+
 def simple_context(*messages: Any, system_prompt: str | None = None) -> Context:
     items: list[Any] = []
     for i, msg in enumerate(messages):
@@ -204,6 +223,7 @@ __all__ = [
     "response_completed",
     "response_created",
     "simple_context",
+    "start_connection",
     "text_frame_delta",
     "text_frame_done",
     "user_text",

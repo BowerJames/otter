@@ -6,7 +6,11 @@ This package is the typed specialisation of
 to concrete unions:
 
 * :data:`ModelConnection` — ``Connection[ClientEvent, ServerEvent]``.
-* :data:`ModelConnectionFn` — ``ConnectionFn[TOptions, ClientEvent, ServerEvent]``,
+* :data:`ModelConnectionFn` — ``ConnectionFn[ClientEvent, ServerEvent]``, the
+  options-bound producer
+  (:data:`ConnectionFn` is
+  ``Callable[[Context, asyncio.Event], Connection[TClient, TEvent]]``).
+* :data:`ModelConnectionFnBuilder` — ``Callable[[TOptions], ModelConnectionFn]``,
   the bidirectional peer of
   :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`.
 * :data:`ClientEvent` / :data:`ServerEvent` — the discriminated unions a
@@ -26,7 +30,11 @@ from .client_events import (
     ContextItemAddEvent,
     ResponseCreate,
 )
-from .model_connection import ModelConnection, ModelConnectionFn
+from .model_connection import (
+    ModelConnection,
+    ModelConnectionFn,
+    ModelConnectionFnBuilder,
+)
 from .server_events import (
     ConnectionErrorEvent,
     ContextItemAddedEvent,
@@ -52,6 +60,7 @@ __all__ = [
     # typed aliases
     "ModelConnection",
     "ModelConnectionFn",
+    "ModelConnectionFnBuilder",
     # client events
     "ClientEvent",
     "ClientEventTypes",

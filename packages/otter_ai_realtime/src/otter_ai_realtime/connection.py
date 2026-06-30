@@ -1,15 +1,18 @@
-"""The Realtime ``ModelConnectionFn`` seam.
+"""The Realtime ``ModelConnectionFnBuilder`` seam.
 
 :func:`create_realtime_model_connection` is a concrete implementation of
-:data:`otter_ai_core.model_connection.ModelConnectionFn` for OpenAI-Realtime-
-format APIs. It is the bidirectional peer of
+:data:`otter_ai_core.model_connection.ModelConnectionFnBuilder` (parameterised
+by :class:`RealtimeModelOptions`) for OpenAI-Realtime-format APIs. It is the
+bidirectional peer of
 :func:`otter_ai_chat_completions.create_chat_completions_assistant_message_stream`.
 
-The seam is **synchronous**: it returns the
+The seam is a **builder**: it closes over the per-call ``options`` bundle and
+returns an :data:`~otter_ai_core.model_connection.ModelConnectionFn` (the
+options-bound producer). That producer is **synchronous**: it returns the
 :class:`~otter_ai_core.model_connection.ModelConnection` immediately and
 schedules its backend (the WebSocket pump) via :func:`asyncio.create_task`.
 The backend pushes every inbound server event (including the terminal ones),
-then calls ``end()`` on the inbound writer. The seam **never raises** —
+then calls ``end()`` on the inbound writer. The producer **never raises** —
 connect/handshake/transport failures are encoded as a
 :class:`~otter_ai_core.model_connection.ConnectionErrorEvent` on the returned
 connection.
@@ -38,6 +41,7 @@ from otter_ai_core.connection import ConnectionBackend
 from otter_ai_core.model_connection import (
     ClientEvent,
     ModelConnection,
+    ModelConnectionFn,
     ServerEvent,
 )
 from otter_ai_realtime import _transport
@@ -55,30 +59,38 @@ _tasks: set[asyncio.Task[None]] = set()
 
 def create_realtime_model_connection(
     options: RealtimeModelOptions,
-    context: Context,
-    abort: asyncio.Event | None = None,
-) -> ModelConnection:
-    """Open a :class:`ModelConnection` for a Realtime model.
+) -> ModelConnectionFn:
+    """Build a :class:`~otter_ai_core.model_connection.ModelConnectionFn` for
+    a Realtime model.
 
-    Synchronous; returns immediately and spawns the backend pump via
-    :func:`asyncio.create_task`. Honours the
-    :data:`~otter_ai_core.model_connection.ModelConnectionFn` contract — it
-    never raises.
+    A concrete value of
+    :data:`~otter_ai_core.model_connection.ModelConnectionFnBuilder`: closes
+    over ``options`` and returns the options-bound producer. The returned
+    producer is **synchronous** — it returns the
+    :class:`~otter_ai_core.model_connection.ModelConnection` immediately and
+    spawns the backend (WebSocket pump) via :func:`asyncio.create_task` — and
+    honours the builder contract: it never raises.
 
-    ``abort`` is the connection-cancel signal (an :class:`asyncio.Event`);
-    when omitted a fresh, unset event is created and the connection runs until
-    the caller closes it (the event is never set unless a caller holds a
-    reference).
+    ``abort`` (the producer's second argument) is the connection-cancel signal
+    (an :class:`asyncio.Event`); it is **required** — setting it tears down the
+    WebSocket and ends the inbound stream gracefully (no error event). It is a
+    *connection* cancel, not a per-response abort. Per-response abort is driven
+    by the caller pushing an
+    :class:`~otter_ai_core.model_connection.AbortResponseEvent` onto the
+    connection's outbound stream, which the pump translates to
+    ``response.cancel``.
     """
-    if abort is None:
-        abort = asyncio.Event()
-    conn: ModelConnection
-    backend: ConnectionBackend[ClientEvent, ServerEvent]
-    conn, backend = create_connection()
-    task = asyncio.create_task(_run(backend, options, context, abort))
-    _tasks.add(task)
-    task.add_done_callback(_tasks.discard)
-    return conn
+
+    def connection_fn(context: Context, abort: asyncio.Event) -> ModelConnection:
+        conn: ModelConnection
+        backend: ConnectionBackend[ClientEvent, ServerEvent]
+        conn, backend = create_connection()
+        task = asyncio.create_task(_run(backend, options, context, abort))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
+        return conn
+
+    return connection_fn
 
 
 # --------------------------------------------------------------------------- #

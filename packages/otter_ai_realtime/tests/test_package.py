@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from otter_ai_core.model_connection import ModelConnectionFn
+from otter_ai_core.model_connection import ModelConnectionFnBuilder
 from otter_ai_realtime import (
     RealtimeCost,
     RealtimeHooks,
@@ -36,10 +36,10 @@ def test_public_surface_imports() -> None:
     assert options.model.id == "m"
 
 
-def test_seam_is_a_model_connection_fn() -> None:
+def test_seam_is_a_model_connection_fn_builder() -> None:
     # Structural conformance: assignability to the typed alias at runtime via
     # the generic's __class_getitem__ is not checked here (mypy/_typechecks.py
     # enforces it); this just asserts the alias resolves and the seam exists.
-    alias = ModelConnectionFn[RealtimeModelOptions]
+    alias = ModelConnectionFnBuilder[RealtimeModelOptions]
     assert alias is not None
     assert callable(create_realtime_model_connection)

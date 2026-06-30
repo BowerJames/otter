@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "otter-ai-assistant-provider-stream",
+    "otter-ai-assistant-stream-model-connection",
     "otter-ai-chat-completions",
     "otter-ai-core",
     "otter-ai-realtime",
@@ -282,6 +283,20 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "otter-ai-chat-completions", editable = "packages/otter_ai_chat_completions" },
+    { name = "otter-ai-core", editable = "packages/otter_ai_core" },
+    { name = "pydantic", specifier = ">=2" },
+]
+
+[[package]]
+name = "otter-ai-assistant-stream-model-connection"
+source = { editable = "packages/otter_ai_assistant_stream_model_connection" }
+dependencies = [
+    { name = "otter-ai-core" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
     { name = "otter-ai-core", editable = "packages/otter_ai_core" },
     { name = "pydantic", specifier = ">=2" },
 ]

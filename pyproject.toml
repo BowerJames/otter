@@ -21,7 +21,7 @@ extend-exclude = [".venv", "build", "dist", "packages/otter_ai_assistant_provide
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["otter_ai_core", "otter_ai_chat_completions", "otter_ai_assistant_provider_stream", "otter_ai_realtime"]
+known-first-party = ["otter_ai_core", "otter_ai_chat_completions", "otter_ai_assistant_provider_stream", "otter_ai_realtime", "otter_ai_assistant_stream_model_connection"]
 
 # ---------------------------------------------------------------------------
 # Mypy: type checking
@@ -30,7 +30,7 @@ known-first-party = ["otter_ai_core", "otter_ai_chat_completions", "otter_ai_ass
 python_version = "3.12"
 strict = true
 files = ["packages"]
-mypy_path = ["packages/otter_ai_core/src", "packages/otter_ai_chat_completions/src", "packages/otter_ai_chat_completions/tests", "packages/otter_ai_assistant_provider_stream/src", "packages/otter_ai_assistant_provider_stream/tests", "packages/otter_ai_realtime/src", "packages/otter_ai_realtime/tests"]
+mypy_path = ["packages/otter_ai_core/src", "packages/otter_ai_chat_completions/src", "packages/otter_ai_chat_completions/tests", "packages/otter_ai_assistant_provider_stream/src", "packages/otter_ai_assistant_provider_stream/tests", "packages/otter_ai_realtime/src", "packages/otter_ai_realtime/tests", "packages/otter_ai_assistant_stream_model_connection/src", "packages/otter_ai_assistant_stream_model_connection/tests"]
 explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 
