@@ -203,6 +203,40 @@ class TestRouting:
         assert "responses" in events[0].message
 
 
+class TestAbortThreading:
+    async def test_abort_threaded_to_dispatched_producer(self) -> None:
+        # The seam forwards the caller's ``abort`` to the dispatched builder's
+        # producer (its second argument), exactly as the old stream seam did.
+        from otter_ai_assistant_provider_stream import (
+            register_model_connection_builder,
+        )
+        from otter_ai_core import create_connection
+
+        seen: list[object] = []
+
+        def fake_builder(_options: ProviderModelOption) -> Any:
+            def producer(_context: Context, abort: asyncio.Event) -> Any:
+                seen.append(abort)
+                conn: Any
+                backend: Any
+                conn, backend = create_connection()
+                backend.end()
+                return conn
+
+            return producer
+
+        register_model_connection_builder(KnownApis.Responses, fake_builder)
+        option = ProviderModelOption(
+            model="m",
+            provider=KnownProviders.OPEN_AI,
+            api=KnownApis.Responses,
+            api_key="sk",
+        )
+        abort = asyncio.Event()
+        await drive_connection(start_connection(option, Context(), abort), [])
+        assert seen == [abort]
+
+
 # --------------------------------------------------------------------------- #
 # Never-raises contract
 # --------------------------------------------------------------------------- #
