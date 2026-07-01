@@ -8,7 +8,7 @@ clean built-in-only state.
 
 Five registries are seeded:
 
-* providers (openai, zai) — identity + env key + default api;
+* providers (openai, zai) — identity + env key;
 * the chat-completions model catalog (committed models.dev snapshot);
 * the realtime model catalog (hand-curated);
 * the connection-builder registry
