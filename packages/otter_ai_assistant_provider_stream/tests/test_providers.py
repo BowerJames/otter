@@ -24,18 +24,16 @@ class TestBuiltInProviders:
         config = get_provider("openai")
         assert config is not None
         assert config.env_key == "OPENAI_API_KEY"
-        assert config.api == "chat-completions"
 
     def test_zai_config(self) -> None:
         config = get_provider("zai")
         assert config is not None
         assert config.env_key == "ZAI_API_KEY"
-        assert config.api == "chat-completions"
 
 
 class TestRuntimeRegistration:
     def test_register_and_get(self) -> None:
-        config = ProviderConfig(name="custom", env_key="CUSTOM", api="chat-completions")
+        config = ProviderConfig(name="custom", env_key="CUSTOM")
         register_provider(config)
         assert get_provider("custom") is config
 

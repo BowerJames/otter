@@ -1,10 +1,9 @@
 """Static contract guards — enforced by mypy, zero-cost at runtime.
 
 Asserts that this package's dispatch seam
-:func:`create_assistant_message_stream_by_provider` conforms to
-:data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`,
-parameterized by this package's options bundle
-(:class:`ModelProviderOptions`).
+:func:`create_model_connection_by_provider` conforms to
+:data:`otter_ai_core.model_connection.ModelConnectionFnBuilder`, parameterised
+by the pure-data :class:`~otter_ai_core.ProviderModelOption` bundle.
 
 mypy is the real enforcer; the entire body is guarded by ``if TYPE_CHECKING:``
 so the module contributes nothing at runtime and never imports at runtime. It
@@ -29,14 +28,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from otter_ai_assistant_provider_stream.stream import (
-        create_assistant_message_stream_by_provider,
+    from otter_ai_assistant_provider_stream.connection import (
+        create_model_connection_by_provider,
     )
-    from otter_ai_assistant_provider_stream.types import ModelProviderOptions
-    from otter_ai_core.assistant_message_stream import (
-        AssistantMessageStreamFnBuilder,
-    )
+    from otter_ai_core import ProviderModelOption
+    from otter_ai_core.model_connection import ModelConnectionFnBuilder
 
-    _check: AssistantMessageStreamFnBuilder[ModelProviderOptions] = (
-        create_assistant_message_stream_by_provider
+    _check: ModelConnectionFnBuilder[ProviderModelOption] = (
+        create_model_connection_by_provider
     )

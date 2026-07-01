@@ -15,7 +15,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-extend-exclude = [".venv", "build", "dist", "packages/otter_ai_assistant_provider_stream/src/otter_ai_assistant_provider_stream/_catalog_generated.py"]
+extend-exclude = [".venv", "build", "dist", "packages/otter_ai_assistant_provider_stream/src/otter_ai_assistant_provider_stream/_catalog_generated.py", "packages/otter_ai_assistant_provider_stream/src/otter_ai_assistant_provider_stream/_realtime_catalog_generated.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

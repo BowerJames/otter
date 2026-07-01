@@ -26,20 +26,22 @@ the default for that level". This mirrors the TypeScript ``undefined`` /
 
 from __future__ import annotations
 
-from otter_ai_assistant_provider_stream.types import ThinkingLevel
+from typing import cast
+
 from otter_ai_chat_completions import (
     ChatCompletionsModel,
     ChatCompletionsReasoningEffort,
 )
+from otter_ai_core import ThinkingLevel
 
 #: Ordered ladder of all thinking levels (pi-ai ``EXTENDED_THINKING_LEVELS``).
 _THINKING_LEVELS: list[ThinkingLevel] = [
-    "off",
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
+    ThinkingLevel.Off,
+    ThinkingLevel.Minimal,
+    ThinkingLevel.Low,
+    ThinkingLevel.Medium,
+    ThinkingLevel.High,
+    ThinkingLevel.XHigh,
 ]
 
 
@@ -53,21 +55,25 @@ def get_supported_thinking_levels(
     ``None``, with ``"xhigh"`` requiring an explicit non-``None`` mapping.
     """
     if not model.reasoning:
-        return ["off"]
+        return [ThinkingLevel.Off]
 
     level_map = model.thinking_level_map
     supported: list[ThinkingLevel] = []
     for level in _THINKING_LEVELS:
-        if level_map is not None and level in level_map:
+        # ``thinking_level_map`` is keyed on a string ``Literal``; a StrEnum
+        # member's value hashes/equals its string, so ``level.value`` indexes
+        # the map correctly (mypy infers it as the literal key type).
+        key = level.value
+        if level_map is not None and key in level_map:
             # Key present in the map. A ``None`` value marks the level
             # unsupported (pi-ai ``mapped === null``).
-            if level_map[level] is None:
+            if level_map[key] is None:
                 continue
             mapped_is_defined = True
         else:
             mapped_is_defined = False
 
-        if level == "xhigh":
+        if level is ThinkingLevel.XHigh:
             # xhigh requires an explicit non-None mapping; absent -> unsupported.
             if mapped_is_defined:
                 supported.append(level)
@@ -102,7 +108,7 @@ def clamp_thinking_level(
         candidate = _THINKING_LEVELS[i]
         if candidate in available:
             return candidate
-    return available[0] if available else "off"
+    return available[0] if available else ThinkingLevel.Off
 
 
 def resolve_reasoning_effort(
@@ -116,9 +122,9 @@ def resolve_reasoning_effort(
     provider-specific mapping via ``thinking_level_map`` is applied downstream
     by ``otter_ai_chat_completions._params``.
     """
-    if level == "off":
+    if level is ThinkingLevel.Off:
         return None
-    return level
+    return cast(ChatCompletionsReasoningEffort, level.value)
 
 
 __all__ = [
