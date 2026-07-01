@@ -42,7 +42,10 @@ types and data models that the other packages (`otter-ai-chat-completions`,
 `otter-ai-assistant-provider-stream`) build on — for example, its
 `AssistantMessageStreamFnBuilder` (under the `assistant_message_stream`
 subpackage) defines the core producer-seam type that the Chat Completions
-seam implements.
+seam implements, and its `ModelConnectionFnBuilder` (under the
+`model_connection` subpackage) defines the connection-side seam that
+`otter-ai-assistant-provider-stream`'s `create_model_connection_by_provider`
+implements (routing on `KnownApis` via the caller's `ProviderModelOption`).
 
 The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,

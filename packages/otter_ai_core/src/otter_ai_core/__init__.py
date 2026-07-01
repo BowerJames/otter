@@ -60,6 +60,12 @@ from otter_ai_core.normalize import (
     fill_missing_tool_results,
     normalize_messages,
 )
+from otter_ai_core.provider_api_model_options import (
+    KnownApis,
+    KnownProviders,
+    ProviderModelOption,
+    ThinkingLevel,
+)
 from otter_ai_core.stream import (
     Stream,
     StreamWriter,
@@ -107,6 +113,11 @@ __all__ = [
     "drop_unreplayable_assistant_turns",
     "fill_missing_tool_results",
     "normalize_messages",
+    # provider/api/model options
+    "KnownApis",
+    "KnownProviders",
+    "ProviderModelOption",
+    "ThinkingLevel",
     # stream runtime
     "Stream",
     "StreamWriter",

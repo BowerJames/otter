@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
 from _provider_helpers import model_kwargs
 
 from otter_ai_assistant_provider_stream import (
+    ThinkingLevel,
     clamp_thinking_level,
     get_supported_thinking_levels,
 )
 from otter_ai_assistant_provider_stream.thinking import resolve_reasoning_effort
-from otter_ai_assistant_provider_stream.types import ThinkingLevel
 from otter_ai_chat_completions import ChatCompletionsModel
 
 
@@ -66,8 +64,8 @@ class TestGetSupportedThinkingLevels:
 class TestClampThinkingLevel:
     def test_supported_level_returned_unchanged(self) -> None:
         model = _model(reasoning=True)
-        assert clamp_thinking_level(model, "low") == "low"
-        assert clamp_thinking_level(model, "high") == "high"
+        assert clamp_thinking_level(model, ThinkingLevel.Low) == "low"
+        assert clamp_thinking_level(model, ThinkingLevel.High) == "high"
 
     def test_glm52_minimal_clamps_up_to_low(self) -> None:
         # minimal is explicitly None -> unsupported; scan up finds low.
@@ -79,23 +77,32 @@ class TestClampThinkingLevel:
             "xhigh": "max",
         }
         model = _model(reasoning=True, thinking_level_map=glm52_map)
-        assert clamp_thinking_level(model, "minimal") == "low"
+        assert clamp_thinking_level(model, ThinkingLevel.Minimal) == "low"
 
     def test_non_reasoning_clamps_to_off(self) -> None:
         model = _model(reasoning=False)
-        assert clamp_thinking_level(model, "high") == "off"
-        assert clamp_thinking_level(model, "xhigh") == "off"
+        assert clamp_thinking_level(model, ThinkingLevel.High) == "off"
+        assert clamp_thinking_level(model, ThinkingLevel.XHigh) == "off"
 
     def test_xhigh_on_model_without_xhigh_clamps_down(self) -> None:
         # No xhigh mapping -> unsupported; scan up fails, scan down finds high.
         model = _model(reasoning=True, thinking_level_map={"high": "high"})
-        assert clamp_thinking_level(model, "xhigh") == "high"
+        assert clamp_thinking_level(model, ThinkingLevel.XHigh) == "high"
 
 
 class TestResolveReasoningEffort:
     def test_off_returns_none(self) -> None:
-        assert resolve_reasoning_effort("off") is None
+        assert resolve_reasoning_effort(ThinkingLevel.Off) is None
 
-    @pytest.mark.parametrize("level", ["minimal", "low", "medium", "high", "xhigh"])
-    def test_non_off_returns_level(self, level: str) -> None:
-        assert resolve_reasoning_effort(cast("ThinkingLevel", level)) == level
+    @pytest.mark.parametrize(
+        "level,expected",
+        [
+            (ThinkingLevel.Minimal, "minimal"),
+            (ThinkingLevel.Low, "low"),
+            (ThinkingLevel.Medium, "medium"),
+            (ThinkingLevel.High, "high"),
+            (ThinkingLevel.XHigh, "xhigh"),
+        ],
+    )
+    def test_non_off_returns_level(self, level: ThinkingLevel, expected: str) -> None:
+        assert resolve_reasoning_effort(level) == expected

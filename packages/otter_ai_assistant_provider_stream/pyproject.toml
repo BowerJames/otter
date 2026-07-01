@@ -1,17 +1,21 @@
 [project]
 name = "otter-ai-assistant-provider-stream"
 dynamic = ["version"]
-description = "Provider/dispatch layer for otter-ai-core: built-in model catalog, env-key resolution, thinking-level clamping, and the create_assistant_message_stream_by_provider seam"
+description = "Provider/dispatch layer for otter-ai-core: built-in model catalogs (chat-completions + realtime), env-key resolution, thinking-level clamping, and the create_model_connection_by_provider seam — a ModelConnectionFnBuilder[ProviderModelOption] routing on KnownApis"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2",
     "otter-ai-core",
     "otter-ai-chat-completions",
+    "otter-ai-assistant-stream-model-connection",
+    "otter-ai-realtime",
 ]
 
 [tool.uv.sources]
 otter-ai-core = { workspace = true }
 otter-ai-chat-completions = { workspace = true }
+otter-ai-assistant-stream-model-connection = { workspace = true }
+otter-ai-realtime = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

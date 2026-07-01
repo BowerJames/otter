@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from otter_ai_assistant_provider_stream.types import (
     BUILT_IN_PROVIDERS,
-    DEFAULT_API,
     ProviderConfig,
 )
 
@@ -45,10 +44,8 @@ def list_providers() -> list[str]:
 def built_in_provider_configs() -> dict[str, ProviderConfig]:
     """The built-in provider configs (used by :func:`register_built_ins`)."""
     return {
-        "openai": ProviderConfig(
-            name="openai", env_key="OPENAI_API_KEY", api=DEFAULT_API
-        ),
-        "zai": ProviderConfig(name="zai", env_key="ZAI_API_KEY", api=DEFAULT_API),
+        "openai": ProviderConfig(name="openai", env_key="OPENAI_API_KEY"),
+        "zai": ProviderConfig(name="zai", env_key="ZAI_API_KEY"),
     }
 
 

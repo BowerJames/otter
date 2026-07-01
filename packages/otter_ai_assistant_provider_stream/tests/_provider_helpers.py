@@ -1,32 +1,35 @@
 """Shared test helpers for the assistant-provider-stream tests.
 
-Includes both catalog-model factories (for unit tests) and a thin copy of the
-httpx transport-faking helpers from ``otter_ai_chat_completions`` (for the
-end-to-end seam test). The transport helpers are copied rather than imported
-from the sibling package because its ``tests`` module is not shipped with the
-wheel.
+Includes catalog-model factories (for unit tests), a thin copy of the httpx
+transport-faking helpers from ``otter_ai_chat_completions`` (for the chat
+end-to-end test), a minimal fake realtime WebSocket (copied because the
+realtime package's ``tests`` module is not shipped with the wheel), and
+connection-driving helpers for the new
+:func:`create_model_connection_by_provider` seam.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import httpx
 import pytest
 
-from otter_ai_assistant_provider_stream import (
-    create_assistant_message_stream_by_provider,
-)
+from otter_ai_assistant_provider_stream import create_model_connection_by_provider
 from otter_ai_chat_completions import (
     ChatCompletionsCost,
     ChatCompletionsModel,
 )
 from otter_ai_chat_completions import stream as stream_module
 from otter_ai_core import Context, UserMessage, context_item
-from otter_ai_core.assistant_message_stream import AssistantMessageStream
+from otter_ai_core.model_connection import (
+    ModelConnection,
+    ResponseDoneEvent,
+    ResponseErrorEvent,
+)
 
 
 def model_kwargs(**overrides: Any) -> dict[str, Any]:
@@ -66,22 +69,45 @@ def simple_context(text: str = "hello") -> Context:
     )
 
 
-def start_stream(
+def start_connection(
     options: Any,
     context: Context,
     abort: asyncio.Event | None = None,
-) -> AssistantMessageStream:
-    """Two-step convenience: build the provider-dispatch stream fn, then call it.
+) -> ModelConnection:
+    """Two-step convenience: build the provider-dispatch connection fn, then call it.
 
-    The seam is a builder — ``create_assistant_message_stream_by_provider``
-    takes ``options`` and returns an ``AssistantMessageStreamFn``, which is then
-    called with ``(context, abort)``. Behavioural tests rarely exercise the
-    abort signal, so this helper defaults it to a fresh, unset
+    The seam is a builder — ``create_model_connection_by_provider`` takes
+    ``options`` and returns a ``ModelConnectionFn``, which is then called with
+    ``(context, abort)``. ``abort`` defaults to a fresh, unset
     :class:`asyncio.Event`.
     """
     if abort is None:
         abort = asyncio.Event()
-    return create_assistant_message_stream_by_provider(options)(context, abort)
+    return create_model_connection_by_provider(options)(context, abort)
+
+
+async def drive_connection(
+    conn: ModelConnection,
+    client_events: Sequence[Any],
+) -> list[Any]:
+    """Send ``client_events`` then drain the connection to completion.
+
+    For a request-driven (chat) connection the caller passes a
+    :class:`~otter_ai_core.model_connection.ResponseCreate`; the connection is
+    closed once a terminal response event is observed so the idle loop stops
+    cleanly. For a realtime connection the caller may pass nothing and rely on
+    the server closing (the fake WS's ``close_inbound``), or pass client events
+    likewise.
+    """
+    for event in client_events:
+        conn.send(event)
+    out: list[Any] = []
+    async for event in conn:
+        out.append(event)
+        if isinstance(event, (ResponseDoneEvent, ResponseErrorEvent)):
+            # Chat path: the turn ended — close so the idle loop stops.
+            conn.close()
+    return out
 
 
 def sse_response(
@@ -127,3 +153,64 @@ def install_fake_transport(monkeypatch: pytest.MonkeyPatch, handler: Any) -> Non
 
 async def collect(stream: Any) -> list[Any]:
     return [event async for event in stream]
+
+
+# --------------------------------------------------------------------------- #
+# Fake realtime WebSocket (copied from otter_ai_realtime/tests/_realtime_helpers)
+# --------------------------------------------------------------------------- #
+
+
+class FakeRealtimeWS:
+    """A minimal async fake of a ``websockets`` connection."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self._inbound: asyncio.Queue[Any] = asyncio.Queue()
+        self.closed: bool = False
+
+    def feed(self, *frames: dict[str, Any]) -> None:
+        for frame in frames:
+            self._inbound.put_nowait(json.dumps(frame))
+
+    def close_inbound(self) -> None:
+        self._inbound.put_nowait(None)
+
+    async def __aiter__(self) -> AsyncIterator[str]:
+        while True:
+            item = await self._inbound.get()
+            if item is None:
+                return
+            yield item
+
+    async def send(self, raw: str) -> None:
+        if self.closed:
+            raise RuntimeError("send on closed socket")
+        self.sent.append(json.loads(raw))
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def install_fake_realtime(
+    monkeypatch: pytest.MonkeyPatch, fake: FakeRealtimeWS
+) -> None:
+    """Monkeypatch ``connect_ws`` to return ``fake``."""
+    import otter_ai_realtime._transport as transport
+
+    async def _connect(model: Any, api_key: str) -> FakeRealtimeWS:  # noqa: ARG001
+        return fake
+
+    monkeypatch.setattr(transport, "connect_ws", _connect)
+
+
+__all__ = [
+    "FakeRealtimeWS",
+    "collect",
+    "drive_connection",
+    "install_fake_realtime",
+    "install_fake_transport",
+    "model_kwargs",
+    "simple_context",
+    "sse_response",
+    "start_connection",
+]

@@ -275,15 +275,19 @@ wheels = [
 name = "otter-ai-assistant-provider-stream"
 source = { editable = "packages/otter_ai_assistant_provider_stream" }
 dependencies = [
+    { name = "otter-ai-assistant-stream-model-connection" },
     { name = "otter-ai-chat-completions" },
     { name = "otter-ai-core" },
+    { name = "otter-ai-realtime" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "otter-ai-assistant-stream-model-connection", editable = "packages/otter_ai_assistant_stream_model_connection" },
     { name = "otter-ai-chat-completions", editable = "packages/otter_ai_chat_completions" },
     { name = "otter-ai-core", editable = "packages/otter_ai_core" },
+    { name = "otter-ai-realtime", editable = "packages/otter_ai_realtime" },
     { name = "pydantic", specifier = ">=2" },
 ]
 
