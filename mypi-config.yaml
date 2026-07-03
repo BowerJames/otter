@@ -1,13 +1,22 @@
 default: default
+
 profiles:
   default:
     cmd: pi
-    extensions:
+    bundles:
+      - mode
       - code-review
       - dynamic-skills
-      - mode
       - btw
-    skills:
+      - loop
+      - render-raw
       - repo-explorer
-    prompts:
       - overview
+  reviewer:
+    cmd: pi -p
+    bundles:
+      - code-review-prompt
+  review-agent-trajectory:
+    cmd: pi -p
+    bundles:
+      - review-agent-trajectory-prompt
