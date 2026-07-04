@@ -17,7 +17,7 @@ class ContextItemAddEvent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientEventTypes.AddContextItem]
+    type: Literal[ClientEventTypes.AddContextItem] = ClientEventTypes.AddContextItem
     item: ContextItem
 
 
@@ -26,13 +26,13 @@ class ResponseCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientEventTypes.CreateResponse]
+    type: Literal[ClientEventTypes.CreateResponse] = ClientEventTypes.CreateResponse
 
 
 class AbortResponseEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientEventTypes.AbortResponse]
+    type: Literal[ClientEventTypes.AbortResponse] = ClientEventTypes.AbortResponse
 
 
 #: Discriminated union of all model connection client events.
