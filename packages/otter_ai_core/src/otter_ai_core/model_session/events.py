@@ -62,6 +62,7 @@ class SessionEventTypes(StrEnum):
     ContextItemAdded = "context_item.added"
     SessionError = "session.error"
     SessionClosed = "session.closed"
+    HandlerError = "handler.error"
 
 
 class ResponseStartedEvent(BaseModel):
@@ -186,6 +187,32 @@ class SessionClosedEvent(BaseModel):
     type: Literal[SessionEventTypes.SessionClosed]
 
 
+class HandlerErrorEvent(BaseModel):
+    """A bus subscriber's handler raised while handling an event.
+
+    This is a **bus-level observability** event, distinct from
+    :class:`ResponseErrorEvent` (a model-response failure) and
+    :class:`SessionErrorEvent` (a transport-level failure). It is emitted by
+    the bus when a registered handler raises; the exception is contained so
+    one bad handler cannot kill the bus for the rest.
+
+    Error events do not emit error events: a handler that raises while
+    handling a :class:`HandlerErrorEvent` has its failure swallowed silently,
+    capping recursion at one level (otherwise a buggy error-handler would feed
+    the queue forever).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[SessionEventTypes.HandlerError]
+    #: Discriminator of the event being dispatched when the handler raised.
+    event_type: SessionEventTypes
+    #: Best-effort name of the offending handler (its ``__name__`` or repr).
+    handler_name: str
+    #: ``"{ExcTypeName}: {message}"`` of the captured exception.
+    error: str
+
+
 SessionEvent = (
     ResponseStartedEvent
     | ResponseDeltaEvent
@@ -195,5 +222,6 @@ SessionEvent = (
     | ContextItemAddedEvent
     | SessionErrorEvent
     | SessionClosedEvent
+    | HandlerErrorEvent
 )
 """Discriminated union of all events published on the model session bus."""
