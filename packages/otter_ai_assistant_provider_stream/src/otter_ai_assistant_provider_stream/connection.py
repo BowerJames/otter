@@ -67,6 +67,7 @@ from otter_ai_core import (
     AssistantMessage,
     Context,
     ProviderModelOption,
+    StreamWiring,
     Usage,
     UsageCost,
     create_connection,
@@ -74,9 +75,9 @@ from otter_ai_core import (
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
+    AssistantMessageEvent,
     AssistantMessageStream,
     AssistantMessageStreamFn,
-    AssistantMessageWriter,
 )
 from otter_ai_core.connection import ConnectionBackend
 from otter_ai_core.model_connection import (
@@ -203,9 +204,9 @@ def _error_stream_fn(
             error_message=f"{type(exc).__name__}: {exc}",
             timestamp=int(time.time() * 1000),
         )
-        stream: AssistantMessageStream
-        writer: AssistantMessageWriter
-        stream, writer = create_stream()
+        wiring: StreamWiring[AssistantMessageEvent] = create_stream()
+        stream = wiring.consumer
+        writer = wiring.producer
         writer.push(
             AssistantErrorEvent(
                 role="assistant",

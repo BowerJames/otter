@@ -36,6 +36,7 @@ unchanged.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Self
 
 
@@ -106,15 +107,32 @@ class StreamWriter[TEvent]:
         self._core.queue.put_nowait(None)
 
 
-def create_stream[TEvent]() -> tuple[Stream[TEvent], StreamWriter[TEvent]]:
+@dataclass(slots=True, frozen=True)
+class StreamWiring[TEvent]:
+    """A linked consumer/producer pair from :func:`create_stream`.
+
+    ``producer`` is the :class:`StreamWriter` (the side that ``push``/``end``);
+    ``consumer`` is the :class:`Stream` (the side iterated with ``async for``).
+    The two halves share one queue. Frozen because a wiring is an immutable
+    binding of the two halves produced together.
+    """
+
+    producer: StreamWriter[TEvent]
+    consumer: Stream[TEvent]
+
+
+def create_stream[TEvent]() -> StreamWiring[TEvent]:
     """Create a linked consumer/producer pair sharing one queue.
 
     A provider's ``stream()``-style function keeps the :class:`StreamWriter`
     and returns the :class:`Stream` to its caller::
 
-        consumer, writer = create_stream()
-        asyncio.create_task(_run(writer, ...))
-        return consumer
+        wiring = create_stream()
+        asyncio.create_task(_run(wiring.producer, ...))
+        return wiring.consumer
     """
     core = _Core[TEvent]()
-    return Stream[TEvent](core), StreamWriter[TEvent](core)
+    return StreamWiring(
+        producer=StreamWriter[TEvent](core),
+        consumer=Stream[TEvent](core),
+    )
