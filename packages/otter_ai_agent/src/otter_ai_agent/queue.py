@@ -18,12 +18,9 @@ Drain semantics are governed by :data:`QueueMode`:
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Literal
 
+from otter_ai_agent.types import QueueMode
 from otter_ai_core.context import UserMessage
-
-QueueMode = Literal["all", "one-at-a-time"]
-"""Controls how many queued items a single drain removes."""
 
 
 class PendingMessageQueue:

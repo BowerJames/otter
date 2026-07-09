@@ -28,7 +28,6 @@ from otter_ai_agent.events import (
     TurnEndEvent,
     TurnStartEvent,
 )
-from otter_ai_agent.queue import QueueMode
 from otter_ai_agent.tools import execute_tool_calls
 from otter_ai_agent.types import (
     AfterToolCallContext,
@@ -44,6 +43,7 @@ from otter_ai_agent.types import (
     BeforeToolCallResult,
     PrepareNextTurnContext,
     PrepareNextTurnHook,
+    QueueMode,
     ShouldStopAfterTurnContext,
     ShouldStopAfterTurnHook,
     ToolExecutionMode,

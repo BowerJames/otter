@@ -51,6 +51,9 @@ ToolExecutionMode = Literal["sequential", "parallel"]
   emitted in source order.
 """
 
+QueueMode = Literal["all", "one-at-a-time"]
+"""How many queued items a single drain removes (steering / follow-up)."""
+
 
 @dataclass
 class AgentToolResult:
@@ -255,10 +258,6 @@ type PrepareNextTurnHook = Callable[
 # --------------------------------------------------------------------------- #
 # Config
 # --------------------------------------------------------------------------- #
-
-
-# Forward import to avoid a cycle: ``queue.py`` does not import this module.
-from otter_ai_agent.queue import QueueMode  # noqa: E402
 
 
 @dataclass

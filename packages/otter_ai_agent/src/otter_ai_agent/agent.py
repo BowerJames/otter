@@ -93,7 +93,7 @@ AgentHandler = Callable[[AgentEvent], Awaitable[None]]
 
 
 def _now_ms() -> int:
-    return int(asyncio.get_event_loop().time() * 1000)
+    return int(asyncio.get_running_loop().time() * 1000)
 
 
 def _zero_usage() -> Usage:
@@ -152,6 +152,10 @@ class _Turn:
     pending_item: ContextItem | None = None
     #: Latest streaming snapshot (for best-effort abort messages).
     last_partial: AssistantMessage | None = None
+    #: Whether the turn's ``MessageStart`` has been emitted (exactly-once guard).
+    started: bool = False
+    #: Whether the turn's ``MessageEnd`` has been emitted (exactly-once guard).
+    ended: bool = False
 
     def resolve(self, terminal: _Terminal) -> bool:
         if not self.future.done():
@@ -274,9 +278,13 @@ class Agent:
         self._session.abort_response()
 
     def close(self) -> None:
-        """Hard-stop: abort the run and tear down the session connection."""
+        """Hard-stop: abort the run, detach the agent's session-bus handlers,
+        and tear down the session connection."""
         if self._run is not None:
             self._run.abort.set()
+        for unsubscribe in self._unsubscribers:
+            unsubscribe()
+        self._unsubscribers = []
         self._session.close()
 
     async def idle(self) -> None:
@@ -368,156 +376,72 @@ class Agent:
         # Starts with the prompt + any steering queued before the run.
         pending: list[UserMessage] = [*prompts, *self._steering.drain()]
 
-        has_more = True
-        while has_more or pending:
-            await self._bus.publish(TurnStartEvent(type=AgentEventType.TurnStart))
+        while True:  # outer loop: re-enter on follow-ups
+            has_more = True
+            while has_more or pending:  # inner loop: tool turns + steering
+                await self._bus.publish(TurnStartEvent(type=AgentEventType.TurnStart))
 
-            # Inject pending user messages as context items.
-            for message in pending:
-                await self._add_item(
-                    run, UserContextItem.from_message(message, _uuid())
-                )
-            pending = []
+                for message in pending:
+                    await self._add_item(
+                        run, UserContextItem.from_message(message, _uuid())
+                    )
+                pending = []
 
-            terminal = await self._run_one_turn(run)
+                terminal = await self._run_one_turn(run)
 
-            if terminal.kind in ("error", "aborted"):
+                if terminal.kind in ("error", "aborted"):
+                    await self._bus.publish(
+                        TurnEndEvent(
+                            type=AgentEventType.TurnEnd,
+                            message=terminal.message,
+                            tool_results=[],
+                        )
+                    )
+                    await self._emit_end(run, error=True)
+                    return
+
+                tool_results, keep_going = await self._handle_tools(run, terminal)
+
                 await self._bus.publish(
                     TurnEndEvent(
                         type=AgentEventType.TurnEnd,
                         message=terminal.message,
-                        tool_results=[],
+                        tool_results=tool_results,
                     )
                 )
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=True,
-                    )
-                )
-                return
 
-            tool_results, keep_going = await self._handle_tools(run, terminal)
+                if run.abort.is_set():
+                    await self._emit_end(run, error=True)
+                    return
 
-            await self._bus.publish(
-                TurnEndEvent(
-                    type=AgentEventType.TurnEnd,
-                    message=terminal.message,
-                    tool_results=tool_results,
-                )
+                has_more = keep_going
+
+                if await self._should_stop(terminal, tool_results, run):
+                    await self._emit_end(run, error=False)
+                    return
+
+                await self._apply_prepare_next_turn(terminal, tool_results, run)
+
+                pending = self._steering.drain()
+
+            # Agent would stop -- drain follow-ups; if any, run another turn loop.
+            follow_ups = self._follow_up.drain()
+            if not follow_ups:
+                break
+            pending = follow_ups
+
+        await self._emit_end(run, error=False)
+
+    async def _emit_end(self, run: _Run, *, error: bool) -> None:
+        await self._bus.publish(
+            AgentEndEvent(
+                type=AgentEventType.AgentEnd, items=list(run.new_items), error=error
             )
-
-            if run.abort.is_set():
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=True,
-                    )
-                )
-                return
-
-            has_more = keep_going
-
-            if await self._should_stop(terminal, tool_results, run):
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=False,
-                    )
-                )
-                return
-
-            await self._apply_prepare_next_turn(terminal, tool_results, run)
-
-            pending = self._steering.drain()
-
-        # Agent would stop -- drain follow-ups.
-        follow_ups = self._follow_up.drain()
-        if follow_ups:
-            await self._drive_follow_ups(run, follow_ups)
-        else:
-            await self._bus.publish(
-                AgentEndEvent(
-                    type=AgentEventType.AgentEnd, items=list(run.new_items), error=False
-                )
-            )
-
-    async def _drive_follow_ups(self, run: _Run, follow_ups: list[UserMessage]) -> None:
-        """Re-enter the driver with follow-up messages as the new pending set."""
-        # Recursion mirrors pi's outer loop: follow-ups become pending messages
-        # and the inner loop runs again.
-        pending: list[UserMessage] = list(follow_ups)
-        has_more = True
-        while has_more or pending:
-            await self._bus.publish(TurnStartEvent(type=AgentEventType.TurnStart))
-            for message in pending:
-                await self._add_item(
-                    run, UserContextItem.from_message(message, _uuid())
-                )
-            pending = []
-            terminal = await self._run_one_turn(run)
-            if terminal.kind in ("error", "aborted"):
-                await self._bus.publish(
-                    TurnEndEvent(
-                        type=AgentEventType.TurnEnd,
-                        message=terminal.message,
-                        tool_results=[],
-                    )
-                )
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=True,
-                    )
-                )
-                return
-            tool_results, keep_going = await self._handle_tools(run, terminal)
-            await self._bus.publish(
-                TurnEndEvent(
-                    type=AgentEventType.TurnEnd,
-                    message=terminal.message,
-                    tool_results=tool_results,
-                )
-            )
-            if run.abort.is_set():
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=True,
-                    )
-                )
-                return
-            has_more = keep_going
-            if await self._should_stop(terminal, tool_results, run):
-                await self._bus.publish(
-                    AgentEndEvent(
-                        type=AgentEventType.AgentEnd,
-                        items=list(run.new_items),
-                        error=False,
-                    )
-                )
-                return
-            await self._apply_prepare_next_turn(terminal, tool_results, run)
-            pending = self._steering.drain()
-        more = self._follow_up.drain()
-        if more:
-            await self._drive_follow_ups(run, more)
-        else:
-            await self._bus.publish(
-                AgentEndEvent(
-                    type=AgentEventType.AgentEnd, items=list(run.new_items), error=False
-                )
-            )
+        )
 
     async def _run_one_turn(self, run: _Run) -> _Terminal:
         """Request one response and await its terminal (abort-aware)."""
-        loop = asyncio.get_event_loop()
-        turn = _Turn(future=loop.create_future())
+        turn = _Turn(future=asyncio.get_running_loop().create_future())
         run.turn = turn
         try:
             self._session.create_response()
@@ -539,10 +463,14 @@ class Agent:
         if not turn.future.done():
             # Abort fired before the session delivered a terminal. Resolve with
             # the best-effort partial so the driver can end gracefully; a late
-            # session terminal is ignored (the future is now done).
+            # session terminal is ignored (the future is now done). Emit the
+            # compensating message boundary events so consumers never see an
+            # unpaired MessageStart.
             partial = turn.last_partial or _skeleton_message(
                 stop_reason=StopReason.Aborted
             )
+            await self._ensure_start(turn, partial)
+            await self._ensure_end(turn, AssistantContextItem.from_message(partial, ""))
             turn.resolve(_Terminal("aborted", partial, None))
         return turn.future.result()
 
@@ -623,15 +551,33 @@ class Agent:
             return None
         return run.turn
 
+    async def _ensure_start(self, turn: _Turn, message: AssistantMessage) -> None:
+        """Emit the turn's ``MessageStart`` exactly once (idempotent)."""
+        if turn.started:
+            return
+        turn.started = True
+        await self._bus.publish(
+            MessageStartEvent(
+                type=AgentEventType.MessageStart,
+                item=AssistantContextItem.from_message(message, ""),
+            )
+        )
+
+    async def _ensure_end(self, turn: _Turn, item: ContextItem) -> None:
+        """Emit the turn's ``MessageEnd`` exactly once (idempotent)."""
+        if turn.ended:
+            return
+        turn.ended = True
+        await self._bus.publish(
+            MessageEndEvent(type=AgentEventType.MessageEnd, item=item)
+        )
+
     async def _on_response_started(self, event: ResponseStartedEvent) -> None:
         turn = self._active_turn()
         if turn is None:
             return
         turn.last_partial = event.partial
-        synthetic = AssistantContextItem.from_message(event.partial, "")
-        await self._bus.publish(
-            MessageStartEvent(type=AgentEventType.MessageStart, item=synthetic)
-        )
+        await self._ensure_start(turn, event.partial)
 
     async def _on_response_delta(self, event: ResponseDeltaEvent) -> None:
         turn = self._active_turn()
@@ -659,13 +605,8 @@ class Agent:
         if turn is None:
             return
         message = event.message
-        synthetic = AssistantContextItem.from_message(message, "")
-        await self._bus.publish(
-            MessageStartEvent(type=AgentEventType.MessageStart, item=synthetic)
-        )
-        await self._bus.publish(
-            MessageEndEvent(type=AgentEventType.MessageEnd, item=synthetic)
-        )
+        await self._ensure_start(turn, message)
+        await self._ensure_end(turn, AssistantContextItem.from_message(message, ""))
         turn.resolve(_Terminal("error", message, None))
 
     async def _on_response_aborted(self, event: ResponseAbortedEvent) -> None:
@@ -673,13 +614,8 @@ class Agent:
         if turn is None:
             return
         message = event.message
-        synthetic = AssistantContextItem.from_message(message, "")
-        await self._bus.publish(
-            MessageStartEvent(type=AgentEventType.MessageStart, item=synthetic)
-        )
-        await self._bus.publish(
-            MessageEndEvent(type=AgentEventType.MessageEnd, item=synthetic)
-        )
+        await self._ensure_start(turn, message)
+        await self._ensure_end(turn, AssistantContextItem.from_message(message, ""))
         turn.resolve(_Terminal("aborted", message, None))
 
     async def _on_context_item_added(self, event: ContextItemAddedEvent) -> None:
@@ -696,9 +632,7 @@ class Agent:
             turn = self._active_turn()
             if turn is not None:
                 if not already:
-                    await self._bus.publish(
-                        MessageEndEvent(type=AgentEventType.MessageEnd, item=item)
-                    )
+                    await self._ensure_end(turn, item)
                 turn.pending_item = item
                 self._maybe_resolve_done(turn)
 

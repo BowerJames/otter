@@ -8,6 +8,7 @@ from typing import Any
 
 from _support import (
     TurnScript,
+    assistant,
     collect_stream,
     new_session,
     run_backend,
@@ -25,14 +26,20 @@ from otter_ai_agent.types import (
     AgentToolResult,
     BeforeToolCallContext,
     BeforeToolCallResult,
+    PrepareNextTurnContext,
+    PrepareNextTurnResult,
     ShouldStopAfterTurnContext,
 )
 from otter_ai_core import StopReason
-from otter_ai_core.context import ContextItem, Role, UserMessage
+from otter_ai_core.context import Context, ContextItem, Role, UserMessage
 from otter_ai_core.model_connection.client_events import (
     ClientEvent,
     ContextItemAddEvent,
     ResponseCreate,
+)
+from otter_ai_core.model_connection.server_events import (
+    ResponseStartedEvent,
+    ServerEventTypes,
 )
 from otter_ai_core.model_session import ModelSession
 from otter_ai_core.tools import Tool
@@ -343,3 +350,181 @@ async def test_should_stop_after_turn() -> None:
     ]
     _, _, received = await build_and_run(scripts, config)
     assert len([e for e in received if isinstance(e, ResponseCreate)]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Regression tests for code-review findings (I-1, I-2) + coverage gaps
+# --------------------------------------------------------------------------- #
+
+
+async def _stream_events(
+    scripts: list[TurnScript], config: AgentConfig
+) -> list[ev.AgentEvent]:
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, config)
+    received: list[ClientEvent] = []
+    driver = asyncio.create_task(run_backend(backend, scripts, received))
+    streamed = await collect_stream(agent.stream("hi"))
+    session.close()
+    await driver
+    return streamed
+
+
+def _idx(events: list[ev.AgentEvent], t: ev.AgentEventType) -> int:
+    return next(i for i, e in enumerate(events) if e.type == t)
+
+
+async def test_error_terminal_emits_one_start_one_end() -> None:
+    """I-1: an error response emits exactly one MessageStart and one MessageEnd."""
+    events = await _stream_events(
+        [TurnScript(kind="error", error_message="boom")], AgentConfig()
+    )
+    starts = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageStart and e.item.role == Role.Assistant
+    ]
+    ends = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageEnd and e.item.role == Role.Assistant
+    ]
+    assert len(starts) == 1, "double MessageStart for error response"
+    assert len(ends) == 1
+    assert _idx(events, ev.AgentEventType.MessageStart) < _idx(
+        events, ev.AgentEventType.MessageEnd
+    )
+    assert events[-1].type is ev.AgentEventType.AgentEnd
+    assert events[-1].error is True
+
+
+async def test_aborted_terminal_emits_one_start_one_end() -> None:
+    """I-1: an aborted response emits exactly one MessageStart and one MessageEnd."""
+    events = await _stream_events([TurnScript(kind="aborted")], AgentConfig())
+    starts = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageStart and e.item.role == Role.Assistant
+    ]
+    ends = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageEnd and e.item.role == Role.Assistant
+    ]
+    assert len(starts) == 1, "double MessageStart for aborted response"
+    assert len(ends) == 1
+    assert _idx(events, ev.AgentEventType.MessageStart) < _idx(
+        events, ev.AgentEventType.MessageEnd
+    )
+
+
+async def test_abort_during_generation_emits_paired_message_end() -> None:
+    """I-2: when abort wins the race before a terminal, the in-progress
+    response's MessageStart still gets a paired MessageEnd."""
+    from otter_ai_core.model_connection.client_events import AbortResponseEvent
+
+    async def gen_then_ignore_abort(backend: Any, received: list[ClientEvent]) -> None:
+        async for client_event in backend:
+            received.append(client_event)
+            if isinstance(client_event, ResponseCreate):
+                backend.push(
+                    ResponseStartedEvent(
+                        type=ServerEventTypes.ResponseStarted,
+                        role=Role.Assistant,
+                        partial=assistant([], StopReason.Stop),
+                    )
+                )
+            # AbortResponseEvent is deliberately ignored -- no ResponseAborted is
+            # delivered, so the abort must win the race in _await_turn.
+        backend.end()
+
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, AgentConfig())
+    received: list[ClientEvent] = []
+    driver = asyncio.create_task(gen_then_ignore_abort(backend, received))
+    task = asyncio.create_task(collect_stream(agent.stream("hi")))
+    await asyncio.sleep(0.05)  # let create_response + ResponseStarted land
+    agent.abort()
+    events = await task
+    session.close()
+    await driver
+
+    starts = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageStart and e.item.role == Role.Assistant
+    ]
+    ends = [
+        e
+        for e in events
+        if e.type == ev.AgentEventType.MessageEnd and e.item.role == Role.Assistant
+    ]
+    assert len(starts) == 1
+    assert len(ends) == 1, "abort-during-generation left an unpaired MessageStart"
+    assert _idx(events, ev.AgentEventType.MessageStart) < _idx(
+        events, ev.AgentEventType.MessageEnd
+    )
+    assert any(e.type is ev.AgentEventType.AgentEnd and e.error for e in events)
+    assert any(isinstance(e, AbortResponseEvent) for e in received)
+
+
+async def test_message_update_streamed_for_text() -> None:
+    """A streamed text response delivers MessageUpdate carrying the snapshot."""
+    events = await _stream_events(
+        [
+            TurnScript(
+                content=[text_block("hello")],
+                stop_reason=StopReason.Stop,
+                stream_text=True,
+            )
+        ],
+        AgentConfig(),
+    )
+    updates = [e for e in events if e.type == ev.AgentEventType.MessageUpdate]
+    assert len(updates) >= 1
+    assert updates[0].message.content[0].text == "hello"  # type: ignore[union-attr]
+
+
+async def test_prepare_next_turn_swaps_context_view() -> None:
+    seen: list[PrepareNextTurnContext] = []
+
+    async def prepare(ctx: PrepareNextTurnContext) -> PrepareNextTurnResult:
+        seen.append(ctx)
+        return PrepareNextTurnResult(
+            context=Context(system_prompt="swapped", items=ctx.context.items)
+        )
+
+    config = AgentConfig(tools=[echo_tool()], prepare_next_turn=prepare)
+    scripts = [
+        TurnScript(
+            content=[tool_call("c1", "echo", {})], stop_reason=StopReason.ToolUse
+        ),
+        TurnScript(content=[text_block("done")], stop_reason=StopReason.Stop),
+    ]
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, config)
+    received: list[ClientEvent] = []
+    driver = asyncio.create_task(run_backend(backend, scripts, received))
+    await agent.run("hi")
+    session.close()
+    await driver
+
+    assert len(seen) == 2  # prepare_next_turn runs after every turn (incl. last)
+    assert agent.context.system_prompt == "swapped"
+
+
+async def test_steering_mode_all_drains_everything() -> None:
+    """QueueMode='all' injects every queued steering message before the turn."""
+    config = AgentConfig(steering_mode="all")
+    scripts = [TurnScript(content=[text_block("ok")], stop_reason=StopReason.Stop)]
+
+    def pre(agent: Agent) -> None:
+        agent.steer(UserMessage(role=Role.User, content="one", timestamp=0))
+        agent.steer(UserMessage(role=Role.User, content="two", timestamp=0))
+
+    _, items, _ = await build_and_run(scripts, config, pre=pre)
+    user_contents = [i.content for i in _by_type(items, Role.User)]
+    assert user_contents == ["hi", "one", "two"]

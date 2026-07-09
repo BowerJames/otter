@@ -95,7 +95,7 @@ def _error_result(message: str) -> AgentToolResult:
 
 
 def _now_ms() -> int:
-    return int(asyncio.get_event_loop().time() * 1000)
+    return int(asyncio.get_running_loop().time() * 1000)
 
 
 def _to_message(finalized: _Finalized) -> ToolResultMessage:
@@ -475,6 +475,13 @@ async def execute_tool_calls(
 
     Returns a :class:`ToolBatch` of result messages and an early-terminate
     hint. Truncated (``length``) responses fail every call without executing.
+
+    .. note::
+        A single tool with ``execution_mode="sequential"`` serializes the
+        **whole** batch (a conservative fallback, matching pi): every other
+        call in the same assistant message -- including ``parallel`` ones --
+        runs sequentially too. This avoids ordering surprises at the cost of
+        some concurrency; refine to run sequential tools first if needed.
     """
     tool_calls = [c for c in assistant_message.content if isinstance(c, ToolCall)]
     if not tool_calls:
