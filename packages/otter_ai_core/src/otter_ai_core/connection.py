@@ -65,7 +65,7 @@ from collections.abc import Callable
 from typing import Self
 
 from otter_ai_core.context import Context
-from otter_ai_core.stream import Stream, StreamWriter, create_stream
+from otter_ai_core.stream import Stream, StreamWiring, StreamWriter, create_stream
 
 
 class Connection[TClient, TEvent]:
@@ -172,12 +172,12 @@ def create_connection[TClient, TEvent]() -> tuple[
         asyncio.create_task(_pump_transport(backend, ...))
         return conn
     """
-    inbound_stream: Stream[TEvent]
-    inbound_writer: StreamWriter[TEvent]
-    inbound_stream, inbound_writer = create_stream()
-    outbound_stream: Stream[TClient]
-    outbound_writer: StreamWriter[TClient]
-    outbound_stream, outbound_writer = create_stream()
+    inbound: StreamWiring[TEvent] = create_stream()
+    inbound_stream = inbound.consumer
+    inbound_writer = inbound.producer
+    outbound: StreamWiring[TClient] = create_stream()
+    outbound_stream = outbound.consumer
+    outbound_writer = outbound.producer
     return (
         Connection(inbound_stream, outbound_writer),
         ConnectionBackend(inbound_writer, outbound_stream),

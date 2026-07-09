@@ -281,8 +281,9 @@ class ScriptedStreamFn:
         self, context: Context, abort: asyncio.Event
     ) -> AssistantMessageStream:
         self.started.append(context)
-        stream: AssistantMessageStream
-        stream, writer = _create_stream()
+        wiring = _create_stream()
+        stream: AssistantMessageStream = wiring.consumer
+        writer = wiring.producer
 
         async def produce() -> None:
             while True:

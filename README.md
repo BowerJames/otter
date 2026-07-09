@@ -157,7 +157,8 @@ into a consumer and a producer sharing one queue:
 - `Stream[TEvent]` — the consumer; iterate with `async for`.
 - `StreamWriter[TEvent]` — the producer; call `push(event)` for every event
   (including the terminal `done`/`error`), then `end()`.
-- `create_stream()` — returns a linked `(Stream, StreamWriter)` pair.
+- `create_stream()` — returns a `StreamWiring[TEvent]` whose `.producer` is
+  the `StreamWriter` and `.consumer` is the `Stream`.
 
 Typed aliases specialize it: `AssistantMessageStream` (and a matching
 `AssistantMessageWriter`), with `AssistantMessageStreamFnBuilder` as the
@@ -177,7 +178,9 @@ from otter_ai_core.assistant_message_stream import AssistantDoneEvent
 
 
 async def main() -> None:
-    stream, writer = create_stream()
+    wiring = create_stream()
+    stream = wiring.consumer
+    writer = wiring.producer
 
     async def produce() -> None:
         msg = AssistantMessage(

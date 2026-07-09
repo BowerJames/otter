@@ -71,6 +71,7 @@ from otter_ai_core.provider_api_model_options import (
 )
 from otter_ai_core.stream import (
     Stream,
+    StreamWiring,
     StreamWriter,
     create_stream,
 )
@@ -125,6 +126,7 @@ __all__ = [
     "ThinkingLevel",
     # stream runtime
     "Stream",
+    "StreamWiring",
     "StreamWriter",
     "create_stream",
     # connection runtime
