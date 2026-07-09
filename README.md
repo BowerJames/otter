@@ -27,12 +27,38 @@ Packages live under [`packages/`](./packages):
 
 ```
 packages/
-└── otter_ai_core/        # the otter-ai-core package (import as `otter_ai_core`)
-    ├── src/otter_ai_core/
-    └── tests/
+├── otter_ai_agent/      # the otter-ai-agent package (agent loop over a ModelSession)
+├── otter_ai_core/       # the otter-ai-core package (import as `otter_ai_core`)
+└── …                    # provider/transport packages (chat-completions, realtime, …)
 ```
 
 The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/).
+
+## `otter-ai-agent`
+
+`otter-ai-agent` is the **turn / tool-execution layer** that sits above
+`otter-ai-core`'s reactive [`ModelSession`](./packages/otter_ai_core/src/otter_ai_core/model_session/model_session.py).
+It ports the agent-loop semantics of pi's `@earendil-works/pi-agent-core` (turn
+loop, sequential/parallel tool execution, steering/follow-up queues,
+`before_tool_call` / `after_tool_call` hooks) onto otter's **reactive** session
+model — and runs unchanged over a Realtime WebSocket *or* a wrapped
+chat-completions stream, because it depends only on the session abstraction.
+
+- [`Agent`](./packages/otter_ai_agent/src/otter_ai_agent/agent.py) — the agent:
+a per-run coroutine driver implements the turn FSM (request → await terminal →
+execute tools → loop), subscribing to the session bus internally. The
+per-turn "await one response" coupling is a private driver detail; the session
+stays fully reactive.
+- [`AgentTool`](./packages/otter_ai_agent/src/otter_ai_agent/types.py) — pairs a
+declarative [`Tool`](./packages/otter_ai_core/src/otter_ai_core/tools.py) (the
+schema sent to the model) with an async `execute`; `before_tool_call` /
+`after_tool_call` / `should_stop_after_turn` / `prepare_next_turn` hooks are
+supported (`prepare_next_turn` is context-view-only — a session is bound to one
+model at connect).
+- [`AgentEvent`](./packages/otter_ai_agent/src/otter_ai_agent/events.py) — a
+separate event family + `AgentBus` (the agent's own vocabulary, distinct from
+the session's reduced `SessionEvent`s). Consume via `agent.on(...)` (persistent
+subscriber), `agent.stream(...)` (`async for`), or `await agent.run(...)`.
 All packages and dev dependencies share a single `.venv` at the root.
 
 ## `otter-ai-core` context model
