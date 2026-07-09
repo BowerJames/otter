@@ -610,3 +610,122 @@ async def test_mixed_per_tool_execution_modes() -> None:
     assert {tr.tool_name for tr in tool_results} == {"seq", "par"}  # type: ignore[union-attr]
     # Sequential tool ran first (whole-batch sequential fallback).
     assert [tr.tool_name for tr in tool_results] == ["seq", "par"]  # type: ignore[union-attr]
+
+
+# --------------------------------------------------------------------------- #
+# Round-3 review: N-1 regression + remaining coverage gaps
+# --------------------------------------------------------------------------- #
+
+
+async def test_session_error_during_turn_emits_paired_message_end() -> None:
+    """N-1: a session error during an active turn (after ResponseStarted) still
+    emits the paired MessageEnd -- the failure path goes through _fail_turn."""
+    from otter_ai_core.model_connection.server_events import ConnectionErrorEvent
+
+    async def err_driver(backend: Any, received: list[ClientEvent]) -> None:
+        async for client_event in backend:
+            received.append(client_event)
+            if isinstance(client_event, ResponseCreate):
+                backend.push(
+                    ResponseStartedEvent(
+                        type=ServerEventTypes.ResponseStarted,
+                        role=Role.Assistant,
+                        partial=assistant([], StopReason.Stop),
+                    )
+                )
+                backend.push(
+                    ConnectionErrorEvent(
+                        type=ServerEventTypes.ConnectionError,
+                        message="boom",
+                        reason="transport_error",
+                    )
+                )
+        backend.end()
+
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, AgentConfig())
+    received: list[ClientEvent] = []
+    driver = asyncio.create_task(err_driver(backend, received))
+    streamed = await collect_stream(agent.stream("hi"))
+    conn.close()  # end the outbound channel so the driver exits
+    await driver
+
+    starts = [
+        e
+        for e in streamed
+        if e.type == ev.AgentEventType.MessageStart and e.item.role == Role.Assistant
+    ]
+    ends = [
+        e
+        for e in streamed
+        if e.type == ev.AgentEventType.MessageEnd and e.item.role == Role.Assistant
+    ]
+    assert len(starts) == 1
+    assert len(ends) == 1, "session-error-during-turn left an unpaired MessageStart"
+    assert any(e.type is ev.AgentEventType.AgentEnd and e.error for e in streamed)
+
+
+async def test_after_tool_call_exception_becomes_error_result() -> None:
+    async def after(
+        ctx: AfterToolCallContext, abort: asyncio.Event
+    ) -> AfterToolCallResult:
+        raise RuntimeError("hook boom")
+
+    config = AgentConfig(tools=[echo_tool()], after_tool_call=after)
+    scripts = [
+        TurnScript(
+            content=[tool_call("c1", "echo", {})], stop_reason=StopReason.ToolUse
+        ),
+        TurnScript(content=[text_block("done")], stop_reason=StopReason.Stop),
+    ]
+    _, items, _ = await build_and_run(scripts, config)
+    tool_result = _by_type(items, Role.ToolResult)[0]
+    assert tool_result.is_error  # type: ignore[union-attr]
+    assert "after_tool_call" in tool_result.content[0].text  # type: ignore[union-attr]
+
+
+async def test_prepare_next_turn_noop_keeps_context() -> None:
+    """Returning None from prepare_next_turn leaves the context untouched and
+    the run proceeds normally."""
+
+    called: list[PrepareNextTurnContext] = []
+
+    async def prepare(ctx: PrepareNextTurnContext) -> PrepareNextTurnResult | None:
+        called.append(ctx)
+        return None
+
+    config = AgentConfig(tools=[echo_tool()], prepare_next_turn=prepare)
+    scripts = [
+        TurnScript(
+            content=[tool_call("c1", "echo", {})], stop_reason=StopReason.ToolUse
+        ),
+        TurnScript(content=[text_block("done")], stop_reason=StopReason.Stop),
+    ]
+    _, _, received = await build_and_run(scripts, config)
+    assert len(called) == 2  # invoked after every turn; None -> no swap, run completes
+    assert len([e for e in received if isinstance(e, ResponseCreate)]) == 2
+
+
+async def test_follow_up_mode_all_drains_everything() -> None:
+    """QueueMode='all' for follow-ups injects every queued message before the
+    single continuation turn."""
+    config = AgentConfig(follow_up_mode="all")
+    scripts = [
+        TurnScript(content=[text_block("first")], stop_reason=StopReason.Stop),
+        TurnScript(content=[text_block("then")], stop_reason=StopReason.Stop),
+    ]
+
+    def pre(agent: Agent) -> None:
+        agent.follow_up(UserMessage(role=Role.User, content="one", timestamp=0))
+        agent.follow_up(UserMessage(role=Role.User, content="two", timestamp=0))
+
+    _, items, _ = await build_and_run(scripts, config, pre=pre)
+    # prompt, assistant(first), then both follow-ups before one continuation turn.
+    assert [i.role for i in items] == [
+        Role.User,
+        Role.Assistant,
+        Role.User,
+        Role.User,
+        Role.Assistant,
+    ]

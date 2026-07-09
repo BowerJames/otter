@@ -44,6 +44,7 @@ from otter_ai_core.context import (
 )
 from otter_ai_core.context.content import ContentType
 
+from ._util import now_ms as _now_ms
 from .events import (
     AgentEvent,
     AgentEventType,
@@ -92,10 +93,6 @@ class ToolBatch:
 
 def _error_result(message: str) -> AgentToolResult:
     return AgentToolResult(content=[TextContent(type=ContentType.Text, text=message)])
-
-
-def _now_ms() -> int:
-    return int(asyncio.get_running_loop().time() * 1000)
 
 
 def _to_message(finalized: _Finalized) -> ToolResultMessage:

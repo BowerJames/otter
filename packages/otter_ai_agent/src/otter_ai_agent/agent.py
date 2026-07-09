@@ -68,6 +68,7 @@ from otter_ai_core.model_session.events import (
     SessionEvent,
 )
 
+from ._util import now_ms as _now_ms
 from .bus import AgentBus
 from .events import (
     AgentEndEvent,
@@ -90,10 +91,6 @@ from .types import (
 
 #: A persistent subscriber registered via :meth:`Agent.on`.
 AgentHandler = Callable[[AgentEvent], Awaitable[None]]
-
-
-def _now_ms() -> int:
-    return int(asyncio.get_running_loop().time() * 1000)
 
 
 def _zero_usage() -> Usage:
@@ -476,17 +473,13 @@ class Agent:
             if not abort_task.done():
                 abort_task.cancel()
         if not turn.future.done():
-            # Abort fired before the session delivered a terminal. Resolve with
-            # the best-effort partial so the driver can end gracefully; a late
-            # session terminal is ignored (the future is now done). Emit the
-            # compensating message boundary events so consumers never see an
-            # unpaired MessageStart.
-            partial = turn.last_partial or _skeleton_message(
-                stop_reason=StopReason.Aborted
+            # Abort fired before the session delivered a terminal. Resolve via
+            # the shared failure path so message boundaries stay paired.
+            await self._fail_turn(
+                turn,
+                kind="aborted",
+                message=_skeleton_message(stop_reason=StopReason.Aborted),
             )
-            await self._ensure_start(turn, partial)
-            await self._ensure_end(turn, AssistantContextItem.from_message(partial, ""))
-            turn.resolve(_Terminal("aborted", partial, None))
         return turn.future.result()
 
     async def _handle_tools(
@@ -587,6 +580,21 @@ class Agent:
             MessageEndEvent(type=AgentEventType.MessageEnd, item=item)
         )
 
+    async def _fail_turn(
+        self, turn: _Turn, *, kind: str, message: AssistantMessage
+    ) -> None:
+        """Emit the paired message boundary events (idempotent) and resolve the
+        turn as failed.
+
+        ``message`` is the fallback; the streamed ``last_partial`` is preferred
+        when present so the boundary matches what consumers already saw. This
+        is the single sink for every failure path (session error/closed and the
+        abort race) so a ``MessageStart`` is never left unpaired (N-1/I-2)."""
+        end_message = turn.last_partial or message
+        await self._ensure_start(turn, end_message)
+        await self._ensure_end(turn, AssistantContextItem.from_message(end_message, ""))
+        turn.resolve(_Terminal(kind, end_message, None))
+
     async def _on_response_started(self, event: ResponseStartedEvent) -> None:
         turn = self._active_turn()
         if turn is None:
@@ -666,7 +674,7 @@ class Agent:
         )
         turn = run.turn
         if turn is not None:
-            turn.resolve(_Terminal("error", message, None))
+            await self._fail_turn(turn, kind="error", message=message)
 
     async def _on_session_closed(self, event: SessionClosedEvent) -> None:
         # The session is gone. Mark the agent single-use, stop the run, and
@@ -683,7 +691,7 @@ class Agent:
         )
         turn = run.turn
         if turn is not None:
-            turn.resolve(_Terminal("aborted", message, None))
+            await self._fail_turn(turn, kind="aborted", message=message)
 
     def _maybe_resolve_done(self, turn: _Turn) -> None:
         """Resolve the turn as ``done`` once both the message and the committed
