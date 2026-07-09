@@ -17,7 +17,9 @@ family) and the **typed stream aliases** (``AssistantMessageStream`` /
 the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
 top level. The ``ConnectionFn`` seam type — the bidirectional peer of
 ``AssistantMessageStreamFnBuilder`` — is defined alongside the connection runtime in
-:mod:`otter_ai_core.connection`.
+:mod:`otter_ai_core.connection`. The generic :data:`BuilderFn` alias — the common
+options-binding shape that both producer seams specialize — lives in
+:mod:`otter_ai_core.builder`.
 
 It defines **no LLMs, providers, APIs, transports, API registry, or
 ``stream()`` dispatch** — only the data model and the generic runtimes.
@@ -25,6 +27,7 @@ It defines **no LLMs, providers, APIs, transports, API registry, or
 
 from __future__ import annotations
 
+from otter_ai_core.builder import BuilderFn
 from otter_ai_core.connection import (
     Connection,
     ConnectionBackend,
@@ -80,6 +83,8 @@ __all__ = [
     "__version__",
     # hooks
     "Hook",
+    # builder
+    "BuilderFn",
     # usage
     "Usage",
     "UsageCost",

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from otter_ai_core.assistant_message_stream.assistant_message_events import (
     AssistantMessageEvent,
 )
+from otter_ai_core.builder import BuilderFn
 from otter_ai_core.context import Context
 from otter_ai_core.stream import Stream, StreamWriter
 
@@ -66,6 +67,6 @@ type AssistantMessageStreamFn = Callable[
 #: registered builder reusable across many calls and lets the dispatch layer
 #: hand callers the bound :data:`AssistantMessageStreamFn` directly.
 
-type AssistantMessageStreamFnBuilder[TOptions] = Callable[
-    [TOptions], AssistantMessageStreamFn
+type AssistantMessageStreamFnBuilder[TOptions] = BuilderFn[
+    TOptions, AssistantMessageStreamFn
 ]

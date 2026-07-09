@@ -10,7 +10,7 @@ to concrete unions:
   options-bound producer
   (:data:`ConnectionFn` is
   ``Callable[[Context, asyncio.Event], Connection[TClient, TEvent]]``).
-* :data:`ModelConnectionFnBuilder` — ``Callable[[TOptions], ModelConnectionFn]``,
+* :data:`ModelConnectionFnBuilder` — ``BuilderFn[TOptions, ModelConnectionFn]``,
   the bidirectional peer of
   :data:`otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`.
 * :data:`ClientEvent` / :data:`ServerEvent` — the discriminated unions a
