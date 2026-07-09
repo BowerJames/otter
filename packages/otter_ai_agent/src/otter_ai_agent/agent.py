@@ -194,6 +194,7 @@ class Agent:
     _follow_up: PendingMessageQueue
     _context: Context
     _run: _Run | None
+    _closed: bool
     _unsubscribers: list[Callable[[], None]]
 
     def __init__(self, session: ModelSession, config: AgentConfig) -> None:
@@ -204,6 +205,7 @@ class Agent:
         self._follow_up = PendingMessageQueue(config.follow_up_mode)
         self._context = Context()
         self._run = None
+        self._closed = False
         self._unsubscribers = [
             session.on(
                 SessionEventTypes.ResponseStarted,
@@ -252,6 +254,12 @@ class Agent:
     def is_running(self) -> bool:
         return self._run is not None
 
+    @property
+    def is_closed(self) -> bool:
+        """True once the session has been closed (via :meth:`close` or a
+        ``SessionClosed`` signal). Further runs are rejected."""
+        return self._closed
+
     def on(
         self, event_type: AgentEventType, handler: AgentHandler
     ) -> Callable[[], None]:
@@ -279,7 +287,9 @@ class Agent:
 
     def close(self) -> None:
         """Hard-stop: abort the run, detach the agent's session-bus handlers,
-        and tear down the session connection."""
+        and tear down the session connection. The agent is single-use after
+        this -- further runs raise (see :attr:`is_closed`)."""
+        self._closed = True
         if self._run is not None:
             self._run.abort.set()
         for unsubscribe in self._unsubscribers:
@@ -323,6 +333,11 @@ class Agent:
             raise RuntimeError(
                 "Agent is already running. Await agent.idle() "
                 "before starting another run.",
+            )
+        if self._closed:
+            raise RuntimeError(
+                "Agent session is closed; construct a new Agent over a fresh "
+                "ModelSession to run again."
             )
         run = _Run(abort=asyncio.Event())
         self._run = run
@@ -637,32 +652,38 @@ class Agent:
                 self._maybe_resolve_done(turn)
 
     async def _on_session_error(self, event: SessionErrorEvent) -> None:
-        turn = self._active_turn()
-        if turn is None:
+        # A transport failure must stop the run whether or not a turn is
+        # in flight: resolve an active turn immediately, and -- crucially --
+        # set the run abort so a driver sitting between turns (about to call
+        # create_response on a dead session) does not hang.
+        run = self._run
+        if run is None:
             return
-        turn.resolve(
-            _Terminal(
-                "error",
-                _skeleton_message(
-                    stop_reason=StopReason.Error, error_message=event.message
-                ),
-                None,
-            )
+        run.abort.set()
+        message = _skeleton_message(
+            stop_reason=StopReason.Error,
+            error_message=f"{event.message} ({event.reason})",
         )
+        turn = run.turn
+        if turn is not None:
+            turn.resolve(_Terminal("error", message, None))
 
     async def _on_session_closed(self, event: SessionClosedEvent) -> None:
-        turn = self._active_turn()
-        if turn is None:
+        # The session is gone. Mark the agent single-use, stop the run, and
+        # resolve any in-flight turn -- so neither a between-turn driver nor
+        # an in-flight _await_turn can hang on a session that will never
+        # deliver another event.
+        self._closed = True
+        run = self._run
+        if run is None:
             return
-        turn.resolve(
-            _Terminal(
-                "aborted",
-                _skeleton_message(
-                    stop_reason=StopReason.Aborted, error_message="session closed"
-                ),
-                None,
-            )
+        run.abort.set()
+        message = _skeleton_message(
+            stop_reason=StopReason.Aborted, error_message="session closed"
         )
+        turn = run.turn
+        if turn is not None:
+            turn.resolve(_Terminal("aborted", message, None))
 
     def _maybe_resolve_done(self, turn: _Turn) -> None:
         """Resolve the turn as ``done`` once both the message and the committed

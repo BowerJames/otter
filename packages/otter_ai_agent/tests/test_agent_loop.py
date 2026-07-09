@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import pytest
 from _support import (
     TurnScript,
     assistant,
@@ -54,6 +55,7 @@ def echo_tool(
     abortable: bool = False,
     name: str = "echo",
     result: AgentToolResult | None = None,
+    execution_mode: str | None = None,
 ) -> AgentTool:
     async def execute(
         tool_call_id: str,
@@ -78,6 +80,7 @@ def echo_tool(
             name=name, description="d", parameters={"type": "object", "properties": {}}
         ),
         execute=execute,
+        execution_mode=execution_mode,  # type: ignore[arg-type]
     )
 
 
@@ -528,3 +531,82 @@ async def test_steering_mode_all_drains_everything() -> None:
     _, items, _ = await build_and_run(scripts, config, pre=pre)
     user_contents = [i.content for i in _by_type(items, Role.User)]
     assert user_contents == ["hi", "one", "two"]
+
+
+# --------------------------------------------------------------------------- #
+# Round-2 review findings (B-1, B-2) + execution-mode coverage
+# --------------------------------------------------------------------------- #
+
+
+async def test_session_closed_mid_run_ends_without_hang() -> None:
+    """B-1: if the session closes while the driver is between turns (here, mid
+    tool execution), the run ends instead of hanging on a dead create_response."""
+    config = AgentConfig(tools=[echo_tool(delay=0.05)])
+    scripts = [
+        TurnScript(
+            content=[tool_call("c1", "echo", {})], stop_reason=StopReason.ToolUse
+        )
+    ]
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, config)
+    received: list[ClientEvent] = []
+    driver = asyncio.create_task(run_backend(backend, scripts, received))
+
+    task = asyncio.create_task(agent.run("hi"))
+    await asyncio.sleep(0.02)  # reach tool execution
+    backend.end()  # server side torn down -> SessionClosed
+    items = await asyncio.wait_for(task, timeout=3)  # must not hang
+    conn.close()  # end the outbound channel so the driver task can exit
+    await driver
+
+    assert agent.is_closed
+    assert any(i.role == Role.ToolResult for i in items)
+
+
+async def test_not_reusable_after_close() -> None:
+    """B-2: after close(), a new run is rejected (the session is gone)."""
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, AgentConfig())
+    agent.close()
+    assert agent.is_closed
+    with pytest.raises(RuntimeError):
+        await agent.run("hi")
+
+
+async def test_not_reusable_after_session_closed() -> None:
+    """B-2 variant: a session that died on its own also makes the agent
+    single-use (construct a new one to run again)."""
+    conn, backend = new_session()
+    session = ModelSession(conn)
+    agent = Agent(session, AgentConfig())
+    backend.end()  # inbound closes -> pump finally -> SessionClosed
+    await asyncio.sleep(0.02)  # let the session bus deliver SessionClosed
+    assert agent.is_closed
+    with pytest.raises(RuntimeError):
+        await agent.run("hi")
+
+
+async def test_mixed_per_tool_execution_modes() -> None:
+    """A batch mixing a sequential tool with a parallel one still executes both
+    (the whole batch serializes when any tool is sequential)."""
+    record: list[tuple[str, Any]] = []
+    config = AgentConfig(
+        tools=[
+            echo_tool(name="seq", record=record, execution_mode="sequential"),
+            echo_tool(name="par", record=record, execution_mode="parallel"),
+        ]
+    )
+    scripts = [
+        TurnScript(
+            content=[tool_call("c1", "seq", {}), tool_call("c2", "par", {})],
+            stop_reason=StopReason.ToolUse,
+        ),
+        TurnScript(content=[text_block("done")], stop_reason=StopReason.Stop),
+    ]
+    _, items, _ = await build_and_run(scripts, config)
+    tool_results = _by_type(items, Role.ToolResult)
+    assert {tr.tool_name for tr in tool_results} == {"seq", "par"}  # type: ignore[union-attr]
+    # Sequential tool ran first (whole-batch sequential fallback).
+    assert [tr.tool_name for tr in tool_results] == ["seq", "par"]  # type: ignore[union-attr]
