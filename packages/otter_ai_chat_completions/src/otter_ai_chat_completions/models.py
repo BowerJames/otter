@@ -139,9 +139,9 @@ class ChatCompletionsModel(BaseModel):
     Runtime handles (hooks) do **not** live here — they cannot
     be carried by a serializable data model. They are bundled with the model
     in :class:`otter_ai_chat_completions.options.ChatCompletionsModelOptions`,
-    which is the builder's sole argument; the cooperative-abort signal (an
-    :class:`asyncio.Event`) is supplied when the builder's returned producer is
-    invoked.
+    which is the builder's sole argument. The cooperative-abort signal is not
+    an argument at all — it is intrinsic to the stream the producer returns
+    (see :func:`otter_ai_core.create_stream`).
     """
 
     model_config = ConfigDict(extra="forbid")

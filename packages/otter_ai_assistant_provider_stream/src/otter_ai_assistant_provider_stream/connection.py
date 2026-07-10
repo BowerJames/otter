@@ -66,18 +66,18 @@ from otter_ai_chat_completions import (
 from otter_ai_core import (
     AssistantMessage,
     BidirectionalChannelWiring,
-    ChannelPair,
     Context,
     ProviderModelOption,
+    StreamPair,
     Usage,
     UsageCost,
     create_bidirectional_channel,
-    create_channel,
+    create_stream,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
     AssistantMessageEvent,
-    AssistantMessageStream,
+    AssistantMessageStreamClient,
     AssistantMessageStreamFn,
 )
 from otter_ai_core.model_connection import (
@@ -192,7 +192,7 @@ def _error_stream_fn(
     from the caller's option so a consumer can still attribute the failure.
     """
 
-    def stream_fn(_context: Context, _abort: asyncio.Event) -> AssistantMessageStream:
+    def stream_fn(_context: Context) -> AssistantMessageStreamClient:
         message = AssistantMessage(
             role="assistant",
             content=[],
@@ -204,10 +204,8 @@ def _error_stream_fn(
             error_message=f"{type(exc).__name__}: {exc}",
             timestamp=int(time.time() * 1000),
         )
-        wiring: ChannelPair[AssistantMessageEvent] = create_channel()
-        stream = wiring.reader
-        writer = wiring.writer
-        writer.push(
+        pair: StreamPair[AssistantMessageEvent] = create_stream()
+        pair.backend.push(
             AssistantErrorEvent(
                 role="assistant",
                 type="error",
@@ -215,8 +213,8 @@ def _error_stream_fn(
                 error=message,
             )
         )
-        writer.end()
-        return stream
+        pair.backend.end()
+        return pair.client
 
     return stream_fn
 

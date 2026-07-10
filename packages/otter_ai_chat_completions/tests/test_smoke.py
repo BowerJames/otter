@@ -12,7 +12,7 @@ from otter_ai_chat_completions import (
     ChatCompletionsModelOptions,
     create_chat_completions_assistant_message_stream,
 )
-from otter_ai_core import ChannelReader, Context, UserMessage, context_item
+from otter_ai_core import Context, StreamClient, UserMessage, context_item
 
 
 def _options() -> ChatCompletionsModelOptions:
@@ -68,8 +68,8 @@ def test_options_defaults_are_independent() -> None:
 async def test_seam_returns_stream_synchronously() -> None:
     # The seam is a builder: it takes ``options`` and returns an
     # ``AssistantMessageStreamFn``. That returned fn is synchronous: it returns
-    # an ``AssistantMessageStream`` (a ``ChannelReader``) without raising, and
-    # schedules its producer via ``asyncio.create_task``. With no API key the
+    # an ``AssistantMessageStreamClient`` (a ``StreamClient``) without raising,
+    # and schedules its producer via ``asyncio.create_task``. With no API key the
     # producer will emit an error event — but the synchronous return contract
     # is what we pin here.
     options = _options()
@@ -82,8 +82,8 @@ async def test_seam_returns_stream_synchronously() -> None:
         ],
     )
     stream_fn = create_chat_completions_assistant_message_stream(options)
-    stream = stream_fn(context, asyncio.Event())
-    assert isinstance(stream, ChannelReader)
+    stream = stream_fn(context)
+    assert isinstance(stream, StreamClient)
     # A producer task was scheduled and is tracked. Drain the stream to
     # completion (the no-API-key producer emits its error event and ends
     # itself) so the test neither leaks the task nor hangs.

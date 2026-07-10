@@ -54,8 +54,9 @@ seam type. A typed ``BidirectionalChannel[ClientEvent, ServerEvent]`` alias and
 a typed seam alias belong in the specialising subpackage (e.g.
 ``model_connection``), mirroring how
 :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
-specialises :class:`~otter_ai_core.channel.ChannelReader`. Like the one-way
-channel runtime, :class:`BidirectionalChannel` and
+specialises :class:`~otter_ai_core.stream.StreamClient` (the abortable
+facade layered over :class:`~otter_ai_core.channel.ChannelReader`). Like the
+one-way channel runtime, :class:`BidirectionalChannel` and
 :class:`BidirectionalChannelBackend` are runtime objects and are **not**
 JSON-serializable.
 """

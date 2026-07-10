@@ -18,8 +18,9 @@ is usually a single iterable object one actor pulls from; and in Python
 ``asyncio.StreamReader``/``StreamWriter`` read *bytes* off a transport, a
 connotation that does not fit a typed-event conduit. (The *values* flowing
 through a channel — an LLM response — are genuinely a stream; the typed
-:data:`~otter_ai_core.assistant_message_stream.AssistantMessageStream` alias
-keeps that domain vocabulary, and just specializes this channel's read end.)
+:data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
+alias keeps that domain vocabulary, and just specializes the read end of the
+abortable :mod:`~otter_ai_core.stream` facade layered over this channel.)
 
 Writer contract (matches pi-ai)
 -------------------------------
