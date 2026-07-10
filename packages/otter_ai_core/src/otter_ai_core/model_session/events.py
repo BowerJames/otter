@@ -37,8 +37,8 @@ carry ``message`` — the snapshot at the end of the response (complete for
 ``Done``, best-effort/interrupted for ``Error``/``Aborted``).
 
 Like the raw protocol family these are Pydantic v2 models with
-``extra="forbid"``; unlike the connection runtime itself they are plain data
-and remain serializable.
+``extra="forbid"``; unlike the bidirectional-stream runtime itself they are
+plain data and remain serializable.
 """
 
 from __future__ import annotations

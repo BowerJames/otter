@@ -1,7 +1,7 @@
 """ModelSession: pump/reduce wiring, SessionClosedEvent, HandlerErrorEvent + cap.
 
 These tests exercise the assembled :class:`ModelSession` against a
-:func:`~otter_ai_core.create_connection` pair whose backend the test drives
+:func:`~otter_ai_core.create_bidirectional_stream` pair whose backend the test drives
 directly. They cover the three integration behaviors the code review flagged
 as untested:
 
@@ -21,12 +21,13 @@ from collections.abc import Awaitable, Callable
 
 from otter_ai_core import (
     AssistantMessage,
-    Connection,
-    ConnectionBackend,
+    BidirectionalStream,
+    BidirectionalStreamBackend,
+    BidirectionalStreamWiring,
     StopReason,
     Usage,
     UsageCost,
-    create_connection,
+    create_bidirectional_stream,
 )
 from otter_ai_core.context import Role
 from otter_ai_core.model_connection.client_events import ClientEvent
@@ -89,14 +90,15 @@ def _collect(
 
 
 def _new() -> tuple[
-    Connection[ClientEvent, ServerEvent], ConnectionBackend[ClientEvent, ServerEvent]
+    BidirectionalStream[ClientEvent, ServerEvent],
+    BidirectionalStreamBackend[ClientEvent, ServerEvent],
 ]:
-    """A bare ``create_connection()`` pair (PEP 695 generics aren't subscriptable
-    at runtime), mirroring ``test_connection.py``'s pattern."""
-    conn: Connection[ClientEvent, ServerEvent]
-    backend: ConnectionBackend[ClientEvent, ServerEvent]
-    conn, backend = create_connection()
-    return conn, backend
+    """A bare ``create_bidirectional_stream()`` pair (PEP 695 generics aren't
+    subscriptable at runtime), mirroring ``test_bidirectional_stream.py``'s
+    pattern."""
+    wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
+    wiring = create_bidirectional_stream()
+    return wiring.caller, wiring.backend
 
 
 async def test_raw_server_events_reduced_and_fanned_out() -> None:
