@@ -37,8 +37,8 @@ from otter_ai_core.bidirectional_channel import (
 )
 from otter_ai_core.builder import BuilderFn
 from otter_ai_core.channel import (
+    ChannelPair,
     ChannelReader,
-    ChannelWiring,
     ChannelWriter,
     create_channel,
 )
@@ -127,8 +127,8 @@ __all__ = [
     "ProviderModelOption",
     "ThinkingLevel",
     # channel runtime (one-way)
+    "ChannelPair",
     "ChannelReader",
-    "ChannelWiring",
     "ChannelWriter",
     "create_channel",
     # channel runtime (bidirectional)

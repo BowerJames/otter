@@ -181,7 +181,7 @@ async def test_terminal_and_caller_close_same_cycle_do_not_deadlock() -> None:
     # The driver then consumes ``ResponseCreate`` (idle), enters the turn, and
     # in the turn's first ``asyncio.wait`` BOTH the stream terminal and the
     # close sentinel resolve in the same cycle.
-    from otter_ai_core import ChannelWiring, create_channel
+    from otter_ai_core import ChannelPair, create_channel
     from otter_ai_core.assistant_message_stream import (
         AssistantMessageEvent,
         AssistantMessageStream,
@@ -192,7 +192,7 @@ async def test_terminal_and_caller_close_same_cycle_do_not_deadlock() -> None:
     def immediate_done_stream_fn(
         context: object, abort: object
     ) -> AssistantMessageStream:
-        wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+        wiring: ChannelPair[AssistantMessageEvent] = create_channel()
         stream: AssistantMessageStream = wiring.reader
         writer = wiring.writer
         writer.push(done_event(final))  # terminal as the very first event
