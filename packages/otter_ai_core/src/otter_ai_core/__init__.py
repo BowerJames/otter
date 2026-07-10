@@ -1,4 +1,4 @@
-"""Otter AI — LLM context data model and generic stream/connection runtimes.
+"""Otter AI — LLM context data model and generic stream/bidirectional-stream runtimes.
 
 This package provides:
 
@@ -6,18 +6,19 @@ This package provides:
   messages, content blocks, tools, usage);
 * a provider-agnostic async stream runtime (``Stream`` / ``StreamWriter`` /
   ``create_stream``); and
-* a provider-agnostic async bidirectional connection runtime
-  (``Connection`` / ``ConnectionBackend`` / ``create_connection``), the
-  bidirectional peer of the stream runtime for APIs that maintain a live
-  connection (Realtime / Responses).
+* a provider-agnostic async bidirectional-stream runtime
+  (``BidirectionalStream`` / ``BidirectionalStreamBackend`` /
+  ``create_bidirectional_stream``), the bidirectional peer of the stream
+  runtime for APIs that maintain a live connection (Realtime / Responses).
 
 The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
 family) and the **typed stream aliases** (``AssistantMessageStream`` /
 ``AssistantMessageWriter`` / the ``AssistantMessageStreamFnBuilder`` seam) live under
 the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
-top level. The ``ConnectionFn`` seam type — the bidirectional peer of
-``AssistantMessageStreamFnBuilder`` — is defined alongside the connection runtime in
-:mod:`otter_ai_core.connection`. The generic :data:`BuilderFn` alias — the common
+top level. The ``BidirectionalStreamFn`` seam type — the bidirectional peer
+of ``AssistantMessageStreamFnBuilder`` — is defined alongside the
+bidirectional-stream runtime in :mod:`otter_ai_core.bidirectional_stream`.
+The generic :data:`BuilderFn` alias — the common
 options-binding shape that both producer seams specialize — lives in
 :mod:`otter_ai_core.builder`.
 
@@ -27,13 +28,14 @@ It defines **no LLMs, providers, APIs, transports, API registry, or
 
 from __future__ import annotations
 
-from otter_ai_core.builder import BuilderFn
-from otter_ai_core.connection import (
-    Connection,
-    ConnectionBackend,
-    ConnectionFn,
-    create_connection,
+from otter_ai_core.bidirectional_stream import (
+    BidirectionalStream,
+    BidirectionalStreamBackend,
+    BidirectionalStreamFn,
+    BidirectionalStreamWiring,
+    create_bidirectional_stream,
 )
+from otter_ai_core.builder import BuilderFn
 from otter_ai_core.context import (
     AssistantContent,
     AssistantContextItem,
@@ -129,9 +131,10 @@ __all__ = [
     "StreamWiring",
     "StreamWriter",
     "create_stream",
-    # connection runtime
-    "Connection",
-    "ConnectionBackend",
-    "ConnectionFn",
-    "create_connection",
+    # bidirectional-stream runtime
+    "BidirectionalStream",
+    "BidirectionalStreamBackend",
+    "BidirectionalStreamFn",
+    "BidirectionalStreamWiring",
+    "create_bidirectional_stream",
 ]

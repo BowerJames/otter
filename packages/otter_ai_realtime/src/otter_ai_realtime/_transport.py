@@ -23,7 +23,7 @@ import websockets
 from otter_ai_realtime._events import InboundTranslator, client_event_to_frame
 
 if TYPE_CHECKING:
-    from otter_ai_core.connection import ConnectionBackend
+    from otter_ai_core.bidirectional_stream import BidirectionalStreamBackend
     from otter_ai_realtime.models import RealtimeModel
 
 
@@ -74,7 +74,7 @@ async def connect_ws(model: RealtimeModel, api_key: str) -> Any:
 
 
 async def pump(
-    backend: ConnectionBackend[Any, Any],
+    backend: BidirectionalStreamBackend[Any, Any],
     ws: Any,
     abort: asyncio.Event,
     translator: InboundTranslator,
@@ -124,7 +124,9 @@ async def pump(
 
 
 async def _read_inbound(
-    ws: Any, backend: ConnectionBackend[Any, Any], translator: InboundTranslator
+    ws: Any,
+    backend: BidirectionalStreamBackend[Any, Any],
+    translator: InboundTranslator,
 ) -> None:
     """Read WS frames, translate, push server events onto the backend.
 
@@ -141,10 +143,13 @@ async def _read_inbound(
                 backend.push(event)
 
 
-async def _drain_outbound(ws: Any, backend: ConnectionBackend[Any, Any]) -> None:
+async def _drain_outbound(
+    ws: Any, backend: BidirectionalStreamBackend[Any, Any]
+) -> None:
     """Drain caller client events, translate, send WS frames.
 
-    Returns when the caller closes the outbound stream (``Connection.close()``).
+    Returns when the caller closes the outbound stream
+    (``BidirectionalStream.close()``).
     """
     async for client_event in backend:
         frame = client_event_to_frame(client_event)

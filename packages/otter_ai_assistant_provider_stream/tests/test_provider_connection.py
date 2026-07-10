@@ -210,18 +210,16 @@ class TestAbortThreading:
         from otter_ai_assistant_provider_stream import (
             register_model_connection_builder,
         )
-        from otter_ai_core import create_connection
+        from otter_ai_core import create_bidirectional_stream
 
         seen: list[object] = []
 
         def fake_builder(_options: ProviderModelOption) -> Any:
             def producer(_context: Context, abort: asyncio.Event) -> Any:
                 seen.append(abort)
-                conn: Any
-                backend: Any
-                conn, backend = create_connection()
-                backend.end()
-                return conn
+                wiring: Any = create_bidirectional_stream()
+                wiring.backend.end()
+                return wiring.caller
 
             return producer
 

@@ -1,33 +1,40 @@
-"""Generic async connection runtime: bidirectional flow, termination, lifecycle."""
+"""Generic async bidirectional-stream runtime: flow, termination, lifecycle."""
 
 from __future__ import annotations
 
 import asyncio
 
-from otter_ai_core import Connection, ConnectionBackend, Context, create_connection
-from otter_ai_core.connection import ConnectionFn
+from otter_ai_core import (
+    BidirectionalStream,
+    BidirectionalStreamBackend,
+    BidirectionalStreamWiring,
+    Context,
+    create_bidirectional_stream,
+)
+from otter_ai_core.bidirectional_stream import BidirectionalStreamFn
 
 
-def _new() -> tuple[Connection[str, int], ConnectionBackend[str, int]]:
-    """A typed connection/end pair for the common (str, int) event shapes.
+def _new() -> tuple[
+    BidirectionalStream[str, int], BidirectionalStreamBackend[str, int]
+]:
+    """A typed caller/backend pair for the common (str, int) event shapes.
 
-    Locals are annotated so ``create_connection()`` is called bare (PEP 695
-    generic functions are not subscriptable at runtime), mirroring
+    Locals are annotated so ``create_bidirectional_stream()`` is called bare
+    (PEP 695 generic functions are not subscriptable at runtime), mirroring
     ``test_stream.py``'s use of ``create_stream()``.
     """
-    conn: Connection[str, int]
-    backend: ConnectionBackend[str, int]
-    conn, backend = create_connection()
-    return conn, backend
+    wiring: BidirectionalStreamWiring[str, int]
+    wiring = create_bidirectional_stream()
+    return wiring.caller, wiring.backend
 
 
-async def _drain(backend: ConnectionBackend[str, int]) -> list[str]:
+async def _drain(backend: BidirectionalStreamBackend[str, int]) -> list[str]:
     """Collect every outbound client event the caller sent, in order."""
     return [event async for event in backend]
 
 
 async def test_inbound_events_flow_to_caller_in_order() -> None:
-    """``backend.push`` events are observed by ``async for`` over the connection."""
+    """``backend.push`` events are observed by ``async for`` over the stream."""
     conn, backend = _new()
     for event in (1, 2, 3):
         backend.push(event)
@@ -159,30 +166,34 @@ async def test_bidirectional_concurrent() -> None:
     assert received == [1, 2]
 
 
-async def test_create_connection_returns_paired_ends() -> None:
-    """The two returned ends are the cross-wired caller/backend handles."""
-    conn, backend = _new()
-    assert isinstance(conn, Connection)
-    assert isinstance(backend, ConnectionBackend)
+async def test_create_bidirectional_stream_returns_paired_ends() -> None:
+    """The wiring's two ends are the cross-wired caller/backend handles."""
+    wiring: BidirectionalStreamWiring[str, int]
+    wiring = create_bidirectional_stream()
+    assert isinstance(wiring.caller, BidirectionalStream)
+    assert isinstance(wiring.backend, BidirectionalStreamBackend)
 
 
-def test_connection_fn_accepts_conforming_callable() -> None:
-    """``ConnectionFn`` is the bidirectional peer seam type.
+def test_bidirectional_stream_fn_accepts_conforming_callable() -> None:
+    """``BidirectionalStreamFn`` is the bidirectional peer seam type.
 
     mypy is the real enforcer; this checks the alias is importable and a
     trivially-conforming callable binds under an annotation referencing it.
-    ``ConnectionFn`` is the *options-bound* producer
-    (``Callable[[Context, asyncio.Event], Connection[TClient, TEvent]]``);
+    ``BidirectionalStreamFn`` is the *options-bound* producer
+    (``Callable[[Context, asyncio.Event], BidirectionalStream[TClient, TEvent]]``);
     its builder peer is :data:`ModelConnectionFnBuilder`.
     """
-    conn: Connection[str, int]
-    conn, _backend = create_connection()
+    wiring: BidirectionalStreamWiring[str, int]
+    wiring = create_bidirectional_stream()
+    conn = wiring.caller
 
-    def make_connection(context: Context, abort: asyncio.Event) -> Connection[str, int]:
-        inner: Connection[str, int]
-        inner, _ = create_connection()
-        return inner
+    def make_stream(
+        context: Context, abort: asyncio.Event
+    ) -> BidirectionalStream[str, int]:
+        inner: BidirectionalStreamWiring[str, int]
+        inner = create_bidirectional_stream()
+        return inner.caller
 
-    fn: ConnectionFn[str, int] = make_connection
+    fn: BidirectionalStreamFn[str, int] = make_stream
     assert callable(fn)
-    assert isinstance(conn, Connection)
+    assert isinstance(conn, BidirectionalStream)

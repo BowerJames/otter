@@ -65,12 +65,13 @@ from otter_ai_chat_completions import (
 )
 from otter_ai_core import (
     AssistantMessage,
+    BidirectionalStreamWiring,
     Context,
     ProviderModelOption,
     StreamWiring,
     Usage,
     UsageCost,
-    create_connection,
+    create_bidirectional_stream,
     create_stream,
 )
 from otter_ai_core.assistant_message_stream import (
@@ -79,7 +80,6 @@ from otter_ai_core.assistant_message_stream import (
     AssistantMessageStream,
     AssistantMessageStreamFn,
 )
-from otter_ai_core.connection import ConnectionBackend
 from otter_ai_core.model_connection import (
     ClientEvent,
     ConnectionErrorEvent,
@@ -283,18 +283,17 @@ def _error_connection(message: str) -> ModelConnection:
     the inbound writer ended, so the caller iterating the connection observes
     exactly the error and then completion.
     """
-    conn: ModelConnection
-    backend: ConnectionBackend[ClientEvent, ServerEvent]
-    conn, backend = create_connection()
-    backend.push(
+    wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
+    wiring = create_bidirectional_stream()
+    wiring.backend.push(
         ConnectionErrorEvent(
             type="connection.error",
             message=message,
             reason="dispatch_error",
         )
     )
-    backend.end()
-    return conn
+    wiring.backend.end()
+    return wiring.caller
 
 
 def _zero_usage() -> Usage:

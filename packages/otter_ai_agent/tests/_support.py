@@ -1,7 +1,7 @@
 """Shared helpers for otter_ai_agent tests.
 
 Tests drive a :class:`ModelSession` against a bare
-:func:`~otter_ai_core.create_connection` pair whose backend a scripted
+:func:`~otter_ai_core.create_bidirectional_stream` pair whose backend a scripted
 ``run_backend`` task drives -- mirroring ``test_model_session.py``. The script
 responds to the agent's ``ResponseCreate`` with canned server events, echoes
 ``ContextItemAddEvent``\\ s as ``ContextItemAdded``, and turns
@@ -18,12 +18,13 @@ from typing import Any
 
 from otter_ai_core import (
     AssistantMessage,
-    Connection,
-    ConnectionBackend,
+    BidirectionalStream,
+    BidirectionalStreamBackend,
+    BidirectionalStreamWiring,
     StopReason,
     Usage,
     UsageCost,
-    create_connection,
+    create_bidirectional_stream,
 )
 from otter_ai_core.context import (
     AssistantContextItem,
@@ -111,17 +112,16 @@ class TurnScript:
 
 
 def new_session() -> tuple[
-    Connection[ClientEvent, ServerEvent],
-    ConnectionBackend[ClientEvent, ServerEvent],
+    BidirectionalStream[ClientEvent, ServerEvent],
+    BidirectionalStreamBackend[ClientEvent, ServerEvent],
 ]:
-    conn: Connection[ClientEvent, ServerEvent]
-    backend: ConnectionBackend[ClientEvent, ServerEvent]
-    conn, backend = create_connection()
-    return conn, backend
+    wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
+    wiring = create_bidirectional_stream()
+    return wiring.caller, wiring.backend
 
 
 async def _emit_turn(
-    backend: ConnectionBackend[ClientEvent, ServerEvent], script: TurnScript
+    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent], script: TurnScript
 ) -> None:
     msg = assistant(script.content, script.stop_reason, script.error_message)
     empty = assistant([], script.stop_reason)
@@ -180,7 +180,7 @@ async def _emit_turn(
 
 
 async def run_backend(
-    backend: ConnectionBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
     scripts: Sequence[TurnScript],
     received: list[ClientEvent],
 ) -> None:
