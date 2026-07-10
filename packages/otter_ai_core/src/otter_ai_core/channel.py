@@ -75,15 +75,27 @@ class ChannelReader[TEvent]:
     Iterate with ``async for event in channel:``. Iteration ends after the
     writer's :meth:`ChannelWriter.end` (the terminal ``done``/``error`` event
     is yielded *before* iteration stops, so the final message is always
-    reachable). Single-consumer; not safe to iterate concurrently.
+    reachable).
+
+    Single-consumer / single-pass: the read end may be iterated **at most
+    once**. A second ``async for`` (even after the first finished) raises
+    :class:`RuntimeError`. The guard lives in ``__aiter__`` — which is
+    **synchronous** because ``async for`` does not await ``__aiter__``; the
+    check-then-set is race-free under the single-threaded asyncio loop.
     """
 
-    __slots__ = ("_core",)
+    __slots__ = ("_core", "_iterating")
 
     def __init__(self, core: _Core[TEvent]) -> None:
         self._core = core
+        self._iterating = False
 
     def __aiter__(self) -> Self:
+        if self._iterating:
+            raise RuntimeError(
+                "ChannelReader is single-consumer and single-pass: already iterated"
+            )
+        self._iterating = True
         return self
 
     async def __anext__(self) -> TEvent:
@@ -123,20 +135,20 @@ class ChannelWriter[TEvent]:
 
 
 @dataclass(slots=True, frozen=True)
-class ChannelWiring[TEvent]:
+class ChannelPair[TEvent]:
     """A linked read/write pair from :func:`create_channel`.
 
     ``writer`` is the :class:`ChannelWriter` (the write end, that
     ``push``/``end``); ``reader`` is the :class:`ChannelReader` (the read end,
     iterated with ``async for``). The two ends share one queue. Frozen because
-    a wiring is an immutable binding of the two ends produced together.
+    a pair is an immutable binding of the two ends produced together.
     """
 
     writer: ChannelWriter[TEvent]
     reader: ChannelReader[TEvent]
 
 
-def create_channel[TEvent]() -> ChannelWiring[TEvent]:
+def create_channel[TEvent]() -> ChannelPair[TEvent]:
     """Create a linked read/write pair sharing one queue.
 
     A producer keeps the :class:`ChannelWriter` (the write end) and returns the
@@ -147,7 +159,7 @@ def create_channel[TEvent]() -> ChannelWiring[TEvent]:
         return wiring.reader
     """
     core = _Core[TEvent]()
-    return ChannelWiring(
+    return ChannelPair(
         writer=ChannelWriter[TEvent](core),
         reader=ChannelReader[TEvent](core),
     )

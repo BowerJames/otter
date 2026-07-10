@@ -157,7 +157,7 @@ single-consumer queue split into a read end and a write end sharing one queue:
 - `ChannelReader[TEvent]` — the read end; iterate with `async for`.
 - `ChannelWriter[TEvent]` — the write end; call `push(event)` for every event
   (including the terminal `done`/`error`), then `end()`.
-- `create_channel()` — returns a `ChannelWiring[TEvent]` whose `.writer` is
+- `create_channel()` — returns a `ChannelPair[TEvent]` whose `.writer` is
   the `ChannelWriter` and `.reader` is the `ChannelReader`.
 
 Typed aliases specialize it: `AssistantMessageStream` (and a matching

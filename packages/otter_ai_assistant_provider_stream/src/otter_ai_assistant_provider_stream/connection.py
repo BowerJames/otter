@@ -66,7 +66,7 @@ from otter_ai_chat_completions import (
 from otter_ai_core import (
     AssistantMessage,
     BidirectionalChannelWiring,
-    ChannelWiring,
+    ChannelPair,
     Context,
     ProviderModelOption,
     Usage,
@@ -204,7 +204,7 @@ def _error_stream_fn(
             error_message=f"{type(exc).__name__}: {exc}",
             timestamp=int(time.time() * 1000),
         )
-        wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+        wiring: ChannelPair[AssistantMessageEvent] = create_channel()
         stream = wiring.reader
         writer = wiring.writer
         writer.push(

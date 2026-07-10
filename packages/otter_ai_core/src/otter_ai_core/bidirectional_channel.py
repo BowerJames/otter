@@ -68,8 +68,8 @@ from dataclasses import dataclass
 from typing import Self
 
 from otter_ai_core.channel import (
+    ChannelPair,
     ChannelReader,
-    ChannelWiring,
     ChannelWriter,
     create_channel,
 )
@@ -198,8 +198,8 @@ def create_bidirectional_channel[TClient, TEvent]() -> BidirectionalChannelWirin
         asyncio.create_task(_pump_transport(wiring.backend, ...))
         return wiring.caller
     """
-    inbound: ChannelWiring[TEvent] = create_channel()
-    outbound: ChannelWiring[TClient] = create_channel()
+    inbound: ChannelPair[TEvent] = create_channel()
+    outbound: ChannelPair[TClient] = create_channel()
     return BidirectionalChannelWiring(
         caller=BidirectionalChannel(inbound.reader, outbound.writer),
         backend=BidirectionalChannelBackend(inbound.writer, outbound.reader),
