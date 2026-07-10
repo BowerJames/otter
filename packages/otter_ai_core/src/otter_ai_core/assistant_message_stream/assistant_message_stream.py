@@ -5,24 +5,24 @@ from otter_ai_core.assistant_message_stream.assistant_message_events import (
     AssistantMessageEvent,
 )
 from otter_ai_core.builder import BuilderFn
+from otter_ai_core.channel import ChannelReader, ChannelWriter
 from otter_ai_core.context import Context
-from otter_ai_core.stream import Stream, StreamWriter
 
 # --------------------------------------------------------------------------- #
 # Typed aliases
 # --------------------------------------------------------------------------- #
 #
 # The two plain aliases (``AssistantMessageStream`` / ``AssistantMessageWriter``)
-# are specialized via ``TypeVar``-invariant assignment (``StreamWriter.push``
+# are specialized via ``TypeVar``-invariant assignment (``ChannelWriter.push``
 # accepts ``TEvent``, so the alias is invariant regardless). The two seam
 # aliases use PEP 695 ``type`` statements; ``AssistantMessageStreamFn`` must be
 # defined first because ``AssistantMessageStreamFnBuilder`` references it.
 
 #: Stream of assistant streaming events (single assistant message per stream).
-AssistantMessageStream = Stream[AssistantMessageEvent]
+AssistantMessageStream = ChannelReader[AssistantMessageEvent]
 
 #: Producer handle for an :data:`AssistantMessageStream`.
-AssistantMessageWriter = StreamWriter[AssistantMessageEvent]
+AssistantMessageWriter = ChannelWriter[AssistantMessageEvent]
 
 #: The options-bound producer: a callable that takes a :class:`Context` and an
 #: ``asyncio.Event`` abort signal and returns an :data:`AssistantMessageStream`.

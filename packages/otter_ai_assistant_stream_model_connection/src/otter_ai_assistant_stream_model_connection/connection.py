@@ -68,7 +68,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from otter_ai_core import Context, create_bidirectional_stream
+from otter_ai_core import Context, create_bidirectional_channel
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
@@ -76,9 +76,9 @@ from otter_ai_core.assistant_message_stream import (
     AssistantMessageStream,
     AssistantMessageStreamFn,
 )
-from otter_ai_core.bidirectional_stream import (
-    BidirectionalStreamBackend,
-    BidirectionalStreamWiring,
+from otter_ai_core.bidirectional_channel import (
+    BidirectionalChannelBackend,
+    BidirectionalChannelWiring,
 )
 from otter_ai_core.model_connection import (
     ClientEvent,
@@ -116,8 +116,8 @@ def create_assistant_stream_model_connection(
     """
 
     def connection_fn(context: Context, abort: asyncio.Event) -> ModelConnection:
-        wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
-        wiring = create_bidirectional_stream()
+        wiring: BidirectionalChannelWiring[ClientEvent, ServerEvent]
+        wiring = create_bidirectional_channel()
         task = asyncio.create_task(_run(wiring.backend, stream_fn, context, abort))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
@@ -132,7 +132,7 @@ def create_assistant_stream_model_connection(
 
 
 async def _run(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     stream_fn: AssistantMessageStreamFn,
     context: Context,
     abort: asyncio.Event,
@@ -151,7 +151,7 @@ async def _run(
 
 
 async def _drive(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     stream_fn: AssistantMessageStreamFn,
     context: Context,
     abort: asyncio.Event,
@@ -205,7 +205,7 @@ async def _drive(
 
 
 async def _handle_idle_client_event(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     stream_fn: AssistantMessageStreamFn,
     context: Context,
     abort: asyncio.Event,
@@ -226,7 +226,7 @@ async def _handle_idle_client_event(
 
 
 def _accept_context_item(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     context: Context,
     client_event: ContextItemAddEvent,
 ) -> None:
@@ -251,7 +251,7 @@ def _accept_context_item(
 
 
 async def _run_response(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     stream_fn: AssistantMessageStreamFn,
     context: Context,
     abort: asyncio.Event,

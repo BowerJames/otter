@@ -9,7 +9,7 @@ used to build a single assistant message:
 * the typed aliases :data:`AssistantMessageStream`, :data:`AssistantMessageWriter`,
   and the producer-side seam type :data:`AssistantMessageStreamFnBuilder`
   (plus its options-bound form :data:`AssistantMessageStreamFn`), which
-  specialize the generic stream runtime in :mod:`otter_ai_core.stream`.
+  specialize the generic channel runtime in :mod:`otter_ai_core.channel`.
 
 It is a supported import surface (Strategy A — two-layer facade): callers may
 import from :mod:`otter_ai_core.assistant_message_stream`. The public surface

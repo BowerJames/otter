@@ -1,7 +1,7 @@
 """Shared helpers for otter_ai_agent tests.
 
 Tests drive a :class:`ModelSession` against a bare
-:func:`~otter_ai_core.create_bidirectional_stream` pair whose backend a scripted
+:func:`~otter_ai_core.create_bidirectional_channel` pair whose backend a scripted
 ``run_backend`` task drives -- mirroring ``test_model_session.py``. The script
 responds to the agent's ``ResponseCreate`` with canned server events, echoes
 ``ContextItemAddEvent``\\ s as ``ContextItemAdded``, and turns
@@ -18,13 +18,13 @@ from typing import Any
 
 from otter_ai_core import (
     AssistantMessage,
-    BidirectionalStream,
-    BidirectionalStreamBackend,
-    BidirectionalStreamWiring,
+    BidirectionalChannel,
+    BidirectionalChannelBackend,
+    BidirectionalChannelWiring,
     StopReason,
     Usage,
     UsageCost,
-    create_bidirectional_stream,
+    create_bidirectional_channel,
 )
 from otter_ai_core.context import (
     AssistantContextItem,
@@ -112,16 +112,16 @@ class TurnScript:
 
 
 def new_session() -> tuple[
-    BidirectionalStream[ClientEvent, ServerEvent],
-    BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    BidirectionalChannel[ClientEvent, ServerEvent],
+    BidirectionalChannelBackend[ClientEvent, ServerEvent],
 ]:
-    wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
-    wiring = create_bidirectional_stream()
+    wiring: BidirectionalChannelWiring[ClientEvent, ServerEvent]
+    wiring = create_bidirectional_channel()
     return wiring.caller, wiring.backend
 
 
 async def _emit_turn(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent], script: TurnScript
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent], script: TurnScript
 ) -> None:
     msg = assistant(script.content, script.stop_reason, script.error_message)
     empty = assistant([], script.stop_reason)
@@ -180,7 +180,7 @@ async def _emit_turn(
 
 
 async def run_backend(
-    backend: BidirectionalStreamBackend[ClientEvent, ServerEvent],
+    backend: BidirectionalChannelBackend[ClientEvent, ServerEvent],
     scripts: Sequence[TurnScript],
     received: list[ClientEvent],
 ) -> None:

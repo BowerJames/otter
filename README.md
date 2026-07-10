@@ -76,7 +76,7 @@ implements (routing on `KnownApis` via the caller's `ProviderModelOption`).
 The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,
 API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
-conversation is built from, plus a generic async stream runtime. The
+conversation is built from, plus a generic async channel runtime. The
 assistant-message-stream **event protocol** (`AssistantMessageEvent` family)
 and the **typed stream aliases** (`AssistantMessageStream` /
 `AssistantMessageWriter` / the `AssistantMessageStreamFnBuilder` seam) live
@@ -102,9 +102,9 @@ level.
   streaming-event protocol: the `AssistantMessageEvent` family (a
   discriminated union on `type`), a port of pi-ai's assistant event protocol;
   plus the typed stream aliases. Imported from `otter_ai_core.assistant_message_stream`.
-- [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — a generic async
-  stream runtime (`Stream` / `StreamWriter` / `create_stream`). See
-  [Generic stream runtime](#generic-stream-runtime).
+- [`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) — a generic async
+  channel runtime (`ChannelReader` / `ChannelWriter` / `create_channel`). See
+  [Generic channel runtime](#generic-channel-runtime).
 
 `AssistantMessage` also carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,
@@ -148,17 +148,17 @@ assert restored == context
 replay_ready = normalize_messages([item.message for item in context.items])
 ```
 
-### Generic stream runtime
+### Generic channel runtime
 
-[`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) is a faithful
-Python/`asyncio` port of pi-ai's `EventStream` push-queue. The runtime is split
-into a consumer and a producer sharing one queue:
+[`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) is a faithful
+Python/`asyncio` port of pi-ai's `EventStream` push-queue. The runtime is a
+single-consumer queue split into a read end and a write end sharing one queue:
 
-- `Stream[TEvent]` — the consumer; iterate with `async for`.
-- `StreamWriter[TEvent]` — the producer; call `push(event)` for every event
+- `ChannelReader[TEvent]` — the read end; iterate with `async for`.
+- `ChannelWriter[TEvent]` — the write end; call `push(event)` for every event
   (including the terminal `done`/`error`), then `end()`.
-- `create_stream()` — returns a `StreamWiring[TEvent]` whose `.producer` is
-  the `StreamWriter` and `.consumer` is the `Stream`.
+- `create_channel()` — returns a `ChannelWiring[TEvent]` whose `.writer` is
+  the `ChannelWriter` and `.reader` is the `ChannelReader`.
 
 Typed aliases specialize it: `AssistantMessageStream` (and a matching
 `AssistantMessageWriter`), with `AssistantMessageStreamFnBuilder` as the
@@ -167,20 +167,20 @@ producer-side seam type — all imported from
 is **no `result()`** — consumers read the terminal `done`/`error` event
 directly.
 
-`Stream` and `StreamWriter` are runtime objects and are **not** JSON-serializable
+`ChannelReader` and `ChannelWriter` are runtime objects and are **not** JSON-serializable
 (unlike `Context`); the serializable data model is unchanged.
 
 ```python
 import asyncio
 
-from otter_ai_core import AssistantMessage, create_stream
+from otter_ai_core import AssistantMessage, create_channel
 from otter_ai_core.assistant_message_stream import AssistantDoneEvent
 
 
 async def main() -> None:
-    wiring = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring = create_channel()
+    reader = wiring.reader
+    writer = wiring.writer
 
     async def produce() -> None:
         msg = AssistantMessage(
@@ -200,7 +200,7 @@ async def main() -> None:
         writer.end()
 
     task = asyncio.create_task(produce())
-    async for event in stream:  # the terminal "done" event is the last one yielded
+    async for event in reader:  # the terminal "done" event is the last one yielded
         ...
     await task
 ```

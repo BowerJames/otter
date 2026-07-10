@@ -37,11 +37,11 @@ import json
 from typing import Any
 
 from otter_ai_core import (
-    BidirectionalStreamWiring,
+    BidirectionalChannelWiring,
     Context,
-    create_bidirectional_stream,
+    create_bidirectional_channel,
 )
-from otter_ai_core.bidirectional_stream import BidirectionalStreamBackend
+from otter_ai_core.bidirectional_channel import BidirectionalChannelBackend
 from otter_ai_core.model_connection import (
     ClientEvent,
     ModelConnection,
@@ -86,8 +86,8 @@ def create_realtime_model_connection(
     """
 
     def connection_fn(context: Context, abort: asyncio.Event) -> ModelConnection:
-        wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
-        wiring = create_bidirectional_stream()
+        wiring: BidirectionalChannelWiring[ClientEvent, ServerEvent]
+        wiring = create_bidirectional_channel()
         task = asyncio.create_task(_run(wiring.backend, options, context, abort))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
@@ -102,7 +102,7 @@ def create_realtime_model_connection(
 
 
 async def _run(
-    backend: BidirectionalStreamBackend[Any, Any],
+    backend: BidirectionalChannelBackend[Any, Any],
     options: RealtimeModelOptions,
     context: Context,
     abort: asyncio.Event,
@@ -141,7 +141,7 @@ async def _run(
 
 
 async def _drive(
-    backend: BidirectionalStreamBackend[Any, Any],
+    backend: BidirectionalChannelBackend[Any, Any],
     ws: Any,
     options: RealtimeModelOptions,
     context: Context,

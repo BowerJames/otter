@@ -1,23 +1,23 @@
-"""Otter AI — LLM context data model and generic stream/bidirectional-stream runtimes.
+"""Otter AI — LLM context data model and generic channel runtimes.
 
 This package provides:
 
 * a Pydantic v2 model for representing LLM conversation context (``Context``,
   messages, content blocks, tools, usage);
-* a provider-agnostic async stream runtime (``Stream`` / ``StreamWriter`` /
-  ``create_stream``); and
-* a provider-agnostic async bidirectional-stream runtime
-  (``BidirectionalStream`` / ``BidirectionalStreamBackend`` /
-  ``create_bidirectional_stream``), the bidirectional peer of the stream
-  runtime for APIs that maintain a live connection (Realtime / Responses).
+* a provider-agnostic async channel runtime (``ChannelReader`` /
+  ``ChannelWriter`` / ``create_channel``); and
+* a provider-agnostic async bidirectional-channel runtime
+  (``BidirectionalChannel`` / ``BidirectionalChannelBackend`` /
+  ``create_bidirectional_channel``), the bidirectional peer of the one-way
+  channel runtime for APIs that maintain a live connection (Realtime / Responses).
 
 The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
 family) and the **typed stream aliases** (``AssistantMessageStream`` /
 ``AssistantMessageWriter`` / the ``AssistantMessageStreamFnBuilder`` seam) live under
 the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
-top level. The ``BidirectionalStreamFn`` seam type — the bidirectional peer
+top level. The ``BidirectionalChannelFn`` seam type — the bidirectional peer
 of ``AssistantMessageStreamFnBuilder`` — is defined alongside the
-bidirectional-stream runtime in :mod:`otter_ai_core.bidirectional_stream`.
+bidirectional-channel runtime in :mod:`otter_ai_core.bidirectional_channel`.
 The generic :data:`BuilderFn` alias — the common
 options-binding shape that both producer seams specialize — lives in
 :mod:`otter_ai_core.builder`.
@@ -28,14 +28,20 @@ It defines **no LLMs, providers, APIs, transports, API registry, or
 
 from __future__ import annotations
 
-from otter_ai_core.bidirectional_stream import (
-    BidirectionalStream,
-    BidirectionalStreamBackend,
-    BidirectionalStreamFn,
-    BidirectionalStreamWiring,
-    create_bidirectional_stream,
+from otter_ai_core.bidirectional_channel import (
+    BidirectionalChannel,
+    BidirectionalChannelBackend,
+    BidirectionalChannelFn,
+    BidirectionalChannelWiring,
+    create_bidirectional_channel,
 )
 from otter_ai_core.builder import BuilderFn
+from otter_ai_core.channel import (
+    ChannelReader,
+    ChannelWiring,
+    ChannelWriter,
+    create_channel,
+)
 from otter_ai_core.context import (
     AssistantContent,
     AssistantContextItem,
@@ -70,12 +76,6 @@ from otter_ai_core.provider_api_model_options import (
     KnownProviders,
     ProviderModelOption,
     ThinkingLevel,
-)
-from otter_ai_core.stream import (
-    Stream,
-    StreamWiring,
-    StreamWriter,
-    create_stream,
 )
 from otter_ai_core.tools import Tool, tool_from_pydantic
 
@@ -126,15 +126,15 @@ __all__ = [
     "KnownProviders",
     "ProviderModelOption",
     "ThinkingLevel",
-    # stream runtime
-    "Stream",
-    "StreamWiring",
-    "StreamWriter",
-    "create_stream",
-    # bidirectional-stream runtime
-    "BidirectionalStream",
-    "BidirectionalStreamBackend",
-    "BidirectionalStreamFn",
-    "BidirectionalStreamWiring",
-    "create_bidirectional_stream",
+    # channel runtime (one-way)
+    "ChannelReader",
+    "ChannelWiring",
+    "ChannelWriter",
+    "create_channel",
+    # channel runtime (bidirectional)
+    "BidirectionalChannel",
+    "BidirectionalChannelBackend",
+    "BidirectionalChannelFn",
+    "BidirectionalChannelWiring",
+    "create_bidirectional_channel",
 ]

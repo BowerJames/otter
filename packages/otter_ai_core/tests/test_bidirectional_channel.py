@@ -1,40 +1,40 @@
-"""Generic async bidirectional-stream runtime: flow, termination, lifecycle."""
+"""Generic async bidirectional-channel runtime: flow, termination, lifecycle."""
 
 from __future__ import annotations
 
 import asyncio
 
 from otter_ai_core import (
-    BidirectionalStream,
-    BidirectionalStreamBackend,
-    BidirectionalStreamWiring,
+    BidirectionalChannel,
+    BidirectionalChannelBackend,
+    BidirectionalChannelWiring,
     Context,
-    create_bidirectional_stream,
+    create_bidirectional_channel,
 )
-from otter_ai_core.bidirectional_stream import BidirectionalStreamFn
+from otter_ai_core.bidirectional_channel import BidirectionalChannelFn
 
 
 def _new() -> tuple[
-    BidirectionalStream[str, int], BidirectionalStreamBackend[str, int]
+    BidirectionalChannel[str, int], BidirectionalChannelBackend[str, int]
 ]:
     """A typed caller/backend pair for the common (str, int) event shapes.
 
-    Locals are annotated so ``create_bidirectional_stream()`` is called bare
+    Locals are annotated so ``create_bidirectional_channel()`` is called bare
     (PEP 695 generic functions are not subscriptable at runtime), mirroring
-    ``test_stream.py``'s use of ``create_stream()``.
+    ``test_channel.py``'s use of ``create_channel()``.
     """
-    wiring: BidirectionalStreamWiring[str, int]
-    wiring = create_bidirectional_stream()
+    wiring: BidirectionalChannelWiring[str, int]
+    wiring = create_bidirectional_channel()
     return wiring.caller, wiring.backend
 
 
-async def _drain(backend: BidirectionalStreamBackend[str, int]) -> list[str]:
+async def _drain(backend: BidirectionalChannelBackend[str, int]) -> list[str]:
     """Collect every outbound client event the caller sent, in order."""
     return [event async for event in backend]
 
 
 async def test_inbound_events_flow_to_caller_in_order() -> None:
-    """``backend.push`` events are observed by ``async for`` over the stream."""
+    """``backend.push`` events are observed by ``async for`` over the channel."""
     conn, backend = _new()
     for event in (1, 2, 3):
         backend.push(event)
@@ -99,7 +99,7 @@ async def test_backend_end_terminates_caller_iteration() -> None:
 
 
 async def test_send_after_close_is_noop() -> None:
-    """Sends after ``close`` are dropped (delegates to ``StreamWriter.push``)."""
+    """Sends after ``close`` are dropped (delegates to ``ChannelWriter.push``)."""
     conn, backend = _new()
     conn.send("kept")
     conn.close()
@@ -166,34 +166,34 @@ async def test_bidirectional_concurrent() -> None:
     assert received == [1, 2]
 
 
-async def test_create_bidirectional_stream_returns_paired_ends() -> None:
+async def test_create_bidirectional_channel_returns_paired_ends() -> None:
     """The wiring's two ends are the cross-wired caller/backend handles."""
-    wiring: BidirectionalStreamWiring[str, int]
-    wiring = create_bidirectional_stream()
-    assert isinstance(wiring.caller, BidirectionalStream)
-    assert isinstance(wiring.backend, BidirectionalStreamBackend)
+    wiring: BidirectionalChannelWiring[str, int]
+    wiring = create_bidirectional_channel()
+    assert isinstance(wiring.caller, BidirectionalChannel)
+    assert isinstance(wiring.backend, BidirectionalChannelBackend)
 
 
-def test_bidirectional_stream_fn_accepts_conforming_callable() -> None:
-    """``BidirectionalStreamFn`` is the bidirectional peer seam type.
+def test_bidirectional_channel_fn_accepts_conforming_callable() -> None:
+    """``BidirectionalChannelFn`` is the bidirectional peer seam type.
 
     mypy is the real enforcer; this checks the alias is importable and a
     trivially-conforming callable binds under an annotation referencing it.
-    ``BidirectionalStreamFn`` is the *options-bound* producer
-    (``Callable[[Context, asyncio.Event], BidirectionalStream[TClient, TEvent]]``);
+    ``BidirectionalChannelFn`` is the *options-bound* producer
+    (``Callable[[Context, asyncio.Event], BidirectionalChannel[TClient, TEvent]]``);
     its builder peer is :data:`ModelConnectionFnBuilder`.
     """
-    wiring: BidirectionalStreamWiring[str, int]
-    wiring = create_bidirectional_stream()
+    wiring: BidirectionalChannelWiring[str, int]
+    wiring = create_bidirectional_channel()
     conn = wiring.caller
 
     def make_stream(
         context: Context, abort: asyncio.Event
-    ) -> BidirectionalStream[str, int]:
-        inner: BidirectionalStreamWiring[str, int]
-        inner = create_bidirectional_stream()
+    ) -> BidirectionalChannel[str, int]:
+        inner: BidirectionalChannelWiring[str, int]
+        inner = create_bidirectional_channel()
         return inner.caller
 
-    fn: BidirectionalStreamFn[str, int] = make_stream
+    fn: BidirectionalChannelFn[str, int] = make_stream
     assert callable(fn)
-    assert isinstance(conn, BidirectionalStream)
+    assert isinstance(conn, BidirectionalChannel)
