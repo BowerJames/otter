@@ -21,7 +21,7 @@ from otter_ai_core import (
     UsageCost,
     UserMessage,
     context_item,
-    create_stream,
+    create_channel,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
@@ -281,9 +281,9 @@ class ScriptedStreamFn:
         self, context: Context, abort: asyncio.Event
     ) -> AssistantMessageStream:
         self.started.append(context)
-        wiring = _create_stream()
-        stream: AssistantMessageStream = wiring.consumer
-        writer = wiring.producer
+        wiring = _create_channel()
+        stream: AssistantMessageStream = wiring.reader
+        writer = wiring.writer
 
         async def produce() -> None:
             while True:
@@ -305,8 +305,8 @@ class ScriptedStreamFn:
 
 
 # Local alias avoids shadowing the builder import name in tests.
-def _create_stream() -> Any:
-    return create_stream()
+def _create_channel() -> Any:
+    return create_channel()
 
 
 async def _suppress_task(task: asyncio.Task[Any]) -> None:

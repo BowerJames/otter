@@ -1,4 +1,4 @@
-"""Generic async stream runtime: ordering, termination, idempotency, aliases."""
+"""Generic async channel runtime: ordering, termination, idempotency, aliases."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import pytest
 
 from otter_ai_core import (
     AssistantMessage,
-    Stream,
-    StreamWiring,
-    StreamWriter,
+    ChannelReader,
+    ChannelWiring,
+    ChannelWriter,
     Usage,
     UsageCost,
-    create_stream,
+    create_channel,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
@@ -75,14 +75,14 @@ def _assistant_events() -> list[AssistantMessageEvent]:
     ]
 
 
-async def _collect[TEvent](stream: Stream[TEvent]) -> list[TEvent]:
-    return [event async for event in stream]
+async def _collect[TEvent](reader: ChannelReader[TEvent]) -> list[TEvent]:
+    return [event async for event in reader]
 
 
 async def test_events_yielded_in_order_then_terminate() -> None:
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     events = _assistant_events()
     for event in events:
         writer.push(event)
@@ -96,9 +96,9 @@ async def test_events_yielded_in_order_then_terminate() -> None:
 
 async def test_terminal_event_reachable_before_iteration_stops() -> None:
     """The ``done`` event is yielded (its message reachable) before iteration ends."""
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     events = _assistant_events()
     for event in events:
         writer.push(event)
@@ -111,17 +111,17 @@ async def test_terminal_event_reachable_before_iteration_stops() -> None:
 
 
 async def test_end_with_no_pushes_yields_nothing() -> None:
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     writer.end()
     assert await _collect(stream) == []
 
 
 async def test_push_after_end_is_noop() -> None:
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     events = _assistant_events()
     writer.end()
     for event in events:
@@ -132,9 +132,9 @@ async def test_push_after_end_is_noop() -> None:
 
 async def test_end_is_idempotent() -> None:
     """Calling ``end`` twice does not enqueue an extra sentinel."""
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     events = _assistant_events()
     for event in events:
         writer.push(event)
@@ -147,9 +147,9 @@ async def test_end_is_idempotent() -> None:
 
 async def test_concurrent_producer_consumer() -> None:
     """Producer pushes from a task while consumer drains concurrently."""
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    stream = wiring.consumer
-    writer = wiring.producer
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    stream = wiring.reader
+    writer = wiring.writer
     events = _assistant_events()
 
     async def produce() -> None:
@@ -165,34 +165,34 @@ async def test_concurrent_producer_consumer() -> None:
     assert received == events
 
 
-def test_type_aliases_are_stream_specializations() -> None:
-    """The assistant alias is usable via an annotated ``create_stream()`` unpack."""
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    a_stream: AssistantMessageStream = wiring.consumer
-    a_writer: AssistantMessageWriter = wiring.producer
-    assert isinstance(a_stream, Stream)
-    assert isinstance(a_writer, StreamWriter)
+def test_type_aliases_are_channel_specializations() -> None:
+    """The assistant alias is usable via an annotated ``create_channel()`` unpack."""
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    a_stream: AssistantMessageStream = wiring.reader
+    a_writer: AssistantMessageWriter = wiring.writer
+    assert isinstance(a_stream, ChannelReader)
+    assert isinstance(a_writer, ChannelWriter)
 
 
-def test_create_stream_returns_stream_wiring_with_named_fields() -> None:
-    """``create_stream()`` returns a frozen ``StreamWiring`` (producer, consumer).
+def test_create_channel_returns_channel_wiring_with_named_fields() -> None:
+    """``create_channel()`` returns a frozen ``ChannelWiring`` (writer, reader).
 
-    Field order is ``producer`` (the ``StreamWriter``) then ``consumer`` (the
-    ``Stream``), and the wiring is frozen. Re-exported from the top-level
+    Field order is ``writer`` (the ``ChannelWriter``) then ``reader`` (the
+    ``ChannelReader``), and the wiring is frozen. Re-exported from the top-level
     ``otter_ai_core`` namespace.
     """
-    from otter_ai_core import StreamWiring as TopLevelStreamWiring
+    from otter_ai_core import ChannelWiring as TopLevelChannelWiring
 
-    wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-    assert isinstance(wiring, StreamWiring)
-    assert TopLevelStreamWiring is StreamWiring  # re-exported at top level
-    # Field order: producer first, consumer second.
-    assert [f.name for f in fields(wiring)] == ["producer", "consumer"]
-    assert isinstance(wiring.producer, StreamWriter)
-    assert isinstance(wiring.consumer, Stream)
+    wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+    assert isinstance(wiring, ChannelWiring)
+    assert TopLevelChannelWiring is ChannelWiring  # re-exported at top level
+    # Field order: writer first, reader second.
+    assert [f.name for f in fields(wiring)] == ["writer", "reader"]
+    assert isinstance(wiring.writer, ChannelWriter)
+    assert isinstance(wiring.reader, ChannelReader)
     # Frozen: attribute assignment is rejected.
     with pytest.raises(FrozenInstanceError):
-        wiring.consumer = wiring.consumer  # type: ignore[misc]
+        wiring.reader = wiring.reader  # type: ignore[misc]
 
 
 def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> None:
@@ -214,8 +214,8 @@ def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> No
 
         def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
             del context, abort
-            wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-            stream: AssistantMessageStream = wiring.consumer
+            wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+            stream: AssistantMessageStream = wiring.reader
             return stream
 
         return stream_fn

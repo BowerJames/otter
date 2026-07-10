@@ -61,15 +61,15 @@ from otter_ai_chat_completions.options import ChatCompletionsModelOptions
 from otter_ai_core import (
     AssistantContent,
     AssistantMessage,
+    ChannelWiring,
     Context,
     StopReason,
-    StreamWiring,
     TextContent,
     ThinkingContent,
     ToolCall,
     Usage,
     UsageCost,
-    create_stream,
+    create_channel,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
@@ -136,9 +136,9 @@ def create_chat_completions_assistant_message_stream(
     """
 
     def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
-        wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-        stream = wiring.consumer
-        writer = wiring.producer
+        wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+        stream = wiring.reader
+        writer = wiring.writer
         task = asyncio.create_task(_run(writer, options, context, abort))
         _producer_tasks.add(task)
         task.add_done_callback(_producer_tasks.discard)

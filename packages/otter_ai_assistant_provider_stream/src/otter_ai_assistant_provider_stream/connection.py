@@ -65,14 +65,14 @@ from otter_ai_chat_completions import (
 )
 from otter_ai_core import (
     AssistantMessage,
-    BidirectionalStreamWiring,
+    BidirectionalChannelWiring,
+    ChannelWiring,
     Context,
     ProviderModelOption,
-    StreamWiring,
     Usage,
     UsageCost,
-    create_bidirectional_stream,
-    create_stream,
+    create_bidirectional_channel,
+    create_channel,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantErrorEvent,
@@ -204,9 +204,9 @@ def _error_stream_fn(
             error_message=f"{type(exc).__name__}: {exc}",
             timestamp=int(time.time() * 1000),
         )
-        wiring: StreamWiring[AssistantMessageEvent] = create_stream()
-        stream = wiring.consumer
-        writer = wiring.producer
+        wiring: ChannelWiring[AssistantMessageEvent] = create_channel()
+        stream = wiring.reader
+        writer = wiring.writer
         writer.push(
             AssistantErrorEvent(
                 role="assistant",
@@ -283,8 +283,8 @@ def _error_connection(message: str) -> ModelConnection:
     the inbound writer ended, so the caller iterating the connection observes
     exactly the error and then completion.
     """
-    wiring: BidirectionalStreamWiring[ClientEvent, ServerEvent]
-    wiring = create_bidirectional_stream()
+    wiring: BidirectionalChannelWiring[ClientEvent, ServerEvent]
+    wiring = create_bidirectional_channel()
     wiring.backend.push(
         ConnectionErrorEvent(
             type="connection.error",
