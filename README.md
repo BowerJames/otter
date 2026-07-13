@@ -1,6 +1,6 @@
 # otter
 
-Otter AI — Python monorepo.
+Otter AI — Python monorepo (a [uv](https://docs.astral.sh/uv/) workspace).
 
 ## Prerequisites
 
@@ -27,89 +27,40 @@ Packages live under [`packages/`](./packages):
 
 ```
 packages/
-├── otter_ai_agent/      # the otter-ai-agent package (agent loop over a ModelSession)
-├── otter_ai_core/       # the otter-ai-core package (import as `otter_ai_core`)
-└── …                    # provider/transport packages (chat-completions, realtime, …)
+└── otter_ai_core/   # the otter-ai-core package (import as `otter_ai_core`)
 ```
 
-The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/).
+The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
+(`members = ["packages/*"]`), so additional packages can be dropped under
+`packages/` without further configuration.
 
-## `otter-ai-agent`
-
-`otter-ai-agent` is the **turn / tool-execution layer** that sits above
-`otter-ai-core`'s reactive [`ModelSession`](./packages/otter_ai_core/src/otter_ai_core/model_session/model_session.py).
-It ports the agent-loop semantics of pi's `@earendil-works/pi-agent-core` (turn
-loop, sequential/parallel tool execution, steering/follow-up queues,
-`before_tool_call` / `after_tool_call` hooks) onto otter's **reactive** session
-model — and runs unchanged over a Realtime WebSocket *or* a wrapped
-chat-completions stream, because it depends only on the session abstraction.
-
-- [`Agent`](./packages/otter_ai_agent/src/otter_ai_agent/agent.py) — the agent:
-a per-run coroutine driver implements the turn FSM (request → await terminal →
-execute tools → loop), subscribing to the session bus internally. The
-per-turn "await one response" coupling is a private driver detail; the session
-stays fully reactive.
-- [`AgentTool`](./packages/otter_ai_agent/src/otter_ai_agent/types.py) — pairs a
-declarative [`Tool`](./packages/otter_ai_core/src/otter_ai_core/tools.py) (the
-schema sent to the model) with an async `execute`; `before_tool_call` /
-`after_tool_call` / `should_stop_after_turn` / `prepare_next_turn` hooks are
-supported (`prepare_next_turn` is context-view-only — a session is bound to one
-model at connect).
-- [`AgentEvent`](./packages/otter_ai_agent/src/otter_ai_agent/events.py) — a
-separate event family + `AgentBus` (the agent's own vocabulary, distinct from
-the session's reduced `SessionEvent`s). Consume via `agent.on(...)` (persistent
-subscriber), `agent.stream(...)` (`async for`), or `await agent.run(...)`.
-All packages and dev dependencies share a single `.venv` at the root.
-
-## `otter-ai-core` context model
+## `otter-ai-core`
 
 `otter-ai-core` is the **driving package** of the monorepo: it owns the core
-types and data models that the other packages (`otter-ai-chat-completions`,
-`otter-ai-assistant-provider-stream`) build on — for example, its
-`AssistantMessageStreamFnBuilder` (under the `assistant_message_stream`
-subpackage) defines the core producer-seam type that the Chat Completions
-seam implements, and its `ModelConnectionFnBuilder` (under the
-`model_connection` subpackage) defines the connection-side seam that
-`otter-ai-assistant-provider-stream`'s `create_model_connection_by_provider`
-implements (routing on `KnownApis` via the caller's `ProviderModelOption`).
+types and data models a conversation is built from, plus the generic async
+streaming runtimes and the reactive [`ModelSession`](./packages/otter_ai_core/src/otter_ai_core/model_session/model_session.py)
+built on top of them. It defines **no LLMs, providers, APIs, transports, API
+registry, or `stream()` dispatch** — only the Pydantic v2 data structures, a
+generic async channel runtime, an abortable stream facade layered over it, and
+the seam types a provider/transport package will implement.
 
-The `otter-ai-core` package models LLM conversation context and the streaming
-runtime used to build it. It defines **no LLMs, providers, APIs, transports,
-API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
-conversation is built from, plus a generic async channel runtime and an
-abortable stream facade layered over it. The
-assistant-message-stream **event protocol** (`AssistantMessageEvent` family)
-and the **typed stream aliases** (`AssistantMessageStreamClient` /
-`AssistantMessageStreamBackend` / the `AssistantMessageStreamFnBuilder` seam) live
-under the `otter_ai_core.assistant_message_stream` subpackage, not the top
-level.
+### Context model
 
-- [`Context`](./packages/otter_ai_core/src/otter_ai_core/context.py) — the top-level
+- [`Context`](./packages/otter_ai_core/src/otter_ai_core/context/context.py) — the top-level
   conversation (`system_prompt`, `items`, `tools`), JSON-serializable so a
   context can be persisted and replayed elsewhere.
-- [`ContextItem`](./packages/otter_ai_core/src/otter_ai_core/context_item.py) — the
+- [`ContextItem`](./packages/otter_ai_core/src/otter_ai_core/context/context_item.py) — the
   `{id, message}` wrapper layer between `Context` and `Message`. The `id` is
   caller/provider-supplied; it is **not** generated inside assistant message
-  streams (e.g. Chat Completions).
-- [`Message`](./packages/otter_ai_core/src/otter_ai_core/messages.py) — a discriminated
+  streams.
+- [`Message`](./packages/otter_ai_core/src/otter_ai_core/context/messages.py) — a discriminated
   union of `UserMessage`, `AssistantMessage`, and `ToolResultMessage`.
-- Content blocks in `content.py`: `TextContent`, `ImageContent`,
-  `ThinkingContent`, `ToolCall`.
+- Content blocks in [`content.py`](./packages/otter_ai_core/src/otter_ai_core/context/content.py):
+  `TextContent`, `ImageContent`, `ThinkingContent`, `ToolCall`.
 - [`Tool`](./packages/otter_ai_core/src/otter_ai_core/tools.py) — tool definitions whose
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
-- [`Usage`](./packages/otter_ai_core/src/otter_ai_core/usage.py) and diagnostics for
+- [`Usage`](./packages/otter_ai_core/src/otter_ai_core/context/usage.py) and diagnostics for
   per-turn accounting.
-- [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream/) — the
-  streaming-event protocol: the `AssistantMessageEvent` family (a
-  discriminated union on `type`), a port of pi-ai's assistant event protocol;
-  plus the typed stream aliases. Imported from `otter_ai_core.assistant_message_stream`.
-- [`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) — a generic async
-  channel runtime (`ChannelReader` / `ChannelWriter` / `create_channel`). See
-  [Generic channel runtime](#generic-channel-runtime).
-- [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — an
-  **abortable stream facade** over the channel (`StreamClient` /
-  `StreamBackend` / `create_stream`): the consumer iterates and calls
-  `abort()`, the producer pushes and observes the shared `abort_signal`.
 
 `AssistantMessage` also carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,
@@ -153,6 +104,14 @@ assert restored == context
 replay_ready = normalize_messages([item.message for item in context.items])
 ```
 
+### Assistant message stream
+
+The [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream/)
+subpackage defines the streaming-event **protocol** (`AssistantMessageEvent`
+family) and the **typed stream aliases** (`AssistantMessageStreamClient` /
+`AssistantMessageStreamBackend` / the `AssistantMessageStreamFnBuilder` seam).
+Import from `otter_ai_core.assistant_message_stream`.
+
 ### Generic channel runtime
 
 [`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) is a faithful
@@ -170,18 +129,36 @@ Layered over the channel is an **abortable stream facade**
 `StreamClient[TEvent]` (iterate with `async for` / `await anext()`, and call
 `abort()` to signal the producer) paired with `StreamBackend[TEvent]` (push /
 end, and observe `abort_signal`), sharing one queue and one `asyncio.Event`;
-`create_stream()` returns a `StreamPair`. The typed aliases specialize the
-facade: `AssistantMessageStreamClient` (and a matching
-`AssistantMessageStreamBackend`), with `AssistantMessageStreamFnBuilder` as
-the producer-side seam type — all imported from
-`otter_ai_core.assistant_message_stream`. The abort signal is **intrinsic to
+`create_stream()` returns a `StreamPair`. The abort signal is **intrinsic to
 the stream** (not a function argument): the producer creates it with
 `create_stream()`, the consumer drives it with `abort()`. There
 is **no `result()`** — consumers read the terminal `done`/`error` event
 directly.
 
-`ChannelReader` and `ChannelWriter` are runtime objects and are **not** JSON-serializable
-(unlike `Context`); the serializable data model is unchanged.
+`ChannelReader`, `ChannelWriter`, `StreamClient`, and `StreamBackend` are
+runtime objects and are **not** JSON-serializable (unlike `Context`); the
+serializable data model is unchanged.
+
+### Other core subpackages
+
+- [`model_session/`](./packages/otter_ai_core/src/otter_ai_core/model_session/) — the reactive
+  `ModelSession`: a state machine over a `ModelConnection` that reduces server
+  events into a smaller `SessionEvent` family and publishes them on a bus.
+  Drive with `create_response()` / `add_context_item()` / `abort_response()` /
+  `close()`; subscribe with `on(...)`.
+- [`model_connection/`](./packages/otter_ai_core/src/otter_ai_core/model_connection/) — the
+  bidirectional `ModelConnection` / `ModelConnectionFn` types
+  (`BidirectionalChannel[ClientEvent, ServerEvent]`) and the
+  `ModelConnectionFnBuilder` seam.
+- [`bidirectional_channel.py`](./packages/otter_ai_core/src/otter_ai_core/bidirectional_channel.py)
+  / [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the bidirectional
+  channel pair and the generic `BuilderFn[TOptions, TResult]` alias both
+  producer seams fold onto.
+- [`hook.py`](./packages/otter_ai_core/src/otter_ai_core/hook.py) — the generic async
+  `Hook[TEvent, TResponse]` alias.
+- [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —
+  pure-data enumerations/types (`KnownApis`, `KnownProviders`, `ThinkingLevel`)
+  a dispatch layer keys on.
 
 ```python
 import asyncio
@@ -225,8 +202,8 @@ Otter defines the runtime and types only — **no providers, no registry, no
 
 | Tool        | Purpose                 | Config                         |
 | ----------- | ----------------------- | ------------------------------ |
-| [ruff]      | Linting + formatting    | `[tool.ruff]` in `pyproject.toml` |
-| [mypy]      | Static type checking    | `[tool.mypy]` in `pyproject.toml` |
+| [ruff]      | Linting + formatting    | `[tool.ruff]` in `pyproject.toml`  |
+| [mypy]      | Static type checking    | `[tool.mypy]` in `pyproject.toml`  |
 | [pytest]    | Testing (incl. `async`) | `[tool.pytest.ini_options]`    |
 
 [ruff]: https://docs.astral.sh/ruff/
