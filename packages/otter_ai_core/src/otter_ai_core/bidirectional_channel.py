@@ -37,7 +37,7 @@ termination sentinel — there is no separate teardown handshake:
   lifecycle (as the chat-completions producer owns its httpx client), encodes
   the failure however its typed event union allows, then ends the inbound
   writer. Because ``TEvent`` is generic, *core* cannot prescribe an
-  error-event shape; a typed specialisation (e.g. ``model_connection``)
+  error-event shape; a typed specialisation in a specialising package
   supplies it.
 
 ``close`` and ``send`` are synchronous (they enqueue / signal, matching
@@ -51,8 +51,7 @@ Scope
 Otter defines **no transports, providers, API registry, or dispatch** here —
 only the generic bidirectional runtime and the :data:`BidirectionalChannelFn`
 seam type. A typed ``BidirectionalChannel[ClientEvent, ServerEvent]`` alias and
-a typed seam alias belong in the specialising subpackage (e.g.
-``model_connection``), mirroring how
+a typed seam alias belong in a specialising subpackage, mirroring how
 :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
 specialises :class:`~otter_ai_core.stream.StreamClient` (the abortable
 facade layered over :class:`~otter_ai_core.channel.ChannelReader`). Like the
@@ -219,8 +218,8 @@ def create_bidirectional_channel[TClient, TEvent]() -> BidirectionalChannelWirin
 #: and the third an ``asyncio.Event`` cooperative-cancel signal.
 #:
 #: ``TClient`` and ``TEvent`` are the channel's outbound and inbound event
-#: types. A typed specialisation fixes them (e.g. to ``ClientEvent`` /
-#: ``ServerEvent`` in ``model_connection``); this generic alias is the
+#: types. A typed specialisation fixes them (e.g. to a provider's client/server
+#: event types in a specialising package); this generic alias is the
 #: contract a provider package and a dispatch layer will agree on.
 type BidirectionalChannelFn[TClient, TEvent] = Callable[
     [Context, asyncio.Event], BidirectionalChannel[TClient, TEvent]

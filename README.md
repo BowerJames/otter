@@ -38,11 +38,10 @@ The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concep
 
 `otter-ai-core` is the **driving package** of the monorepo: it owns the core
 types and data models a conversation is built from, plus the generic async
-streaming runtimes and the reactive [`ModelSession`](./packages/otter_ai_core/src/otter_ai_core/model_session/model_session.py)
-built on top of them. It defines **no LLMs, providers, APIs, transports, API
-registry, or `stream()` dispatch** — only the Pydantic v2 data structures, a
-generic async channel runtime, an abortable stream facade layered over it, and
-the seam types a provider/transport package will implement.
+streaming runtimes built on top of them. It defines **no LLMs, providers,
+APIs, transports, API registry, or `stream()` dispatch** — only the Pydantic v2
+data structures, a generic async channel runtime, an abortable stream facade
+layered over it, and the seam types a provider/transport package will implement.
 
 ### Context model
 
@@ -141,15 +140,6 @@ serializable data model is unchanged.
 
 ### Other core subpackages
 
-- [`model_session/`](./packages/otter_ai_core/src/otter_ai_core/model_session/) — the reactive
-  `ModelSession`: a state machine over a `ModelConnection` that reduces server
-  events into a smaller `SessionEvent` family and publishes them on a bus.
-  Drive with `create_response()` / `add_context_item()` / `abort_response()` /
-  `close()`; subscribe with `on(...)`.
-- [`model_connection/`](./packages/otter_ai_core/src/otter_ai_core/model_connection/) — the
-  bidirectional `ModelConnection` / `ModelConnectionFn` types
-  (`BidirectionalChannel[ClientEvent, ServerEvent]`) and the
-  `ModelConnectionFnBuilder` seam.
 - [`bidirectional_channel.py`](./packages/otter_ai_core/src/otter_ai_core/bidirectional_channel.py)
   / [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the bidirectional
   channel pair and the generic `BuilderFn[TOptions, TResult]` alias both
