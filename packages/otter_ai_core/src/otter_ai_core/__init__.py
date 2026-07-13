@@ -68,7 +68,6 @@ from otter_ai_core.context import (
     UserContextItem,
     UserMessage,
     context_item,
-    tool_from_pydantic,
 )
 from otter_ai_core.hook import Hook
 from otter_ai_core.normalize import (
@@ -113,7 +112,6 @@ __all__ = [
     "UserContent",
     # tools
     "Tool",
-    "tool_from_pydantic",
     # messages
     "AssistantMessage",
     "Message",
