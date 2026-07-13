@@ -13,7 +13,7 @@ provider, registry, or dispatch.
 Why
 ---
 A provider that can already produce an
-:data:`~otter_ai_core.assistant_message_stream.AssistantMessageStream` per turn
+:data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient` per turn
 can be surfaced through the *connection* protocol (the bidirectional peer of
 the stream protocol) without speaking a realtime wire format. Callers iterate
 one inbound :data:`~otter_ai_core.model_connection.ServerEvent` stream and send
@@ -34,7 +34,7 @@ Driver semantics
 ----------------
 * **Request-driven / multi-turn.** The backend idles, draining client events.
   On a :class:`~otter_ai_core.model_connection.ResponseCreate` it invokes
-  ``stream_fn(context, per_response_abort)`` once for that turn and forwards
+  ``stream_fn(context)`` once for that turn and forwards
   the translated :class:`~otter_ai_core.model_connection.ServerEvent` s. A
   subsequent ``ResponseCreate`` (after the turn ends) starts the next
   generation. Concurrent responses are not supported (v1).
@@ -47,10 +47,11 @@ Driver semantics
   (see :mod:`._translate`).
 * **Per-response abort.** A client
   :class:`~otter_ai_core.model_connection.AbortResponseEvent` aborts **only**
-  the in-flight response (via a fresh ``per_response_abort``
-  :class:`asyncio.Event` passed into ``stream_fn``); the connection stays open
-  for further generations. The producer is contractually expected to honour the
-  abort signal and terminate the stream with an aborted terminal event.
+  the in-flight response: the driver calls
+  :meth:`~otter_ai_core.stream.StreamClient.abort` on the per-turn stream
+  (created by :func:`~otter_ai_core.create_stream`), which the producer
+  honours via :attr:`~otter_ai_core.stream.StreamBackend.abort_signal`. The
+  connection stays open for further generations.
 * **Connection cancel.** The producer's required ``abort`` argument is a
   *connection*-level cancel: setting it aborts any in-flight response and ends
   the connection gracefully (**no** ``ConnectionErrorEvent``). Caller
@@ -73,7 +74,7 @@ from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
-    AssistantMessageStream,
+    AssistantMessageStreamClient,
     AssistantMessageStreamFn,
 )
 from otter_ai_core.bidirectional_channel import (
@@ -264,16 +265,16 @@ async def _run_response(
     termination sentinel has been consumed). Returns ``False`` when the turn
     ended normally and the idle loop should resume draining.
 
-    A fresh ``per_response_abort`` is passed into ``stream_fn`` for each turn.
-    Client events are handled inline: an ``AbortResponseEvent`` flips
-    ``per_response_abort`` (and keeps the connection open); a
-    ``ContextItemAddEvent`` is committed immediately; caller ``close()`` or a
-    connection abort both flip ``per_response_abort`` and let the stream drain
-    to its (aborted) terminal. Further ``ResponseCreate`` events arriving while
-    a turn is in flight are ignored (v1: no concurrent responses).
+    Each turn's stream is created by ``stream_fn(context)`` and carries its own
+    intrinsic abort signal. Client events are handled inline: an
+    ``AbortResponseEvent`` calls :meth:`~otter_ai_core.stream.StreamClient.abort`
+    on the stream (and keeps the connection open); a ``ContextItemAddEvent`` is
+    committed immediately; caller ``close()`` or a connection abort both abort
+    the stream and let it drain to its (aborted) terminal. Further
+    ``ResponseCreate`` events arriving while a turn is in flight are ignored
+    (v1: no concurrent responses).
     """
-    per_response_abort = asyncio.Event()
-    stream: AssistantMessageStream = stream_fn(context, per_response_abort)
+    stream: AssistantMessageStreamClient = stream_fn(context)
     connection_ended = False
 
     # All three concerns are long-lived tasks, created once and recreated ONLY
@@ -336,7 +337,7 @@ async def _run_response(
                     # Caller closed — propagate to the stream, drain the aborted
                     # terminal, then signal the idle loop to stop (the outbound
                     # sentinel has been consumed here).
-                    per_response_abort.set()
+                    stream.abort()
                     connection_ended = True
                 elif not terminal:
                     if isinstance(client_event, ResponseCreate):
@@ -347,13 +348,13 @@ async def _run_response(
                         client_task = asyncio.create_task(_anext_or_none(backend))
                     else:
                         # AbortResponseEvent — abort only this turn.
-                        per_response_abort.set()
+                        stream.abort()
                         client_task = asyncio.create_task(_anext_or_none(backend))
 
             # 3. Connection abort — propagate to the stream and drain terminal.
             if abort_task is not None and abort_task.done() and not terminal:
                 abort_task = None
-                per_response_abort.set()
+                stream.abort()
                 connection_ended = True
     finally:
         for task in (stream_task, client_task, abort_task):

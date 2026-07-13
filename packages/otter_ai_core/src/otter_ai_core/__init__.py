@@ -5,17 +5,20 @@ This package provides:
 * a Pydantic v2 model for representing LLM conversation context (``Context``,
   messages, content blocks, tools, usage);
 * a provider-agnostic async channel runtime (``ChannelReader`` /
-  ``ChannelWriter`` / ``create_channel``); and
+  ``ChannelWriter`` / ``create_channel``);
+* a provider-agnostic async **abortable stream** runtime layered over the
+  channel (``StreamClient`` / ``StreamBackend`` / ``create_stream``) — a
+  consumer handle that can *iterate* **and** *abort*; and
 * a provider-agnostic async bidirectional-channel runtime
   (``BidirectionalChannel`` / ``BidirectionalChannelBackend`` /
   ``create_bidirectional_channel``), the bidirectional peer of the one-way
   channel runtime for APIs that maintain a live connection (Realtime / Responses).
 
 The assistant-message-stream **event protocol** (the ``AssistantMessageEvent``
-family) and the **typed stream aliases** (``AssistantMessageStream`` /
-``AssistantMessageWriter`` / the ``AssistantMessageStreamFnBuilder`` seam) live under
-the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at the
-top level. The ``BidirectionalChannelFn`` seam type — the bidirectional peer
+family) and the **typed stream aliases** (``AssistantMessageStreamClient`` /
+``AssistantMessageStreamBackend`` / the ``AssistantMessageStreamFnBuilder`` seam)
+live under the :mod:`otter_ai_core.assistant_message_stream` subpackage, not at
+the top level. The ``BidirectionalChannelFn`` seam type — the bidirectional peer
 of ``AssistantMessageStreamFnBuilder`` — is defined alongside the
 bidirectional-channel runtime in :mod:`otter_ai_core.bidirectional_channel`.
 The generic :data:`BuilderFn` alias — the common
@@ -77,6 +80,12 @@ from otter_ai_core.provider_api_model_options import (
     ProviderModelOption,
     ThinkingLevel,
 )
+from otter_ai_core.stream import (
+    StreamBackend,
+    StreamClient,
+    StreamPair,
+    create_stream,
+)
 from otter_ai_core.tools import Tool, tool_from_pydantic
 
 __version__ = "0.1.0"
@@ -131,6 +140,11 @@ __all__ = [
     "ChannelReader",
     "ChannelWriter",
     "create_channel",
+    # stream runtime (abortable one-way facade over the channel)
+    "StreamBackend",
+    "StreamClient",
+    "StreamPair",
+    "create_stream",
     # channel runtime (bidirectional)
     "BidirectionalChannel",
     "BidirectionalChannelBackend",

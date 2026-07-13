@@ -12,15 +12,16 @@ from otter_ai_core import (
     ChannelPair,
     ChannelReader,
     ChannelWriter,
+    StreamPair,
     Usage,
     UsageCost,
     create_channel,
+    create_stream,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantMessageEvent,
-    AssistantMessageStream,
-    AssistantMessageWriter,
+    AssistantMessageStreamClient,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextStartEvent,
@@ -182,15 +183,6 @@ async def test_reader_is_single_pass() -> None:
             pass
 
 
-def test_type_aliases_are_channel_specializations() -> None:
-    """The assistant alias is usable via an annotated ``create_channel()`` unpack."""
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
-    a_stream: AssistantMessageStream = wiring.reader
-    a_writer: AssistantMessageWriter = wiring.writer
-    assert isinstance(a_stream, ChannelReader)
-    assert isinstance(a_writer, ChannelWriter)
-
-
 def test_create_channel_returns_channel_pair_with_named_fields() -> None:
     """``create_channel()`` returns a frozen ``ChannelPair`` (writer, reader).
 
@@ -218,7 +210,8 @@ def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> No
     mypy is the real enforcer; this just checks the alias is importable and a
     trivially-conforming builder — ``(options) -> AssistantMessageStreamFn`` —
     binds under an annotation referencing it, and that the returned fn has the
-    options-bound ``(context, abort) -> stream`` shape.
+    options-bound ``(context) -> stream`` shape (the abort signal is intrinsic
+    to the stream, not an argument).
     """
     from otter_ai_core import Context
     from otter_ai_core.assistant_message_stream import (
@@ -229,11 +222,10 @@ def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> No
     def make_stream_fn(options: object) -> AssistantMessageStreamFn:
         del options
 
-        def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
-            del context, abort
-            wiring: ChannelPair[AssistantMessageEvent] = create_channel()
-            stream: AssistantMessageStream = wiring.reader
-            return stream
+        def stream_fn(context: Context) -> AssistantMessageStreamClient:
+            del context
+            pair: StreamPair[AssistantMessageEvent] = create_stream()
+            return pair.client
 
         return stream_fn
 

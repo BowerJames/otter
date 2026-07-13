@@ -365,19 +365,20 @@ async def test_http_error_status_emits_error_event(
 
 
 async def test_abort_emits_aborted_error_event(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Pre-setting the abort signal exercises the per-chunk / pre-send abort
-    # check: the producer must emit an ``AssistantErrorEvent`` with
+    # Aborting the returned stream immediately exercises the per-chunk / pre-
+    # send abort check: the producer must emit an ``AssistantErrorEvent`` with
     # ``reason="aborted"`` and never raise. (Partial content is preserved
     # structurally — content is appended to ``output`` which is carried on the
     # error event — but we cannot deterministically trigger mid-stream abort
-    # with ``MockTransport`` since it buffers the whole body at once.)
+    # with ``MockTransport`` since it buffers the whole body at once.) The
+    # stream's producer task is scheduled but not yet run when ``abort()`` is
+    # called, so its first action — the pre-send abort check — sees it set.
     def handler(request: httpx.Request) -> httpx.Response:
         return sse_response([_delta_chunk({"content": "x"}, finish_reason="stop")])
 
     install_fake_transport(monkeypatch, handler)
-    abort = asyncio.Event()
-    abort.set()
-    stream = start_stream(make_options(), simple_context(), abort)
+    stream = start_stream(make_options(), simple_context())
+    stream.abort()
     events = await collect(stream)
     err = events[-1]
     assert isinstance(err, AssistantErrorEvent)

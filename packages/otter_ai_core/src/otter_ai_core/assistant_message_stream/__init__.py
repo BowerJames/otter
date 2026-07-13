@@ -6,10 +6,12 @@ used to build a single assistant message:
 * the :data:`AssistantMessageEvent` family (a discriminated union on ``type``)
   — a Python port of the ``AssistantMessageEvent`` protocol from
   ``@earendil-works/pi-ai``; and
-* the typed aliases :data:`AssistantMessageStream`, :data:`AssistantMessageWriter`,
-  and the producer-side seam type :data:`AssistantMessageStreamFnBuilder`
-  (plus its options-bound form :data:`AssistantMessageStreamFn`), which
-  specialize the generic channel runtime in :mod:`otter_ai_core.channel`.
+* the typed aliases :data:`AssistantMessageStreamClient`,
+  :data:`AssistantMessageStreamBackend`, and the producer-side seam type
+  :data:`AssistantMessageStreamFnBuilder` (plus its options-bound form
+  :data:`AssistantMessageStreamFn`), which specialize the generic abortable-
+  stream runtime in :mod:`otter_ai_core.stream` (itself layered over the
+  channel runtime in :mod:`otter_ai_core.channel`).
 
 It is a supported import surface (Strategy A — two-layer facade): callers may
 import from :mod:`otter_ai_core.assistant_message_stream`. The public surface
@@ -34,18 +36,18 @@ from .assistant_message_events import (
     EventErrorReason,
 )
 from .assistant_message_stream import (
-    AssistantMessageStream,
+    AssistantMessageStreamBackend,
+    AssistantMessageStreamClient,
     AssistantMessageStreamFn,
     AssistantMessageStreamFnBuilder,
-    AssistantMessageWriter,
 )
 
 __all__ = [
     # typed aliases
-    "AssistantMessageStream",
+    "AssistantMessageStreamBackend",
+    "AssistantMessageStreamClient",
     "AssistantMessageStreamFn",
     "AssistantMessageStreamFnBuilder",
-    "AssistantMessageWriter",
     # events
     "AssistantDoneEvent",
     "AssistantDoneReason",

@@ -10,18 +10,19 @@ The seam is a **builder**: it closes over the per-call ``options`` bundle and
 returns an
 :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFn`
 (the options-bound producer). That producer is **synchronous**: it returns the
-:class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+:class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
 immediately and schedules its work via :func:`asyncio.create_task`. The producer
 pushes every streaming event, including the terminal
 ``done``/:class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`,
-then calls ``end()`` on the writer. The producer **never raises** —
+then calls ``end()`` on the backend. The producer **never raises** —
 request/model/runtime failures are encoded as
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` (with
 ``stop_reason`` of ``"error"`` or ``"aborted"`` and ``error_message`` set).
 
-Cooperative abort is honoured via the producer's ``abort`` argument (an
-:class:`asyncio.Event`), checked between SSE chunks and around the request
-send. On abort the producer emits an
+Cooperative abort is honoured via the stream's abort signal (an
+:class:`asyncio.Event` shared between the :class:`~otter_ai_core.stream.StreamClient`
+and the :class:`~otter_ai_core.stream.StreamBackend`), checked between SSE
+chunks and around the request send. On abort the producer emits an
 :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` with
 ``reason="aborted"`` and stops, preserving any partial content.
 
@@ -61,23 +62,23 @@ from otter_ai_chat_completions.options import ChatCompletionsModelOptions
 from otter_ai_core import (
     AssistantContent,
     AssistantMessage,
-    ChannelPair,
     Context,
     StopReason,
+    StreamPair,
     TextContent,
     ThinkingContent,
     ToolCall,
     Usage,
     UsageCost,
-    create_channel,
+    create_stream,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
-    AssistantMessageStream,
+    AssistantMessageStreamBackend,
+    AssistantMessageStreamClient,
     AssistantMessageStreamFn,
-    AssistantMessageWriter,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextEndEvent,
@@ -123,26 +124,30 @@ def create_chat_completions_assistant_message_stream(
     :data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamFnBuilder`:
     closes over ``options`` and returns the options-bound producer. The
     returned producer is synchronous — it returns the
-    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStream`
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
     immediately and spawns its work via :func:`asyncio.create_task` — and
     honours the builder contract: it never raises.
 
-    ``abort`` (the producer's second argument) is the cooperative-abort signal
-    (an :class:`asyncio.Event`); it is **required** — the producer checks it
-    between SSE chunks and around the request send, and on abort emits an
-    :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent` with
-    ``reason="aborted"``. Callers with no abort hook pass a fresh, unset
-    :class:`asyncio.Event`.
+    The cooperative-abort signal is **intrinsic to the stream**, not an
+    argument: the producer creates it with
+    :func:`~otter_ai_core.create_stream`, keeps the
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamBackend`
+    (observing :attr:`~otter_ai_core.stream.StreamBackend.abort_signal`), and
+    returns the
+    :class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
+    for the consumer to iterate and abort via
+    :meth:`~otter_ai_core.stream.StreamClient.abort`. The producer checks the
+    signal between SSE chunks and around the request send, and on abort emits
+    an :class:`~otter_ai_core.assistant_message_stream.AssistantErrorEvent`
+    with ``reason="aborted"``.
     """
 
-    def stream_fn(context: Context, abort: asyncio.Event) -> AssistantMessageStream:
-        wiring: ChannelPair[AssistantMessageEvent] = create_channel()
-        stream = wiring.reader
-        writer = wiring.writer
-        task = asyncio.create_task(_run(writer, options, context, abort))
+    def stream_fn(context: Context) -> AssistantMessageStreamClient:
+        pair: StreamPair[AssistantMessageEvent] = create_stream()
+        task = asyncio.create_task(_run(pair.backend, options, context))
         _producer_tasks.add(task)
         task.add_done_callback(_producer_tasks.discard)
-        return stream
+        return pair.client
 
     return stream_fn
 
@@ -153,18 +158,19 @@ def create_chat_completions_assistant_message_stream(
 
 
 async def _run(
-    writer: AssistantMessageWriter,
+    backend: AssistantMessageStreamBackend,
     options: ChatCompletionsModelOptions,
     context: Context,
-    abort: asyncio.Event,
 ) -> None:
     output = _skeleton(options)
     try:
-        await _produce(writer, output, options, context, abort)
+        await _produce(backend, output, options, context)
     except Exception as exc:  # noqa: BLE001 — the seam must never raise.
-        output.stop_reason = StopReason.Aborted if abort.is_set() else StopReason.Error
+        output.stop_reason = (
+            StopReason.Aborted if backend.abort_signal.is_set() else StopReason.Error
+        )
         output.error_message = _format_error(exc)
-        writer.push(
+        backend.push(
             AssistantErrorEvent(
                 role="assistant",
                 type="error",
@@ -173,15 +179,14 @@ async def _run(
             )
         )
     finally:
-        writer.end()
+        backend.end()
 
 
 async def _produce(
-    writer: AssistantMessageWriter,
+    backend: AssistantMessageStreamBackend,
     output: AssistantMessage,
     options: ChatCompletionsModelOptions,
     context: Context,
-    abort: asyncio.Event,
 ) -> None:
     model = options.model
     api_key = model.api_key
@@ -218,7 +223,7 @@ async def _produce(
     client = _create_client(model, api_key, headers, timeout_seconds)
     async with client:
         response = await _send_with_retries(
-            client, params, abort, max_retries, max_retry_delay_seconds
+            client, params, backend.abort_signal, max_retries, max_retry_delay_seconds
         )
         if options.hooks.on_response is not None:
             await options.hooks.on_response(
@@ -229,8 +234,10 @@ async def _produce(
                 )
             )
 
-        writer.push(AssistantStartEvent(role="assistant", type="start", partial=output))
-        await _consume_stream(writer, output, response, model, abort)
+        backend.push(
+            AssistantStartEvent(role="assistant", type="start", partial=output)
+        )
+        await _consume_stream(backend, output, response, model)
 
 
 # --------------------------------------------------------------------------- #
@@ -376,11 +383,10 @@ class _StreamingToolCall:
 
 
 async def _consume_stream(
-    writer: AssistantMessageWriter,
+    backend: AssistantMessageStreamBackend,
     output: AssistantMessage,
     response: httpx.Response,
     model: ChatCompletionsModel,
-    abort: asyncio.Event,
 ) -> None:
     blocks: list[AssistantContent] = output.content  # the live list
     state = _BlockState()
@@ -392,7 +398,7 @@ async def _consume_stream(
         if state.text_block is None:
             state.text_block = TextContent(type="text", text="")
             blocks.append(state.text_block)
-            writer.push(
+            backend.push(
                 AssistantTextStartEvent(
                     role="assistant",
                     type="text_start",
@@ -408,7 +414,7 @@ async def _consume_stream(
                 type="thinking", thinking="", thinking_signature=signature
             )
             blocks.append(state.thinking_block)
-            writer.push(
+            backend.push(
                 AssistantThinkingStartEvent(
                     role="assistant",
                     type="thinking_start",
@@ -438,7 +444,7 @@ async def _consume_stream(
                 state.tool_calls_by_id[tc_id_str] = streaming
             blocks.append(placeholder)
             state.tool_calls_in_order.append(streaming)
-            writer.push(
+            backend.push(
                 AssistantToolCallStartEvent(
                     role="assistant",
                     type="tool_call_start",
@@ -453,7 +459,7 @@ async def _consume_stream(
     has_finish_reason = False
     try:
         async for payload in iter_sse_events(response):
-            if abort.is_set():
+            if backend.abort_signal.is_set():
                 raise RuntimeError("Request was aborted")
             if payload == "[DONE]":
                 break
@@ -490,7 +496,7 @@ async def _consume_stream(
                         ensure_text_block,
                         ensure_thinking_block,
                         ensure_tool_call_block,
-                        writer,
+                        backend,
                         content_index,
                     )
     finally:
@@ -498,7 +504,7 @@ async def _consume_stream(
 
     # Post-stream validation — each condition raises to route through the
     # producer's error path.
-    if abort.is_set():
+    if backend.abort_signal.is_set():
         raise RuntimeError("Request was aborted")
     if output.stop_reason == "aborted":
         raise RuntimeError("Request was aborted")
@@ -509,9 +515,9 @@ async def _consume_stream(
     if not has_finish_reason:
         raise RuntimeError("Stream ended without finish_reason")
 
-    _finish_blocks(state, blocks, output, writer)
+    _finish_blocks(state, blocks, output, backend)
 
-    writer.push(
+    backend.push(
         AssistantDoneEvent(
             role="assistant",
             type="done",
@@ -566,14 +572,14 @@ def _apply_delta(
     ensure_text_block: Any,
     ensure_thinking_block: Any,
     ensure_tool_call_block: Any,
-    writer: AssistantMessageWriter,
+    backend: AssistantMessageStreamBackend,
     content_index: Any,
 ) -> None:
     content = delta.get("content")
     if isinstance(content, str) and content:
         block = ensure_text_block()
         block.text += content
-        writer.push(
+        backend.push(
             AssistantTextDeltaEvent(
                 role="assistant",
                 type="text_delta",
@@ -594,7 +600,7 @@ def _apply_delta(
             )
             block = ensure_thinking_block(signature)
             block.thinking += value
-            writer.push(
+            backend.push(
                 AssistantThinkingDeltaEvent(
                     role="assistant",
                     type="thinking_delta",
@@ -624,7 +630,7 @@ def _apply_delta(
                     streaming.placeholder.arguments = parse_streaming_json(
                         streaming.partial_args
                     )
-            writer.push(
+            backend.push(
                 AssistantToolCallDeltaEvent(
                     role="assistant",
                     type="tool_call_delta",
@@ -639,13 +645,13 @@ def _finish_blocks(
     state: _BlockState,
     blocks: list[AssistantContent],
     output: AssistantMessage,
-    writer: AssistantMessageWriter,
+    backend: AssistantMessageStreamBackend,
 ) -> None:
     """Emit ``*_end`` events for every open block, finalizing tool-call args."""
     for block in list(blocks):
         idx = blocks.index(block)
         if block is state.text_block:
-            writer.push(
+            backend.push(
                 AssistantTextEndEvent(
                     role="assistant",
                     type="text_end",
@@ -655,7 +661,7 @@ def _finish_blocks(
                 )
             )
         elif block is state.thinking_block:
-            writer.push(
+            backend.push(
                 AssistantThinkingEndEvent(
                     role="assistant",
                     type="thinking_end",
@@ -671,7 +677,7 @@ def _finish_blocks(
             )
             if streaming is not None:
                 streaming.finalize_arguments()
-            writer.push(
+            backend.push(
                 AssistantToolCallEndEvent(
                     role="assistant",
                     type="tool_call_end",

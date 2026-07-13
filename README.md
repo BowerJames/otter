@@ -76,10 +76,11 @@ implements (routing on `KnownApis` via the caller's `ProviderModelOption`).
 The `otter-ai-core` package models LLM conversation context and the streaming
 runtime used to build it. It defines **no LLMs, providers, APIs, transports,
 API registry, or `stream()` dispatch** — only the Pydantic v2 data structures a
-conversation is built from, plus a generic async channel runtime. The
+conversation is built from, plus a generic async channel runtime and an
+abortable stream facade layered over it. The
 assistant-message-stream **event protocol** (`AssistantMessageEvent` family)
-and the **typed stream aliases** (`AssistantMessageStream` /
-`AssistantMessageWriter` / the `AssistantMessageStreamFnBuilder` seam) live
+and the **typed stream aliases** (`AssistantMessageStreamClient` /
+`AssistantMessageStreamBackend` / the `AssistantMessageStreamFnBuilder` seam) live
 under the `otter_ai_core.assistant_message_stream` subpackage, not the top
 level.
 
@@ -105,6 +106,10 @@ level.
 - [`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) — a generic async
   channel runtime (`ChannelReader` / `ChannelWriter` / `create_channel`). See
   [Generic channel runtime](#generic-channel-runtime).
+- [`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py) — an
+  **abortable stream facade** over the channel (`StreamClient` /
+  `StreamBackend` / `create_stream`): the consumer iterates and calls
+  `abort()`, the producer pushes and observes the shared `abort_signal`.
 
 `AssistantMessage` also carries inert provenance (`api`, `provider`, `model`,
 `response_model`, `response_id`) and accounting (`usage`, `stop_reason`,
@@ -160,10 +165,18 @@ single-consumer queue split into a read end and a write end sharing one queue:
 - `create_channel()` — returns a `ChannelPair[TEvent]` whose `.writer` is
   the `ChannelWriter` and `.reader` is the `ChannelReader`.
 
-Typed aliases specialize it: `AssistantMessageStream` (and a matching
-`AssistantMessageWriter`), with `AssistantMessageStreamFnBuilder` as the
-producer-side seam type — all imported from
-`otter_ai_core.assistant_message_stream`. There
+Layered over the channel is an **abortable stream facade**
+([`stream.py`](./packages/otter_ai_core/src/otter_ai_core/stream.py)):
+`StreamClient[TEvent]` (iterate with `async for` / `await anext()`, and call
+`abort()` to signal the producer) paired with `StreamBackend[TEvent]` (push /
+end, and observe `abort_signal`), sharing one queue and one `asyncio.Event`;
+`create_stream()` returns a `StreamPair`. The typed aliases specialize the
+facade: `AssistantMessageStreamClient` (and a matching
+`AssistantMessageStreamBackend`), with `AssistantMessageStreamFnBuilder` as
+the producer-side seam type — all imported from
+`otter_ai_core.assistant_message_stream`. The abort signal is **intrinsic to
+the stream** (not a function argument): the producer creates it with
+`create_stream()`, the consumer drives it with `abort()`. There
 is **no `result()`** — consumers read the terminal `done`/`error` event
 directly.
 

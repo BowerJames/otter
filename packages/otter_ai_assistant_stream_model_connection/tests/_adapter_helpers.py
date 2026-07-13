@@ -14,6 +14,7 @@ from typing import Any
 from otter_ai_core import (
     AssistantMessage,
     Context,
+    StreamPair,
     TextContent,
     ThinkingContent,
     ToolCall,
@@ -21,13 +22,13 @@ from otter_ai_core import (
     UsageCost,
     UserMessage,
     context_item,
-    create_channel,
+    create_stream,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
-    AssistantMessageStream,
+    AssistantMessageStreamClient,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextEndEvent,
@@ -277,36 +278,29 @@ class ScriptedStreamFn:
             return getter.result()
         return _END
 
-    def __call__(
-        self, context: Context, abort: asyncio.Event
-    ) -> AssistantMessageStream:
+    def __call__(self, context: Context) -> AssistantMessageStreamClient:
         self.started.append(context)
-        wiring = _create_channel()
-        stream: AssistantMessageStream = wiring.reader
-        writer = wiring.writer
+        pair: StreamPair[AssistantMessageEvent] = create_stream()
+        stream: AssistantMessageStreamClient = pair.client
+        backend = pair.backend
 
         async def produce() -> None:
             while True:
-                nxt = await self._next(abort)
+                nxt = await self._next(backend.abort_signal)
                 if nxt is _ABORT:
-                    writer.push(
+                    backend.push(
                         error_event(make_message(stop_reason="aborted"), "aborted")
                     )
                     break
                 if nxt is _END or nxt is None:
                     break
-                writer.push(nxt)
+                backend.push(nxt)
                 if isinstance(nxt, (AssistantDoneEvent, AssistantErrorEvent)):
                     break
-            writer.end()
+            backend.end()
 
         asyncio.create_task(produce())
         return stream
-
-
-# Local alias avoids shadowing the builder import name in tests.
-def _create_channel() -> Any:
-    return create_channel()
 
 
 async def _suppress_task(task: asyncio.Task[Any]) -> None:

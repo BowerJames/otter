@@ -21,10 +21,11 @@ class ChatCompletionsModelOptions:
     ``TOptions``.
 
     The builder closes over this bundle and returns an
-    ``AssistantMessageStreamFn``; the context and the abort signal (an
-    :class:`asyncio.Event`) are supplied when that returned function is
-    invoked. The abort signal is **not** part of this bundle: it is the single
-    source of truth for cooperative abort. ``hooks`` defaults to an empty
+    ``AssistantMessageStreamFn``; the context is supplied when that returned
+    function is invoked. The cooperative-abort signal is **not** part of this
+    bundle (nor an argument to the returned function): it is intrinsic to the
+    stream the producer returns (see :func:`otter_ai_core.create_stream`).
+    ``hooks`` defaults to an empty
     :class:`ChatCompletionsHooks` (no-op), so a "no hooks" caller constructs
     this with just the model.
     """

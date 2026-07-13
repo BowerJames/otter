@@ -20,7 +20,7 @@ key resolution, model catalog) is the consumer's responsibility. v1 is
 
 The seam is the **bidirectional peer** of
 :func:`otter_ai_chat_completions.create_chat_completions_assistant_message_stream`:
-instead of a single outbound ``AssistantMessageStream`` it returns a live
+instead of a single outbound ``AssistantMessageStreamClient`` it returns a live
 :class:`~otter_ai_core.model_connection.ModelConnection` the caller iterates
 inbound server events from and sends outbound client events to.
 """
