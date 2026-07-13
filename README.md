@@ -27,7 +27,8 @@ Packages live under [`packages/`](./packages):
 
 ```
 packages/
-└── otter_ai_core/   # the otter-ai-core package (import as `otter_ai_core`)
+├── otter_ai_core/     # the otter-ai-core package (import as `otter_ai_core`)
+└── otter_ai_logging/  # the otter-ai-logging package (import as `otter_ai_logging`)
 ```
 
 The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
@@ -187,6 +188,35 @@ async def main() -> None:
 
 Otter defines the runtime and types only — **no providers, no registry, no
 `stream()` dispatch**.
+
+## `otter-ai-logging`
+
+`otter-ai-logging` configures the stdlib [`logging`](https://docs.python.org/3/library/logging.html)
+module for the monorepo's logging conventions. It depends on nothing but the
+standard library.
+
+- **Line format** — `<timestamp_utc> <level> <message>` (ISO-8601 UTC), e.g.
+  `2026-07-09T10:56:29Z INFO user 42 authenticated`.
+- **Stream routing** — `DEBUG`/`INFO`/`WARNING` → stdout, `ERROR` → stderr
+  (stderr only; never mirrored). `ERROR` is the alertable channel.
+- **Level** — driven by the `LOG_LEVEL` environment variable (one of
+  `DEBUG`/`INFO`/`WARNING`/`ERROR`), defaulting to `INFO`. The canonical level
+  set is four levels; `CRITICAL`/unknown values raise `ValueError`.
+
+Application code configures logging once at startup; libraries and modules
+obtain a logger with the stdlib idiom `logging.getLogger(__name__)`.
+
+```python
+from otter_ai_logging import configure_logging
+
+configure_logging()  # reads LOG_LEVEL (default INFO); idempotent
+
+import logging
+
+log = logging.getLogger(__name__)
+log.info("user %s authenticated", 42)        # -> stdout
+log.error("database connection refused")     # -> stderr (alertable)
+```
 
 ## Tooling
 
