@@ -181,7 +181,7 @@ def test_bidirectional_channel_fn_accepts_conforming_callable() -> None:
     trivially-conforming callable binds under an annotation referencing it.
     ``BidirectionalChannelFn`` is the *options-bound* producer
     (``Callable[[Context, asyncio.Event], BidirectionalChannel[TClient, TEvent]]``);
-    its builder peer is :data:`ModelConnectionFnBuilder`.
+    its builder peer specialises :data:`otter_ai_core.builder.BuilderFn`.
     """
     wiring: BidirectionalChannelWiring[str, int]
     wiring = create_bidirectional_channel()

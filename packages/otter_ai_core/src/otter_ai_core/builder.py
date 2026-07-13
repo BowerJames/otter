@@ -3,12 +3,13 @@
 A :data:`BuilderFn` is an options-binding callable: it takes a per-call
 options bundle (``TOptions``) and returns the options-bound result
 (``TResult``). It is the generalization underlying otter's producer-side seam
-aliases, both of which are ``BuilderFn`` specialized to a fixed result type:
+aliases, which are ``BuilderFn`` specialized to a fixed result type:
 
 * ``AssistantMessageStreamFnBuilder[TOptions]`` is
   ``BuilderFn[TOptions, AssistantMessageStreamFn]``.
-* ``ModelConnectionFnBuilder[TOptions]`` is
-  ``BuilderFn[TOptions, ModelConnectionFn]``.
+
+A future bidirectional producer seam (for live-connection APIs) will
+specialize ``BuilderFn`` the same way.
 
 A *builder* closes over its options and returns the options-bound value; this
 is distinct from driving a specific call, which keeps a registered builder

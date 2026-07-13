@@ -1,8 +1,8 @@
 """Provider/api/model-option subpackage facade.
 
 This package groups the small pure-data enums and the
-:class:`ProviderModelOption` bundle that the provider/dispatch layer
-(:mod:`otter_ai_assistant_provider_stream`) keys its routing on:
+:class:`ProviderModelOption` bundle that a provider/dispatch layer keys its
+routing on:
 
 * :class:`KnownApis` — the api shape to dispatch through
   (``chat-completions`` / ``responses`` / ``realtime``).
@@ -11,9 +11,8 @@ This package groups the small pure-data enums and the
 * :class:`ThinkingLevel` — the off switch plus the five reasoning-effort
   levels (mirrors pi-ai's ``ModelThinkingLevel``).
 * :class:`ProviderModelOption` — the caller's selection of a model + per-call
-  config; realises the ``TOptions`` of
-  :data:`otter_ai_core.model_connection.ModelConnectionFnBuilder` for the
-  dispatch layer.
+  config; realises the ``TOptions`` of :data:`otter_ai_core.builder.BuilderFn`
+  for the dispatch layer.
 
 It is a supported import surface (Strategy A — two-layer facade): callers may
 import from :mod:`otter_ai_core.provider_api_model_options`. The public

@@ -11,16 +11,13 @@ class ProviderModelOption(BaseModel):
     """The caller's selection of a model + per-call reasoning config.
 
     Pure data: it identifies a catalog model by ``(provider, model)`` plus the
-    api to dispatch it through, the api key, and a thinking level. It realises
-    the ``TOptions`` of
-    :data:`otter_ai_core.model_connection.ModelConnectionFnBuilder` for the
-    provider/dispatch layer
-    (:mod:`otter_ai_assistant_provider_stream`).
+    api to dispatch it through, the api key, and a thinking level. It is the
+    caller's options bundle — realising the ``TOptions`` of the dispatch
+    layer's producer seam (:data:`otter_ai_core.builder.BuilderFn`).
 
     No runtime handles (hooks) and no per-call request overrides live here —
     by design (the dispatch layer uses default hooks and applies no overrides
-    on top of catalog facts). The abort signal is the producer's second
-    argument (an :class:`asyncio.Event`), never part of this bundle.
+    on top of catalog facts).
     """
 
     model: str
