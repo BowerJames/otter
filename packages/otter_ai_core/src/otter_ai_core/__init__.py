@@ -70,11 +70,6 @@ from otter_ai_core.context import (
     context_item,
 )
 from otter_ai_core.hook import Hook
-from otter_ai_core.normalize import (
-    drop_unreplayable_assistant_turns,
-    fill_missing_tool_results,
-    normalize_messages,
-)
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
     KnownProviders,
@@ -125,10 +120,6 @@ __all__ = [
     "ToolResultContextItem",
     "UserContextItem",
     "context_item",
-    # normalize (opt-in)
-    "drop_unreplayable_assistant_turns",
-    "fill_missing_tool_results",
-    "normalize_messages",
     # provider/api/model options
     "KnownApis",
     "KnownProviders",

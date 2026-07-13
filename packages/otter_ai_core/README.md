@@ -48,24 +48,10 @@ pure-JSON-serializable so a context can be persisted, transferred, and replayed.
 `error_message`). Otter never interprets these — they are preserved so a
 context can be replayed by a provider package built on top.
 
-### Opt-in replay normalization
-
-[`normalize.py`](./src/otter_ai_core/normalize.py) exposes **opt-in** utilities
-that prepare a message list for replay to a model:
-
-- `drop_unreplayable_assistant_turns` — removes assistant turns whose
-  `stop_reason` is `"error"` or `"aborted"`.
-- `fill_missing_tool_results` — inserts synthetic `is_error=True` tool results
-  for any `tool_call` not followed by its result.
-- `normalize_messages` — applies both.
-
-These are **never applied automatically** (they would corrupt a normal
-tool-execution loop); call them explicitly only when preparing to replay.
-
 ### Quick example
 
 ```python
-from otter_ai_core import Context, UserMessage, context_item, normalize_messages
+from otter_ai_core import Context, UserMessage, context_item
 
 context = Context(
     system_prompt="You are helpful.",
@@ -80,9 +66,6 @@ context = Context(
 # A Context round-trips through plain JSON.
 restored = Context.model_validate_json(context.model_dump_json())
 assert restored == context
-
-# Opt-in replay prep (only when you intend to send to a model elsewhere):
-replay_ready = normalize_messages([item.to_message() for item in context.items])
 ```
 
 ## Assistant message events
