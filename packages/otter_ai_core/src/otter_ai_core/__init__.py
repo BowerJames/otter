@@ -4,8 +4,6 @@ This package provides:
 
 * a Pydantic v2 model for representing LLM conversation context (``Context``,
   messages, content blocks, tools, usage);
-* a Pydantic v2 model for representing LLM conversation context (``Context``,
-  messages, content blocks, tools, usage);
 * a provider-agnostic async channel runtime (``ChannelReader`` /
   ``ChannelWriter`` / ``create_channel``);
 * a provider-agnostic async **abortable stream** runtime layered over the
