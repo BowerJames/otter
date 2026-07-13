@@ -121,6 +121,20 @@ def test_error_not_mirrored_to_stdout(capfd: pytest.CaptureFixture[str]) -> None
     assert "boom" not in out
 
 
+def test_third_party_critical_routes_to_stderr(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    # A dependency's stray CRITICAL (above the canonical set our own code never
+    # emits) must still land on stderr, never stdout — the stderr handler's
+    # ERROR floor catches it and the stdout handler's _MaxLevelFilter rejects
+    # it. This locks in the contract documented in the package docstring.
+    configure_logging("DEBUG")
+    logging.getLogger("third.party").critical("kaboom")
+    out, err = capfd.readouterr()
+    assert "kaboom" in err
+    assert "kaboom" not in out
+
+
 def test_level_gating_warning(capfd: pytest.CaptureFixture[str]) -> None:
     configure_logging("WARNING")
     _emit_all(logging.getLogger("otter.test"))

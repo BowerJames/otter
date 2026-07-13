@@ -24,12 +24,17 @@ def _isolate_root_logger() -> Iterator[None]:
     stream objects at call time and tags the handlers it attaches; clearing
     handlers before each test means every test re-attaches fresh handlers
     (bound to that test's capture streams) and handler-count assertions start
-    from zero.
+    from zero. The root level is also reset to the stdlib default
+    (:data:`logging.WARNING`) so a future test that does not call
+    :func:`~otter_ai_logging.configure_logging` does not inherit a level set by
+    an earlier test.
     """
     root = logging.getLogger()
     root.handlers.clear()
+    root.setLevel(logging.WARNING)
     yield
     root.handlers.clear()
+    root.setLevel(logging.WARNING)
 
 
 @pytest.fixture(autouse=True)
