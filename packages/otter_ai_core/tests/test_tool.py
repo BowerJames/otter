@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from otter_ai_core import Tool, tool_from_pydantic
+from otter_ai_core import Tool
 
 
 class _GetTimeParams(BaseModel):
@@ -45,7 +45,7 @@ def test_parameters_rejects_non_schema_value() -> None:
         Tool(name="get_time", description="d", parameters="not-a-schema")
 
 
-def test_tool_from_pydantic_helper() -> None:
-    tool = tool_from_pydantic("get_time", "d", _GetTimeParams)
+def test_from_pydantic() -> None:
+    tool = Tool.from_pydantic("get_time", "d", _GetTimeParams)
     assert tool.name == "get_time"
     assert tool.parameters == _GetTimeParams.model_json_schema()

@@ -52,11 +52,13 @@ class Tool(BaseModel):
             "BaseModel subclass."
         )
 
+    @classmethod
+    def from_pydantic(
+        cls, name: str, description: str, model_cls: type[BaseModel]
+    ) -> Tool:
+        """Build a :class:`Tool` from a Pydantic ``BaseModel`` subclass.
 
-def tool_from_pydantic(name: str, description: str, model_cls: type[BaseModel]) -> Tool:
-    """Build a :class:`Tool` from a Pydantic ``BaseModel`` subclass.
-
-    Convenience wrapper around ``Tool(name=name, description=description,
-    parameters=model_cls)``.
-    """
-    return Tool(name=name, description=description, parameters=model_cls)
+        Convenience classmethod around ``cls(name=name, description=description,
+        parameters=model_cls)``.
+        """
+        return cls(name=name, description=description, parameters=model_cls)
