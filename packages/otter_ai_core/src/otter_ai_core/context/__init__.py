@@ -38,6 +38,7 @@ from .messages import (
     UserMessage,
 )
 from .role import Role
+from .tool import Tool, tool_from_pydantic
 from .usage import Usage, UsageCost
 
 __all__ = [
@@ -68,6 +69,9 @@ __all__ = [
     "UserMessage",
     # role
     "Role",
+    # tool
+    "Tool",
+    "tool_from_pydantic",
     # usage
     "Usage",
     "UsageCost",
