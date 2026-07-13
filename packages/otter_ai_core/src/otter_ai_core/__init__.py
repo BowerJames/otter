@@ -58,6 +58,7 @@ from otter_ai_core.context import (
     StopReason,
     TextContent,
     ThinkingContent,
+    Tool,
     ToolCall,
     ToolResultContextItem,
     ToolResultMessage,
@@ -67,6 +68,7 @@ from otter_ai_core.context import (
     UserContextItem,
     UserMessage,
     context_item,
+    tool_from_pydantic,
 )
 from otter_ai_core.hook import Hook
 from otter_ai_core.normalize import (
@@ -86,7 +88,6 @@ from otter_ai_core.stream import (
     StreamPair,
     create_stream,
 )
-from otter_ai_core.tools import Tool, tool_from_pydantic
 
 __version__ = "0.1.0"
 

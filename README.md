@@ -57,7 +57,7 @@ layered over it, and the seam types a provider/transport package will implement.
   union of `UserMessage`, `AssistantMessage`, and `ToolResultMessage`.
 - Content blocks in [`content.py`](./packages/otter_ai_core/src/otter_ai_core/context/content.py):
   `TextContent`, `ImageContent`, `ThinkingContent`, `ToolCall`.
-- [`Tool`](./packages/otter_ai_core/src/otter_ai_core/tools.py) — tool definitions whose
+- [`Tool`](./packages/otter_ai_core/src/otter_ai_core/context/tool.py) — tool definitions whose
   `parameters` accept a JSON-Schema `dict` or a Pydantic `BaseModel` subclass.
 - [`Usage`](./packages/otter_ai_core/src/otter_ai_core/context/usage.py) and diagnostics for
   per-turn accounting.
@@ -84,14 +84,14 @@ tool-execution loop); call them explicitly only when preparing to replay.
 ### Quick example
 
 ```python
-from otter_ai_core import Context, ContextItem, UserMessage, normalize_messages
+from otter_ai_core import Context, UserMessage, context_item, normalize_messages
 
 context = Context(
     system_prompt="You are helpful.",
     items=[
-        ContextItem(
-            id="u1",
+        context_item(
             message=UserMessage(role="user", content="Hi!", timestamp=0),
+            id="u1",
         )
     ],
 )
@@ -101,7 +101,7 @@ restored = Context.model_validate_json(context.model_dump_json())
 assert restored == context
 
 # Opt-in replay prep (only when you intend to send to a model elsewhere):
-replay_ready = normalize_messages([item.message for item in context.items])
+replay_ready = normalize_messages([item.to_message() for item in context.items])
 ```
 
 ### Assistant message stream
