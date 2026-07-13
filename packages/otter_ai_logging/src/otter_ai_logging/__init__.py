@@ -128,15 +128,24 @@ def configure_logging(level: str | int | None = None) -> None:
     otherwise the ``LOG_LEVEL`` environment variable is read, otherwise
     :data:`DEFAULT_LEVEL` (``INFO``) is used.
 
-    Idempotent: handlers attached here are tagged; a repeat call updates the
-    root level but does not attach duplicate handlers (avoiding duplicated log
-    lines when called more than once).
+    Safe to call repeatedly (idempotent in effect): each call replaces any
+    handlers previously attached by this function — and only those — with a
+    fresh pair, so repeat calls never duplicate handlers and the configuration
+    self-corrects if one of our handlers was removed elsewhere. Other handlers
+    on the root logger are left untouched.
     """
     root = logging.getLogger()
     root.setLevel(_resolve_level(level))
 
-    if any(getattr(handler, _HANDLER_TAG, False) for handler in root.handlers):
-        return
+    # Replace any handlers we previously attached (and only ours) with a fresh
+    # pair: a repeat call never duplicates handlers, and the configuration
+    # self-corrects if one of ours was removed elsewhere. Other handlers on the
+    # root logger are left untouched.
+    root.handlers = [
+        handler
+        for handler in root.handlers
+        if not getattr(handler, _HANDLER_TAG, False)
+    ]
 
     formatter = _utc_formatter()
 

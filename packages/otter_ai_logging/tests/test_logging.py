@@ -200,6 +200,35 @@ def test_idempotent_no_duplicate_handlers() -> None:
     assert logging.getLogger().level == logging.INFO  # level still updated
 
 
+def test_reconfigure_self_heals_after_partial_handler_removal() -> None:
+    # If one of our handlers is removed elsewhere, a repeat call must restore
+    # the full pair rather than short-circuiting on the surviving one.
+    configure_logging("DEBUG")
+    owned = [h for h in logging.getLogger().handlers if getattr(h, _HANDLER_TAG, False)]
+    assert len(owned) == 2
+    logging.getLogger().removeHandler(owned[0])
+    assert _count_owned_handlers() == 1
+
+    configure_logging("INFO")
+    assert _count_owned_handlers() == 2  # full pair restored
+    assert logging.getLogger().level == logging.INFO
+
+
+def test_reconfigure_preserves_foreign_handlers() -> None:
+    # Handlers we did not attach (e.g. an application's own handler) are left in
+    # place across repeat calls.
+    foreign = logging.StreamHandler()
+    logging.getLogger().addHandler(foreign)
+
+    configure_logging("DEBUG")
+    assert foreign in logging.getLogger().handlers
+    assert _count_owned_handlers() == 2
+
+    configure_logging("INFO")
+    assert foreign in logging.getLogger().handlers  # still there
+    assert _count_owned_handlers() == 2
+
+
 # --------------------------------------------------------------------------- #
 # _MaxLevelFilter (unit)
 # --------------------------------------------------------------------------- #
