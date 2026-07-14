@@ -16,12 +16,13 @@ from otter_ai_core.model_connection import (
     CreateResponse,
     ModelConnectionBackend,
     ModelConnectionClient,
-    ResponseDelta,
     ResponseDone,
     ResponseStarted,
+    ResponseUpdated,
     ServerContextEvent,
     ToolResultAdded,
     UserItemAdded,
+    UserItemUpdated,
 )
 
 _CLIENT_ADAPTER: TypeAdapter[ClientContextEvent] = TypeAdapter(ClientContextEvent)
@@ -107,9 +108,10 @@ def test_client_event_routing(typ: str, leaf: type, extra: dict[str, Any]) -> No
     "typ, leaf, extra",
     [
         ("response.started", ResponseStarted, {"partial": _assistant_item()}),
-        ("response.delta", ResponseDelta, {"partial": _assistant_item()}),
+        ("response.updated", ResponseUpdated, {"partial": _assistant_item()}),
         ("response.done", ResponseDone, {"item": _assistant_item(stop_reason="stop")}),
         ("user_item.added", UserItemAdded, {"item": _user_item()}),
+        ("user_item.updated", UserItemUpdated, {"item": _user_item()}),
         (
             "tool_result_item.added",
             ToolResultAdded,
@@ -134,9 +136,10 @@ def test_server_event_routing(typ: str, leaf: type, extra: dict[str, Any]) -> No
         (AddToolResultMessage, "tool_result.add"),
         (CreateResponse, "response.create"),
         (ResponseStarted, "response.started"),
-        (ResponseDelta, "response.delta"),
+        (ResponseUpdated, "response.updated"),
         (ResponseDone, "response.done"),
         (UserItemAdded, "user_item.added"),
+        (UserItemUpdated, "user_item.updated"),
         (ToolResultAdded, "tool_result_item.added"),
     ],
 )
