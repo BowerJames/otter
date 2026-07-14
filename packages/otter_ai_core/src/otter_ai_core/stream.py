@@ -12,11 +12,15 @@ Why a facade, not abort baked into the channel
 The generic channel is a pure single-consumer queue split into a read end and
 a write end. Not every channel consumer needs abort (the session bus, internal
 plumbing, the two directions of a
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannel`), so
-cancellation does not belong on the primitive. A *stream*, by contrast, is the
-domain concept for "an iterable a consumer can cancel" — exactly like
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannel` is a facade
-composed of two channels rather than a modification of the channel primitive.
+:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelClient` /
+:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelBackend`
+pair), so cancellation does not belong on the primitive. A *stream*, by
+contrast, is the domain concept for "an iterable a consumer can cancel" —
+exactly like :class:`~otter_ai_core.connection.ConnectionClient` /
+:class:`~otter_ai_core.connection.ConnectionBackend` is a facade composed of a
+:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelPair` plus one
+shared abort event, rather than a modification of the bidirectional channel
+primitive.
 
 The layering is therefore:
 
@@ -40,13 +44,19 @@ factory.
 
 Symmetry with the bidirectional runtime
 ---------------------------------------
-The pair mirrors
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannel` (caller
-side) / :class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelBackend`
-(producer side) / ``BidirectionalChannelWiring`` / ``create_bidirectional_channel``,
-and the product type mirrors :class:`~otter_ai_core.channel.ChannelPair`
-(``StreamPair`` / :func:`create_stream`). The one-way consumer is the role-
-explicit :class:`StreamClient` and the producer is :class:`StreamBackend`.
+The abortable one-way facade here is mirrored by the abortable two-way facade
+in :mod:`otter_ai_core.connection`:
+:class:`~otter_ai_core.connection.ConnectionClient` (consumer side, iterate +
+abort) / :class:`~otter_ai_core.connection.ConnectionBackend` (producer side,
+push + observe abort) / ``ConnectionPair`` /
+:func:`~otter_ai_core.connection.create_connection`, itself layered over the
+abort-free :func:`~otter_ai_core.bidirectional_channel.create_bidirectional_channel`
+primitive. The product type mirrors
+:class:`~otter_ai_core.channel.ChannelPair` (``StreamPair`` /
+:func:`create_stream`). The one-way consumer is the role-explicit
+:class:`StreamClient` and the producer is :class:`StreamBackend`; their
+bidirectional peers are :class:`~otter_ai_core.connection.ConnectionClient`
+and :class:`~otter_ai_core.connection.ConnectionBackend`.
 
 Scope
 -----
@@ -111,7 +121,7 @@ class StreamClient[TEvent]:
         return self
 
     async def __anext__(self) -> TEvent:
-        return await self._reader.__anext__()
+        return await anext(self._reader)
 
 
 class StreamBackend[TEvent]:

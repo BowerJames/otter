@@ -125,14 +125,29 @@ serializable data model is unchanged.
 ### Other core subpackages
 
 - [`bidirectional_channel.py`](./packages/otter_ai_core/src/otter_ai_core/bidirectional_channel.py)
-  / [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the bidirectional
-  channel pair and the generic `BuilderFn[TOptions, TResult]` alias both
-  producer seams fold onto.
+  — the bidirectional queue primitive (two cross-wired channels) for APIs that
+  keep a live connection (Realtime / Responses):
+  `BidirectionalChannelClient` / `BidirectionalChannelBackend` / `create_bidirectional_channel`.
+- [`connection.py`](./packages/otter_ai_core/src/otter_ai_core/connection.py) —
+  the abortable bidirectional facade layered over it
+  (`ConnectionClient` / `ConnectionBackend` / `create_connection`): a two-way
+  consumer handle that can iterate, push, and abort — the bidirectional peer
+  of `stream.py`.
+- [`model_connection/`](./packages/otter_ai_core/src/otter_ai_core/model_connection/)
+  — the typed two-way event protocol (`ClientContextEvent` /
+  `ServerContextEvent`) and typed connection aliases
+  (`ModelConnectionClient` / `ModelConnectionBackend`); the bidirectional peer
+  of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
+- [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
+  generic `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
 - [`hook.py`](./packages/otter_ai_core/src/otter_ai_core/hook.py) — the generic async
   `Hook[TEvent, TResponse]` alias.
 - [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —
   pure-data enumerations/types (`KnownApis`, `KnownProviders`, `ThinkingLevel`)
   a dispatch layer keys on.
+
+No provider-side seam type is defined for the bidirectional/connection runtime
+yet; a connection-level seam will be added in a future dispatch package.
 
 ```python
 import asyncio

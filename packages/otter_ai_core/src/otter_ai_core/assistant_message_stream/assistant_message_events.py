@@ -24,7 +24,10 @@ A stream should emit ``start`` before any partial updates, then terminate with
   the message.
 
 Every non-terminal event carries a ``partial`` snapshot of the in-progress
-message, so a consumer can render state from the latest event alone.
+message, so a consumer can render state from the latest event alone. While
+the message is in flight that ``partial`` snapshot has
+``stop_reason=None``; only the terminal ``done``/``error`` message carries a
+non-``None`` stop reason (mirrored in the event's ``reason``).
 """
 
 from __future__ import annotations

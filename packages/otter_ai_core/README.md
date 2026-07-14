@@ -124,24 +124,39 @@ through, plus the seam types a provider/transport package will implement:
 - [`channel.py`](./src/otter_ai_core/channel.py) — a single-consumer async
   push-queue split into a read end and a write end
   (`ChannelReader` / `ChannelWriter` / `create_channel`).
-- [`stream.py`](./src/otter_ai_core/stream.py) — an abortable stream facade
-  layered over the channel (`StreamClient` / `StreamBackend` / `create_stream`);
-  the abort signal is intrinsic to the stream, not threaded as an argument.
+- [`stream.py`](./src/otter_ai_core/stream.py) — an abortable one-way stream
+  facade layered over the channel (`StreamClient` / `StreamBackend` /
+  `create_stream`); the abort signal is intrinsic to the stream, not threaded
+  as an argument.
 - [`bidirectional_channel.py`](./src/otter_ai_core/bidirectional_channel.py) — a
-  bidirectional runtime for APIs that keep a live connection (Realtime /
-  Responses) (`BidirectionalChannel` / `BidirectionalChannelBackend` /
+  bidirectional queue primitive (two cross-wired channels) for APIs that keep
+  a live connection (Realtime / Responses) (`BidirectionalChannelClient` /
+  `BidirectionalChannelBackend` / `BidirectionalChannelPair` /
   `create_bidirectional_channel`).
+- [`connection.py`](./src/otter_ai_core/connection.py) — an abortable
+  bidirectional facade layered over the bidirectional channel
+  (`ConnectionClient` / `ConnectionBackend` / `ConnectionPair` /
+  `create_connection`) — a two-way consumer handle that can iterate, push, and
+  abort; the bidirectional peer of `stream.py`.
 - [`builder.py`](./src/otter_ai_core/builder.py) — the generic
-  `BuilderFn[TOptions, TResult]` alias both producer seams fold onto.
+  `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
 - [`hook.py`](./src/otter_ai_core/hook.py) — the generic async
   `Hook[TEvent, TResponse]` alias provider packages build hook types on top of.
 - [`provider_api_model_options/`](./src/otter_ai_core/provider_api_model_options) —
   pure-data enumerations/types (`KnownApis`, `KnownProviders`,
   `ThinkingLevel`) a dispatch layer keys on.
 
+The typed one-way stream aliases (`AssistantMessageStreamClient` /
+`AssistantMessageStreamBackend`) and the assistant-message-stream event
+protocol live in
+[`assistant_message_stream/`](./src/otter_ai_core/assistant_message_stream);
+their bidirectional peers — the model-connection event protocol
+(`ClientContextEvent` / `ServerContextEvent`) and the typed two-way connection
+aliases (`ModelConnectionClient` / `ModelConnectionBackend`) — live in
+[`model_connection/`](./src/otter_ai_core/model_connection).
+
 See the [root `README.md`](../../README.md) for the full runtime documentation
-and the producer-side seam types (`AssistantMessageStreamFnBuilder`,
-`BidirectionalChannelFn`).
+and the one-way producer-side seam type (`AssistantMessageStreamFnBuilder`).
 
 ## Tooling
 
