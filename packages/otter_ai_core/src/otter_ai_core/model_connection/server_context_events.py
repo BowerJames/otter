@@ -1,0 +1,102 @@
+"""Server→client events for a model connection.
+
+This module models the inbound events a server (transport pump) pushes to the
+client over a model connection — the ``TBackend`` of
+:class:`otter_ai_core.connection.ConnectionBackend` / the
+:data:`~otter_ai_core.model_connection.ModelConnectionBackend` typed alias.
+It is **data-only**: no transport, no provider registry, no dispatch. Only the
+Pydantic v2 data structures a server pushes and a client iterates.
+
+The protocol is otter's general model-connection event structure, partly
+modelled on the OpenAI Responses / Realtime server-event families (e.g.
+``response.created`` / ``response.done``). It is a single discriminated union
+over ``type``.
+
+Item vs. message
+----------------
+Where the client→server events carry raw messages
+(see :mod:`otter_ai_core.model_connection.client_context_events`), these
+server→client events carry *context items* — messages tagged with the
+server-assigned ``id`` the client uses to place them in a
+:class:`~otter_ai_core.context.Context`. Response deltas carry an in-flight
+``partial`` :class:`~otter_ai_core.context.AssistantContextItem` (its
+underlying message's ``stop_reason`` is ``None`` until the terminal
+``response.done``).
+
+Producer contract
+-----------------
+For a single ``response.create`` the server emits ``response.started`` (with
+an empty/partial assistant item), zero or more ``response.delta`` snapshots,
+then a terminal ``response.done`` carrying the final assistant item. Out-of-
+band, the server emits ``user_item.added`` / ``tool_result_item.added`` to
+echo back the items it accepted from the client.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from otter_ai_core.context import (
+    AssistantContextItem,
+    ToolResultContextItem,
+    UserContextItem,
+)
+
+
+class ResponseStarted(BaseModel):
+    """A response generation has started. ``partial`` is the empty-start item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["response.started"] = "response.started"
+    partial: AssistantContextItem
+
+
+class ResponseDelta(BaseModel):
+    """An incremental update to the in-progress assistant item.
+
+    ``partial`` is a full snapshot of the in-progress
+    :class:`~otter_ai_core.context.AssistantContextItem` (its message's
+    ``stop_reason`` is ``None`` while in flight).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["response.delta"] = "response.delta"
+    partial: AssistantContextItem
+
+
+class ResponseDone(BaseModel):
+    """Response generation completed. ``item`` is the final assistant item."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["response.done"] = "response.done"
+    item: AssistantContextItem
+
+
+class UserItemAdded(BaseModel):
+    """The server accepted a user message and assigned it an item ``id``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["user_item.added"] = "user_item.added"
+    item: UserContextItem
+
+
+class ToolResultAdded(BaseModel):
+    """The server accepted a tool result and assigned it an item ``id``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["tool_result_item.added"] = "tool_result_item.added"
+    item: ToolResultContextItem
+
+
+#: Discriminated union of all server→client (inbound) model-connection events.
+ServerContextEvent = Annotated[
+    ResponseStarted | ResponseDelta | ResponseDone | UserItemAdded | ToolResultAdded,
+    Field(discriminator="type"),
+]

@@ -48,6 +48,12 @@ class AssistantMessage(BaseModel):
     ``response_id``) and accounting (``usage``/``stop_reason``/``error_message``)
     are stored inertly — otter never interprets them, but preserves them so a
     context can be replayed elsewhere.
+
+    ``stop_reason`` is ``None`` only while the message is in flight (e.g. the
+    ``partial`` snapshots carried by non-terminal streaming events); a
+    terminal message — one emitted by a ``done``/``error`` event, or any
+    message persisted in a :class:`~otter_ai_core.context.Context` — always
+    carries a non-``None`` stop reason.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -64,7 +70,9 @@ class AssistantMessage(BaseModel):
     response_id: str | None = None
     diagnostics: list[AssistantMessageDiagnostic] | None = None
     usage: Usage
-    stop_reason: StopReason
+    #: Why generation stopped. ``None`` only while the message is in flight
+    #: (a partial snapshot); a terminal message always carries a value.
+    stop_reason: StopReason | None
     error_message: str | None = None
     #: Unix timestamp in milliseconds.
     timestamp: int
