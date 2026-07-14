@@ -140,8 +140,6 @@ through, plus the seam types a provider/transport package will implement:
   abort; the bidirectional peer of `stream.py`.
 - [`builder.py`](./src/otter_ai_core/builder.py) — the generic
   `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
-- [`hook.py`](./src/otter_ai_core/hook.py) — the generic async
-  `Hook[TEvent, TResponse]` alias provider packages build hook types on top of.
 - [`provider_api_model_options/`](./src/otter_ai_core/provider_api_model_options) —
   pure-data enumerations/types (`KnownApis`, `KnownProviders`,
   `ThinkingLevel`) a dispatch layer keys on.

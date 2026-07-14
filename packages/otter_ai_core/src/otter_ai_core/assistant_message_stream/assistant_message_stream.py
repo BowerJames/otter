@@ -83,9 +83,7 @@ type AssistantMessageStreamFn = Callable[[Context], AssistantMessageStreamClient
 #:
 #: ``TOptions`` is open because the realistic shape is a provider-specific
 #: **options bundle** — pure-data config (model id, temperature, max tokens,
-#: API key, …) bundled with runtime handles (hooks) that cannot travel
-#: out-of-band (a closure is per-call and defeats registry-keyed lookup;
-#: registry metadata is per-registration, not per-call). A provider that needs
+#: API key, …). A provider that needs
 #: nothing beyond the model may specialize ``TOptions`` to a bare ``Model``
 #: type, but the options-bundle form is the intended pattern.
 type AssistantMessageStreamFnBuilder[TOptions] = BuilderFn[
