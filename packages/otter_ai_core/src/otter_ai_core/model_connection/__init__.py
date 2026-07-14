@@ -34,12 +34,13 @@ from .model_connection import (
     ModelConnectionPair,
 )
 from .server_context_events import (
-    ResponseDelta,
     ResponseDone,
     ResponseStarted,
+    ResponseUpdated,
     ServerContextEvent,
     ToolResultAdded,
     UserItemAdded,
+    UserItemUpdated,
 )
 
 __all__ = [
@@ -53,10 +54,11 @@ __all__ = [
     "ClientContextEvent",
     "CreateResponse",
     # server→client events
-    "ResponseDelta",
+    "ResponseUpdated",
     "ResponseDone",
     "ResponseStarted",
     "ServerContextEvent",
     "ToolResultAdded",
     "UserItemAdded",
+    "UserItemUpdated",
 ]

@@ -18,7 +18,7 @@ Where the client→server events carry raw messages
 (see :mod:`otter_ai_core.model_connection.client_context_events`), these
 server→client events carry *context items* — messages tagged with the
 server-assigned ``id`` the client uses to place them in a
-:class:`~otter_ai_core.context.Context`. Response deltas carry an in-flight
+:class:`~otter_ai_core.context.Context`. ``response.updated`` events carry an in-flight
 ``partial`` :class:`~otter_ai_core.context.AssistantContextItem` (its
 underlying message's ``stop_reason`` is ``None`` until the terminal
 ``response.done``).
@@ -26,10 +26,13 @@ underlying message's ``stop_reason`` is ``None`` until the terminal
 Producer contract
 -----------------
 For a single ``response.create`` the server emits ``response.started`` (with
-an empty/partial assistant item), zero or more ``response.delta`` snapshots,
+an empty/partial assistant item), zero or more ``response.updated`` snapshots,
 then a terminal ``response.done`` carrying the final assistant item. Out-of-
-band, the server emits ``user_item.added`` / ``tool_result_item.added`` to
-echo back the items it accepted from the client.
+band, the server emits ``user_item.added`` / ``user_item.updated`` /
+``tool_result_item.added`` to echo back the items it accepted or amended:
+``user_item.updated`` signals that an existing user item was amended (e.g. an
+asynchronously-transcribed audio item revised after it was first added, as in
+the OpenAI Realtime API), so a client must refresh any local copy.
 """
 
 from __future__ import annotations
@@ -54,8 +57,8 @@ class ResponseStarted(BaseModel):
     partial: AssistantContextItem
 
 
-class ResponseDelta(BaseModel):
-    """An incremental update to the in-progress assistant item.
+class ResponseUpdated(BaseModel):
+    """An update to the in-progress assistant item.
 
     ``partial`` is a full snapshot of the in-progress
     :class:`~otter_ai_core.context.AssistantContextItem` (its message's
@@ -64,7 +67,7 @@ class ResponseDelta(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["response.delta"] = "response.delta"
+    type: Literal["response.updated"] = "response.updated"
     partial: AssistantContextItem
 
 
@@ -86,6 +89,21 @@ class UserItemAdded(BaseModel):
     item: UserContextItem
 
 
+class UserItemUpdated(BaseModel):
+    """A previously-added user item was amended; refresh any local copy.
+
+    Signals that an existing :class:`~otter_ai_core.context.UserContextItem`
+    was updated server-side — e.g. an asynchronously-transcribed audio item
+    revised after it was first added (as in the OpenAI Realtime API) — so a
+    client holding a local copy of the item must refresh it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["user_item.updated"] = "user_item.updated"
+    item: UserContextItem
+
+
 class ToolResultAdded(BaseModel):
     """The server accepted a tool result and assigned it an item ``id``."""
 
@@ -97,6 +115,11 @@ class ToolResultAdded(BaseModel):
 
 #: Discriminated union of all server→client (inbound) model-connection events.
 ServerContextEvent = Annotated[
-    ResponseStarted | ResponseDelta | ResponseDone | UserItemAdded | ToolResultAdded,
+    ResponseStarted
+    | ResponseUpdated
+    | ResponseDone
+    | UserItemAdded
+    | UserItemUpdated
+    | ToolResultAdded,
     Field(discriminator="type"),
 ]
