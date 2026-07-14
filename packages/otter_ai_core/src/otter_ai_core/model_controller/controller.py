@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from types import TracebackType
 from typing import Self
 
@@ -72,6 +73,8 @@ _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 #: A client→server event that appends conversation input before a generation.
 InputEvent = AddUserMessage | AddToolResultMessage
 
+_log = logging.getLogger(__name__)
+
 
 class ModelController:
     """Drive a :data:`ModelConnectionClient` as a stateful conversation.
@@ -86,6 +89,10 @@ class ModelController:
     Tear down with ``await controller.aclose()`` (or ``async with``); see the
     module docstring for the two-abort distinction and the cooperative-then-
     deterministic teardown model.
+
+    .. note::
+       The constructor schedules a background drain task and so must be called
+       from within a running :mod:`asyncio` event loop.
     """
 
     __slots__ = ("_client", "_bus", "_state", "_task")
@@ -231,9 +238,21 @@ class ModelController:
                 if event.type == ServerContextEventType.RESPONSE_DONE:
                     self._state.set_idle()
                 self._bus.publish(event)
+        except asyncio.CancelledError:
+            raise  # teardown (aclose); expected — let the finally clean up
+        except Exception:
+            # An unexpected failure in the drain loop: log it (diagnostics) and
+            # let the task end cleanly rather than dying with an unretrieved
+            # exception. The finally still releases wait_idle() and stops the bus.
+            _log.error("model controller drain loop exited unexpectedly", exc_info=True)
         finally:
-            # Whether the backend ended the inbound gracefully or we were
-            # cancelled, stop the bus so its worker can drain and exit.
+            # Defensively release any waiter: on an abnormal exit (unexpected
+            # error or cancellation) a caller parked on wait_idle() must not
+            # hang. Idempotent on the normal exit path (idle is already set by
+            # the response.done handler). Whether the backend ended the inbound
+            # gracefully or we were cancelled, also stop the bus so its worker
+            # can drain and exit.
+            self._state.set_idle()
             self._bus.end()
 
 

@@ -55,6 +55,10 @@ class ModelBus:
     per event in subscription order; a raising handler is logged and skipped
     (see the module docstring). End with :meth:`end` (fire-and-forget) or
     :meth:`aclose` (awaited, deadline-bounded).
+
+    .. note::
+       The constructor schedules a background worker task and so must be called
+       from within a running :mod:`asyncio` event loop.
     """
 
     __slots__ = ("_reader", "_writer", "_handlers", "_task")

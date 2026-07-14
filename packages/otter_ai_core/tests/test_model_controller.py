@@ -49,6 +49,7 @@ from otter_ai_core.model_connection import (
     ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
+    UserItemUpdated,
 )
 from otter_ai_core.model_controller import ModelBus, ModelController, State
 
@@ -469,6 +470,10 @@ async def test_abort_when_idle_raises() -> None:
             UserItemAdded(item=_user_item()),
         ),
         (
+            ServerContextEventType.USER_ITEM_UPDATED,
+            UserItemUpdated(item=_user_item()),
+        ),
+        (
             ServerContextEventType.TOOL_RESULT_ADDED,
             ToolResultAdded(item=_tool_result_item()),
         ),
@@ -589,3 +594,20 @@ async def test_post_close_commands_rejected_even_when_idle() -> None:
         controller.generate([_input()])
     await controller.aclose(timeout=0.2)
     await task
+
+
+async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
+    """A teardown that cancels ``_run`` mid-generation must not strand wait_idle.
+
+    With a wedged backend (no ``response.done`` ever arrives), ``aclose``
+    force-cancels the drain loop. The ``_run`` ``finally`` defensively sets
+    idle so a caller parked on ``wait_idle()`` is released rather than hung.
+    """
+    controller, backend = _pair()
+    controller.generate([_input()])
+    await _take(backend, 2)
+    assert controller.is_idle() is False  # busy
+    await controller.aclose(timeout=0.2)  # wedged backend -> cancel mid-flight
+    # wait_idle() must return (defensive set_idle in _run's finally):
+    await asyncio.wait_for(controller.wait_idle(), 1)
+    assert controller.is_idle() is True
