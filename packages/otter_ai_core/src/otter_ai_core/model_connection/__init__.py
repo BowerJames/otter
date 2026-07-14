@@ -23,9 +23,11 @@ added in a future dispatch package.
 """
 
 from .client_context_events import (
+    AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
     ClientContextEvent,
+    ClientContextEventType,
     CreateResponse,
 )
 from .model_connection import (
@@ -38,6 +40,7 @@ from .server_context_events import (
     ResponseStarted,
     ResponseUpdated,
     ServerContextEvent,
+    ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
     UserItemUpdated,
@@ -49,11 +52,14 @@ __all__ = [
     "ModelConnectionClient",
     "ModelConnectionPair",
     # client→server events
+    "ClientContextEventType",
     "AddToolResultMessage",
     "AddUserMessage",
     "ClientContextEvent",
     "CreateResponse",
+    "AbortResponse",
     # server→client events
+    "ServerContextEventType",
     "ResponseUpdated",
     "ResponseDone",
     "ResponseStarted",
