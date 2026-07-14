@@ -121,7 +121,7 @@ class StreamClient[TEvent]:
         return self
 
     async def __anext__(self) -> TEvent:
-        return await self._reader.__anext__()
+        return await anext(self._reader)
 
 
 class StreamBackend[TEvent]:
