@@ -18,6 +18,7 @@ A small ``_conformant_backend`` task honours the abort contract — on
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 import pytest
@@ -611,3 +612,17 @@ async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
     # wait_idle() must return (defensive set_idle in _run's finally):
     await asyncio.wait_for(controller.wait_idle(), 1)
     assert controller.is_idle() is True
+
+
+async def test_aclose_reaps_bus_even_when_cancelled_mid_flight() -> None:
+    """If aclose() itself is cancelled, its finally still reaps the bus worker."""
+    controller, _backend = _pair()
+    # Wedged backend: the controller drain never completes on its own, so
+    # aclose parks inside await_or_cancel(controller._task).
+    close_task = asyncio.create_task(controller.aclose(timeout=10))
+    await asyncio.sleep(0.05)  # let aclose park
+    close_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await close_task
+    # The bus worker was still reaped by aclose's finally — no owned task left.
+    assert controller.bus._task.done()

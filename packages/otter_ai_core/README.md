@@ -192,6 +192,10 @@ Prefer `async with ModelController(client)` (or `await controller.aclose()`).
 
 ### Quick example
 
+The example shows the **consumer** side only. In practice a transport /
+provider task pumps `pair.backend` — pushing `ServerContextEvent`s and draining
+`ClientContextEvent`s — otherwise `wait_idle()` will never return.
+
 ```python
 import asyncio
 

@@ -49,7 +49,6 @@ Once :meth:`close` / :meth:`aclose` has begun, the command methods
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from types import TracebackType
 from typing import Self
@@ -62,6 +61,7 @@ from otter_ai_core.model_connection import (
     ModelConnectionClient,
     ServerContextEventType,
 )
+from otter_ai_core.model_controller._lifecycle import await_or_cancel
 from otter_ai_core.model_controller.bus import ModelBus
 from otter_ai_core.model_controller.state import State
 
@@ -214,8 +214,12 @@ class ModelController:
         Safe to call more than once.
         """
         self.close()
-        await _await_or_cancel(self._task, timeout)
-        await self._bus.aclose(timeout)
+        try:
+            await await_or_cancel(self._task, timeout)
+        finally:
+            # Always reap the bus worker — even if the await above was cancelled
+            # mid-flight — so no owned task is left pending.
+            await self._bus.aclose(timeout)
 
     async def __aenter__(self) -> Self:
         return self
@@ -254,26 +258,3 @@ class ModelController:
             # can drain and exit.
             self._state.set_idle()
             self._bus.end()
-
-
-async def _await_or_cancel(task: asyncio.Task[None], timeout: float | None) -> None:
-    """Await ``task`` for up to ``timeout`` seconds; force-cancel if it overruns.
-
-    ``timeout`` of ``None`` waits indefinitely (drain-or-hang). A timed-out or
-    otherwise-interrupted await still cancels the task (running its ``finally``
-    blocks) so no owned task is left pending.
-    """
-    if task.done():
-        return
-    try:
-        await asyncio.wait_for(task, timeout)
-    except TimeoutError:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    except BaseException:
-        # The await itself was cancelled: cancel the task too, then re-raise.
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        raise

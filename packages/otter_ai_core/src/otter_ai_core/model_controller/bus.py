@@ -35,6 +35,7 @@ from collections.abc import Awaitable, Callable
 
 from otter_ai_core.channel import ChannelPair, create_channel
 from otter_ai_core.model_connection import ServerContextEvent, ServerContextEventType
+from otter_ai_core.model_controller._lifecycle import await_or_cancel
 
 #: Default graceful-drain deadline (seconds) for :meth:`ModelBus.aclose`.
 #: ``None`` would wait forever; a finite default keeps teardown deterministic
@@ -129,17 +130,4 @@ class ModelBus:
         so no owned task is left pending. Safe to call more than once.
         """
         self.end()
-        if self._task.done():
-            return
-        try:
-            await asyncio.wait_for(self._task, timeout)
-        except TimeoutError:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-        except BaseException:
-            # aclose() itself was cancelled: cancel the worker too, then re-raise.
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            raise
+        await await_or_cancel(self._task, timeout)
