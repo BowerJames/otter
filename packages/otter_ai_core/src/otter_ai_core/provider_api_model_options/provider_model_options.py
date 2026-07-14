@@ -14,10 +14,6 @@ class ProviderModelOption(BaseModel):
     api to dispatch it through, the api key, and a thinking level. It is the
     caller's options bundle — realising the ``TOptions`` of the dispatch
     layer's producer seam (:data:`otter_ai_core.builder.BuilderFn`).
-
-    No runtime handles (hooks) and no per-call request overrides live here —
-    by design (the dispatch layer uses default hooks and applies no overrides
-    on top of catalog facts).
     """
 
     model: str

@@ -140,8 +140,6 @@ serializable data model is unchanged.
   of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
   generic `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
-- [`hook.py`](./packages/otter_ai_core/src/otter_ai_core/hook.py) — the generic async
-  `Hook[TEvent, TResponse]` alias.
 - [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —
   pure-data enumerations/types (`KnownApis`, `KnownProviders`, `ThinkingLevel`)
   a dispatch layer keys on.

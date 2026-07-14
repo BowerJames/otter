@@ -81,7 +81,6 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
-from otter_ai_core.hook import Hook
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
     KnownProviders,
@@ -100,8 +99,6 @@ __version__ = "0.1.0"
 __all__ = [
     # version
     "__version__",
-    # hooks
-    "Hook",
     # builder
     "BuilderFn",
     # usage
