@@ -37,6 +37,7 @@ the OpenAI Realtime API), so a client must refresh any local copy.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -48,12 +49,25 @@ from otter_ai_core.context import (
 )
 
 
+class ServerContextEventType(StrEnum):
+    """The ``type`` field of a server→client model-connection event."""
+
+    RESPONSE_STARTED = "response.started"
+    RESPONSE_UPDATED = "response.updated"
+    RESPONSE_DONE = "response.done"
+    USER_ITEM_ADDED = "user_item.added"
+    USER_ITEM_UPDATED = "user_item.updated"
+    TOOL_RESULT_ADDED = "tool_result_item.added"
+
+
 class ResponseStarted(BaseModel):
     """A response generation has started. ``partial`` is the empty-start item."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["response.started"] = "response.started"
+    type: Literal[ServerContextEventType.RESPONSE_STARTED] = (
+        ServerContextEventType.RESPONSE_STARTED
+    )  # noqa: E501
     partial: AssistantContextItem
 
 
@@ -67,7 +81,9 @@ class ResponseUpdated(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["response.updated"] = "response.updated"
+    type: Literal[ServerContextEventType.RESPONSE_UPDATED] = (
+        ServerContextEventType.RESPONSE_UPDATED
+    )  # noqa: E501
     partial: AssistantContextItem
 
 
@@ -76,7 +92,9 @@ class ResponseDone(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["response.done"] = "response.done"
+    type: Literal[ServerContextEventType.RESPONSE_DONE] = (
+        ServerContextEventType.RESPONSE_DONE
+    )  # noqa: E501
     item: AssistantContextItem
 
 
@@ -85,7 +103,9 @@ class UserItemAdded(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["user_item.added"] = "user_item.added"
+    type: Literal[ServerContextEventType.USER_ITEM_ADDED] = (
+        ServerContextEventType.USER_ITEM_ADDED
+    )  # noqa: E501
     item: UserContextItem
 
 
@@ -100,7 +120,9 @@ class UserItemUpdated(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["user_item.updated"] = "user_item.updated"
+    type: Literal[ServerContextEventType.USER_ITEM_UPDATED] = (
+        ServerContextEventType.USER_ITEM_UPDATED
+    )  # noqa: E501
     item: UserContextItem
 
 
@@ -109,7 +131,9 @@ class ToolResultAdded(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["tool_result_item.added"] = "tool_result_item.added"
+    type: Literal[ServerContextEventType.TOOL_RESULT_ADDED] = (
+        ServerContextEventType.TOOL_RESULT_ADDED
+    )  # noqa: E501
     item: ToolResultContextItem
 
 

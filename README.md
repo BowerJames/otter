@@ -138,6 +138,13 @@ serializable data model is unchanged.
   `ServerContextEvent`) and typed connection aliases
   (`ModelConnectionClient` / `ModelConnectionBackend`); the bidirectional peer
   of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
+- [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
+  — the high-level conversation driver built on a `ModelConnectionClient`:
+  `ModelController` (append input / request / abort a response, idle/busy
+  tracking), `ModelBus` (typed pub/sub keyed on `ServerContextEventType`),
+  and `State` (the idle/busy latch + closing flag). Unlike the lower-level
+  subpackages, it is re-exported at the top level (`ModelController` /
+  `ModelBus` / `State`).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
   generic `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
 - [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —

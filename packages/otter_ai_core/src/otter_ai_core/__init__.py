@@ -81,6 +81,7 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
+from otter_ai_core.model_controller import ModelBus, ModelController, State
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
     KnownProviders,
@@ -154,4 +155,9 @@ __all__ = [
     "ConnectionBackend",
     "ConnectionPair",
     "create_connection",
+    # model controller (high-level conversation driver over a connection;
+    # re-exported at the top level, unlike the subpackage-only model_connection)
+    "ModelController",
+    "ModelBus",
+    "State",
 ]

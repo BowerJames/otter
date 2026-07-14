@@ -10,9 +10,11 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from otter_ai_core import AssistantContextItem, TextContent, Usage, UsageCost
 from otter_ai_core.connection import ConnectionBackend, ConnectionClient
 from otter_ai_core.model_connection import (
+    AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
     ClientContextEvent,
+    ClientContextEventType,
     CreateResponse,
     ModelConnectionBackend,
     ModelConnectionClient,
@@ -97,6 +99,7 @@ def _tool_result_item() -> dict[str, Any]:
         ("user_message.add", AddUserMessage, {"message": _user_message()}),
         ("tool_result.add", AddToolResultMessage, {"message": _tool_result_message()}),
         ("response.create", CreateResponse, {}),
+        ("response.abort", AbortResponse, {}),
     ],
 )
 def test_client_event_routing(typ: str, leaf: type, extra: dict[str, Any]) -> None:
@@ -135,6 +138,7 @@ def test_server_event_routing(typ: str, leaf: type, extra: dict[str, Any]) -> No
         (AddUserMessage, "user_message.add"),
         (AddToolResultMessage, "tool_result.add"),
         (CreateResponse, "response.create"),
+        (AbortResponse, "response.abort"),
         (ResponseStarted, "response.started"),
         (ResponseUpdated, "response.updated"),
         (ResponseDone, "response.done"),
@@ -150,7 +154,7 @@ def test_type_field_has_default(cls: type[BaseModel], typ: str) -> None:
 
 def test_create_response_constructs_without_type() -> None:
     """An event with no required non-type fields builds with no arguments."""
-    assert CreateResponse().type == "response.create"
+    assert CreateResponse().type == ClientContextEventType.CREATE_RESPONSE
 
 
 # --------------------------------------------------------------------------- #

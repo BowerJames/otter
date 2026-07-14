@@ -151,7 +151,76 @@ protocol live in
 their bidirectional peers — the model-connection event protocol
 (`ClientContextEvent` / `ServerContextEvent`) and the typed two-way connection
 aliases (`ModelConnectionClient` / `ModelConnectionBackend`) — live in
-[`model_connection/`](./src/otter_ai_core/model_connection).
+[`model_connection/`](./src/otter_ai_core/model_connection). The high-level
+conversation driver layered over a `ModelConnectionClient` — `ModelController`,
+`ModelBus`, and `State` — lives in
+[`model_controller/`](./src/otter_ai_core/model_controller) and is documented
+below.
+
+## Model controller
+
+[`model_controller/`](./src/otter_ai_core/model_controller) turns the low-level
+connection conduit into a stateful conversation. It is re-exported at the top
+level (`ModelController` / `ModelBus` / `State`) — the high-level convenience
+most callers want, unlike the subpackage-only `model_connection`.
+
+- [`ModelController`](./src/otter_ai_core/model_controller/controller.py) —
+  wraps a `ModelConnectionClient`, drives the conversation
+  (`add_messages` / `generate` / `abort`), tracks idle/busy state from inbound
+  `response.done` events, and re-publishes every server event to its `bus`.
+- [`ModelBus`](./src/otter_ai_core/model_controller/bus.py) — a typed pub/sub
+  bus keyed on `ServerContextEventType`, with its own worker task and
+  per-handler error isolation (a raising handler is logged at `ERROR` and
+  skipped; siblings keep running).
+- [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy
+  `asyncio.Event` latch plus a `is_closing` flag.
+
+A fresh controller starts **idle**. `generate` flips it to busy and returns it
+to idle on `response.done`. Two distinct aborts:
+
+- `abort()` — **protocol** abort: stop the in-flight generation but keep the
+  connection open (pushes an `AbortResponse`).
+- `close()` / `aclose()` — **runtime** teardown: tear the connection down via
+  `client.abort()`.
+
+Teardown is cooperative first, deterministic second. `close()` is synchronous
+and only *initiates* teardown (`client.abort()`); the controller keeps draining
+so a conformant backend's shutdown items still flow through the bus.
+`aclose(timeout)` awaits that drain to completion and force-cancels if a
+wedged backend never ends the inbound — so no owned task is left pending.
+Prefer `async with ModelController(client)` (or `await controller.aclose()`).
+
+### Quick example
+
+```python
+import asyncio
+
+from otter_ai_core import ModelController, UserMessage, create_connection
+from otter_ai_core.context import Role
+from otter_ai_core.model_connection import AddUserMessage, ServerContextEventType
+
+
+async def main() -> None:
+    pair = create_connection()  # a transport task pumps pair.backend in practice
+    async with ModelController(pair.client) as controller:
+        done = asyncio.Event()
+
+        async def on_done(_event: object) -> None:
+            done.set()
+
+        controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, on_done)
+        controller.generate(
+            [
+                AddUserMessage(
+                    message=UserMessage(role=Role.User, content="Hi!", timestamp=0)
+                )
+            ]
+        )
+        await controller.wait_idle()  # blocks until response.done
+
+
+asyncio.run(main())
+```
 
 See the [root `README.md`](../../README.md) for the full runtime documentation
 and the one-way producer-side seam type (`AssistantMessageStreamFnBuilder`).
