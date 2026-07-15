@@ -23,9 +23,11 @@ The public surface is declared via :data:`__all__`.
 from otter_ai_core.model_controller.bus import ModelBus
 from otter_ai_core.model_controller.controller import ModelController
 from otter_ai_core.model_controller.state import State
+from otter_ai_core.model_controller.stream import create_model_controller_stream
 
 __all__ = [
     "ModelController",
     "ModelBus",
     "State",
+    "create_model_controller_stream"
 ]

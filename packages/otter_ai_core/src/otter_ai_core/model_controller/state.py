@@ -69,3 +69,6 @@ class State:
     def begin_closing(self) -> None:
         """Mark teardown begun. Idempotent; subsequent commands are rejected."""
         self._is_closing = True
+
+    async def wait_for_idle(self) -> None:
+        await self._is_idle.wait()

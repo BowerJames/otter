@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context.content import AssistantContent, UserContent
+from otter_ai_core.context.content import AssistantContent, UserContent, ToolCall
 from otter_ai_core.context.diagnostics import AssistantMessageDiagnostic
 from otter_ai_core.context.role import Role
 from otter_ai_core.context.usage import Usage
@@ -76,6 +76,12 @@ class AssistantMessage(BaseModel):
     error_message: str | None = None
     #: Unix timestamp in milliseconds.
     timestamp: int
+
+    @property
+    def tool_calls(self) -> list[ToolCall]:
+        return [
+            content_part for content_part in self.content if isinstance(content_part,ToolCall)
+        ]
 
 
 class ToolResultMessage(BaseModel):

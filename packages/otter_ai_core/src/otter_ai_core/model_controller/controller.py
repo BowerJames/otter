@@ -51,7 +51,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from types import TracebackType
-from typing import Self
+from typing import Self, Callable
 
 from otter_ai_core.model_connection import (
     AbortResponse,
@@ -62,7 +62,7 @@ from otter_ai_core.model_connection import (
     ServerContextEventType,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
-from otter_ai_core.model_controller.bus import ModelBus
+from otter_ai_core.model_controller.bus import ModelBus, Handler
 from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`ModelController.aclose`.
@@ -120,6 +120,14 @@ class ModelController:
     def is_idle(self) -> bool:
         """``True`` when no generation is in progress (commands are accepted)."""
         return self._state.is_idle.is_set()
+    
+    async def wait_for_idle(self) -> None:
+        await self._state.wait_for_idle()
+
+    def on(
+        self, event_type: ServerContextEventType, handler: Handler
+    ) -> Callable[[], None]:
+        return self._bus.subscribe(event_type, handler)
 
     def is_closing(self) -> bool:
         """``True`` once teardown has begun (commands are then rejected)."""
