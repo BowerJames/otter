@@ -66,9 +66,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -197,6 +195,27 @@ async def test_bus_matching_handler_fires() -> None:
     await bus.aclose()
 
 
+async def test_model_bus_handler_preserves_server_event_narrowing() -> None:
+    bus = ModelBus()
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(event: ServerContextEvent) -> None:
+        match event.type:
+            case ServerContextEventType.RESPONSE_DONE:
+                # Strict mypy must narrow the full union before allowing .item.
+                seen.append(event.item.id)
+                done.set()
+            case _:
+                pass
+
+    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
+    bus.publish(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(done.wait(), 1)
+    assert seen == ["a1"]
+    await bus.aclose()
+
+
 async def test_bus_non_matching_type_not_dispatched() -> None:
     bus = ModelBus()
     wrong = asyncio.Event()
@@ -276,7 +295,7 @@ async def test_bus_isolates_handler_errors(caplog: pytest.LogCaptureFixture) -> 
     bus.subscribe(ServerContextEventType.RESPONSE_DONE, good)
     bus.subscribe(ServerContextEventType.USER_ITEM_ADDED, on_user_item)
 
-    with caplog.at_level(logging.ERROR, logger="otter_ai_core.model_controller.bus"):
+    with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
         bus.publish(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(sibling.wait(), 1)  # sibling ran despite bad raising
         bus.publish(UserItemAdded(item=_user_item()))

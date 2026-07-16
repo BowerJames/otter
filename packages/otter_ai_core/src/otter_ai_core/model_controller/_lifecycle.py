@@ -1,9 +1,8 @@
-"""Internal async teardown helper shared by the controller and the bus.
+"""Internal async teardown helper for the model controller.
 
-Both :class:`~otter_ai_core.model_controller.ModelController` and
-:class:`~otter_ai_core.model_controller.ModelBus` own a background task whose
-graceful drain must be awaited under a deadline and force-cancelled if it
-overruns. That logic lives once here.
+The controller's background drain task must be awaited under a deadline and
+force-cancelled if it overruns. The generic bus owns its corresponding helper
+within :mod:`otter_ai_core.bus`.
 """
 
 from __future__ import annotations

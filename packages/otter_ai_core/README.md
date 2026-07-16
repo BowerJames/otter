@@ -3,9 +3,10 @@
 **Otter AI** — a Pydantic v2 data model for representing LLM conversation
 context, the streaming-event protocol used to build a single assistant message,
 and the generic async runtimes (a one-way channel, an abortable stream facade,
-and a bidirectional channel) plus the seam types a provider/transport package
-will implement. No LLMs, providers, APIs, transports, API registry, or
-`stream()` dispatch live here; only the data structures a conversation and an
+a bidirectional channel, and a typed event bus) plus the seam types a
+provider/transport package will implement. No LLMs, providers, APIs,
+transports, API registry, or `stream()` dispatch live here; only the data
+structures a conversation and an
 event stream are built from, the runtimes that carry them, and the seams a
 provider package will plug into.
 
@@ -124,6 +125,10 @@ through, plus the seam types a provider/transport package will implement:
 - [`channel.py`](./src/otter_ai_core/channel.py) — a single-consumer async
   push-queue split into a read end and a write end
   (`ChannelReader` / `ChannelWriter` / `create_channel`).
+- [`bus.py`](./src/otter_ai_core/bus.py) — a structurally typed pub/sub bus
+  keyed by a `StrEnum` discriminator. Its event parameter is the complete
+  discriminated union, so handlers retain variant narrowing; the bus validates
+  at runtime that each event's discriminator belongs to its configured enum.
 - [`stream.py`](./src/otter_ai_core/stream.py) — an abortable one-way stream
   facade layered over the channel (`StreamClient` / `StreamBackend` /
   `create_stream`); the abort signal is intrinsic to the stream, not threaded
@@ -168,10 +173,11 @@ most callers want, unlike the subpackage-only `model_connection`.
   wraps a `ModelConnectionClient`, drives the conversation
   (`add_messages` / `generate` / `abort`), tracks idle/busy state from inbound
   `response.done` events, and re-publishes every server event to its `bus`.
-- [`ModelBus`](./src/otter_ai_core/model_controller/bus.py) — a typed pub/sub
-  bus keyed on `ServerContextEventType`, with its own worker task and
-  per-handler error isolation (a raising handler is logged at `ERROR` and
-  skipped; siblings keep running).
+- [`ModelBus`](./src/otter_ai_core/model_controller/bus.py) — the
+  zero-argument model-event specialization of the generic
+  [`Bus`](./src/otter_ai_core/bus.py), keyed on `ServerContextEventType`, with
+  its own worker task and per-handler error isolation (a raising handler is
+  logged at `ERROR` and skipped; siblings keep running).
 - [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy
   `asyncio.Event` latch plus a `is_closing` flag.
 

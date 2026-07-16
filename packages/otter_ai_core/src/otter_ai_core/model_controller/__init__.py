@@ -8,7 +8,8 @@ This package groups the high-level conversation driver built atop the
   conversation (``add_messages`` / ``generate`` / ``abort``), tracks idle/busy
   state from inbound ``response.done`` events, and re-publishes every server
   event to a :class:`ModelBus`.
-* :class:`ModelBus` — a typed pub/sub bus keyed on
+* :class:`ModelBus` — the model-event specialization of
+  :class:`otter_ai_core.bus.Bus`, keyed on
   :class:`~otter_ai_core.model_connection.ServerContextEventType`, with its own
   worker task and per-handler error isolation.
 * :class:`State` — the controller's mutable idle/busy latch and closing flag.
@@ -25,9 +26,4 @@ from otter_ai_core.model_controller.controller import ModelController
 from otter_ai_core.model_controller.state import State
 from otter_ai_core.model_controller.stream import create_model_controller_stream
 
-__all__ = [
-    "ModelController",
-    "ModelBus",
-    "State",
-    "create_model_controller_stream"
-]
+__all__ = ["ModelController", "ModelBus", "State", "create_model_controller_stream"]

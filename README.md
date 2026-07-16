@@ -41,8 +41,9 @@ The repository root is a [virtual uv workspace](https://docs.astral.sh/uv/concep
 types and data models a conversation is built from, plus the generic async
 streaming runtimes built on top of them. It defines **no LLMs, providers,
 APIs, transports, API registry, or `stream()` dispatch** — only the Pydantic v2
-data structures, a generic async channel runtime, an abortable stream facade
-layered over it, and the seam types a provider/transport package will implement.
+data structures, generic async channel and typed event-bus runtimes, an
+abortable stream facade layered over the channel, and the seam types a
+provider/transport package will implement.
 
 ### Context model
 
@@ -124,6 +125,10 @@ serializable data model is unchanged.
 
 ### Other core subpackages
 
+- [`bus.py`](./packages/otter_ai_core/src/otter_ai_core/bus.py) — a structurally
+  typed pub/sub bus keyed by a `StrEnum` discriminator. Handlers retain the
+  complete event union for variant narrowing, while runtime validation ensures
+  each event belongs to the configured discriminator family.
 - [`bidirectional_channel.py`](./packages/otter_ai_core/src/otter_ai_core/bidirectional_channel.py)
   — the bidirectional queue primitive (two cross-wired channels) for APIs that
   keep a live connection (Realtime / Responses):
@@ -141,8 +146,9 @@ serializable data model is unchanged.
 - [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
   — the high-level conversation driver built on a `ModelConnectionClient`:
   `ModelController` (append input / request / abort a response, idle/busy
-  tracking), `ModelBus` (typed pub/sub keyed on `ServerContextEventType`),
-  and `State` (the idle/busy latch + closing flag). Unlike the lower-level
+  tracking), `ModelBus` (the zero-argument model-event specialization of the
+  generic bus, keyed on `ServerContextEventType`), and `State` (the idle/busy
+  latch + closing flag). Unlike the lower-level
   subpackages, it is re-exported at the top level (`ModelController` /
   `ModelBus` / `State`).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
