@@ -26,9 +26,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from otter_ai_core.context import ToolResultMessage, UserMessage
+from otter_ai_core.event import Event
 
 
 class ClientContextEventType(StrEnum):
@@ -40,18 +41,16 @@ class ClientContextEventType(StrEnum):
     ABORT_RESPONSE = "response.abort"
 
 
-class AddUserMessage(BaseModel):
+class AddUserMessage(Event[ClientContextEventType]):
     """Append a user message to the conversation before a ``response.create``."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientContextEventType.ADD_USER_MESSAGE] = (
-        ClientContextEventType.ADD_USER_MESSAGE
-    )  # noqa: E501
+    type: Literal[ClientContextEventType.ADD_USER_MESSAGE] = ClientContextEventType.ADD_USER_MESSAGE  # noqa: E501
     message: UserMessage
 
 
-class AddToolResultMessage(BaseModel):
+class AddToolResultMessage(Event[ClientContextEventType]):
     """Append a tool-result message to the conversation before a ``response.create``."""
 
     model_config = ConfigDict(extra="forbid")
@@ -62,24 +61,20 @@ class AddToolResultMessage(BaseModel):
     message: ToolResultMessage
 
 
-class CreateResponse(BaseModel):
+class CreateResponse(Event[ClientContextEventType]):
     """Ask the server to generate the next assistant response."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientContextEventType.CREATE_RESPONSE] = (
-        ClientContextEventType.CREATE_RESPONSE
-    )  # noqa: E501
+    type: Literal[ClientContextEventType.CREATE_RESPONSE] = ClientContextEventType.CREATE_RESPONSE  # noqa: E501
 
 
-class AbortResponse(BaseModel):
+class AbortResponse(Event[ClientContextEventType]):
     """Ask the server to abort the current response generation."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ClientContextEventType.ABORT_RESPONSE] = (
-        ClientContextEventType.ABORT_RESPONSE
-    )  # noqa: E501
+    type: Literal[ClientContextEventType.ABORT_RESPONSE] = ClientContextEventType.ABORT_RESPONSE  # noqa: E501
 
 
 #: Discriminated union of all client→server (outbound) model-connection events.

@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context.content import AssistantContent, UserContent, ToolCall
+from otter_ai_core.context.content import AssistantContent, ToolCall, UserContent
 from otter_ai_core.context.diagnostics import AssistantMessageDiagnostic
 from otter_ai_core.context.role import Role
 from otter_ai_core.context.usage import Usage
@@ -79,9 +79,7 @@ class AssistantMessage(BaseModel):
 
     @property
     def tool_calls(self) -> list[ToolCall]:
-        return [
-            content_part for content_part in self.content if isinstance(content_part,ToolCall)
-        ]
+        return [content_part for content_part in self.content if isinstance(content_part, ToolCall)]
 
 
 class ToolResultMessage(BaseModel):
@@ -105,6 +103,4 @@ class ToolResultMessage(BaseModel):
 
 
 #: Discriminated union of all message roles.
-Message = Annotated[
-    UserMessage | AssistantMessage | ToolResultMessage, Field(discriminator="role")
-]
+Message = Annotated[UserMessage | AssistantMessage | ToolResultMessage, Field(discriminator="role")]

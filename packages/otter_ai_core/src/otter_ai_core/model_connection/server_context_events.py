@@ -40,13 +40,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from otter_ai_core.context import (
     AssistantContextItem,
     ToolResultContextItem,
     UserContextItem,
 )
+from otter_ai_core.event import Event
 
 
 class ServerContextEventType(StrEnum):
@@ -60,18 +61,16 @@ class ServerContextEventType(StrEnum):
     TOOL_RESULT_ADDED = "tool_result_item.added"
 
 
-class ResponseStarted(BaseModel):
+class ResponseStarted(Event[ServerContextEventType]):
     """A response generation has started. ``partial`` is the empty-start item."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ServerContextEventType.RESPONSE_STARTED] = (
-        ServerContextEventType.RESPONSE_STARTED
-    )  # noqa: E501
+    type: Literal[ServerContextEventType.RESPONSE_STARTED] = ServerContextEventType.RESPONSE_STARTED  # noqa: E501
     partial: AssistantContextItem
 
 
-class ResponseUpdated(BaseModel):
+class ResponseUpdated(Event[ServerContextEventType]):
     """An update to the in-progress assistant item.
 
     ``partial`` is a full snapshot of the in-progress
@@ -81,35 +80,29 @@ class ResponseUpdated(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ServerContextEventType.RESPONSE_UPDATED] = (
-        ServerContextEventType.RESPONSE_UPDATED
-    )  # noqa: E501
+    type: Literal[ServerContextEventType.RESPONSE_UPDATED] = ServerContextEventType.RESPONSE_UPDATED  # noqa: E501
     partial: AssistantContextItem
 
 
-class ResponseDone(BaseModel):
+class ResponseDone(Event[ServerContextEventType]):
     """Response generation completed. ``item`` is the final assistant item."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ServerContextEventType.RESPONSE_DONE] = (
-        ServerContextEventType.RESPONSE_DONE
-    )  # noqa: E501
+    type: Literal[ServerContextEventType.RESPONSE_DONE] = ServerContextEventType.RESPONSE_DONE  # noqa: E501
     item: AssistantContextItem
 
 
-class UserItemAdded(BaseModel):
+class UserItemAdded(Event[ServerContextEventType]):
     """The server accepted a user message and assigned it an item ``id``."""
 
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal[ServerContextEventType.USER_ITEM_ADDED] = (
-        ServerContextEventType.USER_ITEM_ADDED
-    )  # noqa: E501
+    type: Literal[ServerContextEventType.USER_ITEM_ADDED] = ServerContextEventType.USER_ITEM_ADDED  # noqa: E501
     item: UserContextItem
 
 
-class UserItemUpdated(BaseModel):
+class UserItemUpdated(Event[ServerContextEventType]):
     """A previously-added user item was amended; refresh any local copy.
 
     Signals that an existing :class:`~otter_ai_core.context.UserContextItem`
@@ -126,7 +119,7 @@ class UserItemUpdated(BaseModel):
     item: UserContextItem
 
 
-class ToolResultAdded(BaseModel):
+class ToolResultAdded(Event[ServerContextEventType]):
     """The server accepted a tool result and assigned it an item ``id``."""
 
     model_config = ConfigDict(extra="forbid")

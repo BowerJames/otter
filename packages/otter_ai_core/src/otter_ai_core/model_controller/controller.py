@@ -50,8 +50,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from types import TracebackType
-from typing import Self, Callable
+from typing import Self
 
 from otter_ai_core.model_connection import (
     AbortResponse,
@@ -62,7 +63,7 @@ from otter_ai_core.model_connection import (
     ServerContextEventType,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
-from otter_ai_core.model_controller.bus import ModelBus, Handler
+from otter_ai_core.model_controller.bus import Handler, ModelBus
 from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`ModelController.aclose`.
@@ -120,13 +121,11 @@ class ModelController:
     def is_idle(self) -> bool:
         """``True`` when no generation is in progress (commands are accepted)."""
         return self._state.is_idle.is_set()
-    
+
     async def wait_for_idle(self) -> None:
         await self._state.wait_for_idle()
 
-    def on(
-        self, event_type: ServerContextEventType, handler: Handler
-    ) -> Callable[[], None]:
+    def on(self, event_type: ServerContextEventType, handler: Handler) -> Callable[[], None]:
         return self._bus.subscribe(event_type, handler)
 
     def is_closing(self) -> bool:
@@ -143,9 +142,7 @@ class ModelController:
 
     def _require_running(self) -> None:
         if self._state.is_closing:
-            raise RuntimeError(
-                "ModelController is closing/closed; commands are rejected."
-            )
+            raise RuntimeError("ModelController is closing/closed; commands are rejected.")
 
     def add_messages(self, messages: list[InputEvent]) -> None:
         """Append conversation input (user messages / tool results) without generating.
@@ -156,9 +153,7 @@ class ModelController:
         """
         self._require_running()
         if not self.is_idle():
-            raise RuntimeError(
-                "Cannot add messages while a response generation is in progress."
-            )
+            raise RuntimeError("Cannot add messages while a response generation is in progress.")
         for message in messages:
             self._client.push(message)
 
@@ -171,9 +166,7 @@ class ModelController:
         """
         self._require_running()
         if not self.is_idle():
-            raise RuntimeError(
-                "Cannot generate a response while one is already in progress."
-            )
+            raise RuntimeError("Cannot generate a response while one is already in progress.")
         self._state.set_busy()
         for message in messages:
             self._client.push(message)
