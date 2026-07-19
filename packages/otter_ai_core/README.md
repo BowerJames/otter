@@ -80,7 +80,12 @@ A single discriminated union over `type`:
 
 - [`AssistantMessageEvent`](./src/otter_ai_core/assistant_message_stream/assistant_message_events.py)
   — 12 events (a port of pi-ai): `start`, `text_start/delta/end`,
-  `thinking_start/delta/end`, `tool_call_start/delta/end`, `done`, `error`.
+  `thinking_start/delta/end`, `tool_call_start/delta/end`, `done`, `error`. The
+  `type` values are owned by the
+  [`AssistantMessageEventType`](./src/otter_ai_core/assistant_message_stream/assistant_message_events.py)
+  `StrEnum` (the peer of `ServerContextEventType` / `ClientContextEventType` in
+  `model_connection`), and each event narrows `type` to a literal member and
+  inherits from the shared generic `Event[AssistantMessageEventType]` base.
 
 ### Terminal contract
 
