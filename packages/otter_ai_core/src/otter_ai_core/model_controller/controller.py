@@ -7,8 +7,26 @@ low-level push/iterate/abort conduit into a conversation: it appends input
 (``response.create``), asks it to stop the current generation
 (``response.abort``), and tracks idle/busy state from the inbound
 ``response.done`` events. Every inbound server event is also re-published to a
-:class:`~otter_ai_core.model_controller.bus.ModelBus` for fan-out to
-subscribers (renderers, persistence, metrics, …).
+:class:`~otter_ai_core.bus.Bus` for fan-out to subscribers (renderers,
+persistence, metrics, …).
+
+Async, confirmation-awaiting commands
+-------------------------------------
+The command surface is **async** and **awaits a backend confirmation** before
+returning:
+
+* :meth:`add_message` — pushes a ``user_message.add`` / ``tool_result.add``
+  client event and awaits the matching ``user_item.added`` /
+  ``tool_result_item.added`` server echo. Call it one or more times to stage
+  input.
+* :meth:`generate` — pushes ``response.create`` and awaits the matching
+  ``response.done``.
+
+Both are single-flight (rejected while busy) and never hang: if the run loop
+exits before the awaited echo arrives — teardown via :meth:`close` /
+:meth:`aclose`, or a non-conformant backend that ends the inbound early — the
+awaiting command is released and raises :class:`RuntimeError` rather than
+stranding its task.
 
 Two distinct aborts
 -------------------
@@ -42,7 +60,7 @@ Teardown is **cooperative first, deterministic second**:
   cleanup.) ``aclose`` is also available via ``async with``.
 
 Once :meth:`close` / :meth:`aclose` has begun, the command methods
-(:meth:`generate`, :meth:`add_messages`, :meth:`abort`) reject with
+(:meth:`add_message`, :meth:`generate`, :meth:`abort`) reject with
 :class:`RuntimeError`.
 """
 
@@ -54,16 +72,17 @@ from collections.abc import Callable
 from types import TracebackType
 from typing import Self
 
+from otter_ai_core.bus import Bus, BusHandler
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
     CreateResponse,
     ModelConnectionClient,
+    ServerContextEvent,
     ServerContextEventType,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
-from otter_ai_core.model_controller.bus import Handler, ModelBus
 from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`ModelController.aclose`.
@@ -76,6 +95,9 @@ InputEvent = AddUserMessage | AddToolResultMessage
 
 _log = logging.getLogger(__name__)
 
+#: An async subscriber invoked for a matching inbound server event.
+type ModelControllerHandler = BusHandler[ServerContextEvent]
+
 
 class ModelController:
     """Drive a :data:`ModelConnectionClient` as a stateful conversation.
@@ -83,9 +105,10 @@ class ModelController:
     Construct with a client (typically the ``client`` end of a
     :func:`~otter_ai_core.connection.create_connection` whose backend is pumped
     by a transport task). The controller starts **idle**. Use
-    :meth:`generate` to send input and request a response; :meth:`abort` to
-    cancel the in-flight response; :meth:`add_messages` to append input without
-    requesting a response. Subscribe to inbound events via the :attr:`bus`.
+    :meth:`add_message` to append input (awaiting the server's echo),
+    :meth:`generate` to request and await the next assistant response, and
+    :meth:`abort` to cancel an in-flight response. Subscribe to inbound events
+    via the :attr:`bus`.
 
     Tear down with ``await controller.aclose()`` (or ``async with``); see the
     module docstring for the two-abort distinction and the cooperative-then-
@@ -96,12 +119,13 @@ class ModelController:
        from within a running :mod:`asyncio` event loop.
     """
 
-    __slots__ = ("_client", "_bus", "_state", "_task")
+    __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
 
     def __init__(self, client: ModelConnectionClient) -> None:
         self._client = client
-        self._bus = ModelBus()
+        self._bus: Bus[ServerContextEventType, ServerContextEvent] = Bus(ServerContextEventType)
         self._state = State()
+        self._command_waiter: asyncio.Event | None = None
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
 
     # ------------------------------------------------------------------ #
@@ -109,7 +133,7 @@ class ModelController:
     # ------------------------------------------------------------------ #
 
     @property
-    def bus(self) -> ModelBus:
+    def bus(self) -> Bus[ServerContextEventType, ServerContextEvent]:
         """The pub/sub bus every inbound server event is re-published to."""
         return self._bus
 
@@ -125,7 +149,9 @@ class ModelController:
     async def wait_for_idle(self) -> None:
         await self._state.wait_for_idle()
 
-    def on(self, event_type: ServerContextEventType, handler: Handler) -> Callable[[], None]:
+    def on(
+        self, event_type: ServerContextEventType, handler: ModelControllerHandler
+    ) -> Callable[[], None]:
         return self._bus.subscribe(event_type, handler)
 
     def is_closing(self) -> bool:
@@ -137,40 +163,104 @@ class ModelController:
         await self._state.is_idle.wait()
 
     # ------------------------------------------------------------------ #
-    # Commands (rejected once closing)
+    # Commands (rejected once closing, or while busy)
     # ------------------------------------------------------------------ #
 
     def _require_running(self) -> None:
         if self._state.is_closing:
             raise RuntimeError("ModelController is closing/closed; commands are rejected.")
 
-    def add_messages(self, messages: list[InputEvent]) -> None:
-        """Append conversation input (user messages / tool results) without generating.
+    def _check_idle(self) -> None:
+        if not self.is_idle():
+            raise RuntimeError("ModelController is busy; command rejected.")
 
-        Only valid while idle. The items are pushed as
-        ``user_message.add`` / ``tool_result.add`` client events for the server
-        to echo back as items.
+    async def add_message(self, message: InputEvent) -> None:
+        """Append one conversation input and await the server's item-added echo.
+
+        Pushes a ``user_message.add`` / ``tool_result.add`` client event, flips
+        the controller to busy, and blocks until the backend echoes the matching
+        ``user_item.added`` / ``tool_result_item.added`` server event, then
+        returns to idle. Call one or more times to stage input before
+        :meth:`generate`.
+
+        Raises :class:`RuntimeError` if the controller is closing/closed or
+        already busy, or if the run loop exits before the echo arrives
+        (teardown / non-conformant backend) — the await never hangs.
         """
         self._require_running()
-        if not self.is_idle():
-            raise RuntimeError("Cannot add messages while a response generation is in progress.")
-        for message in messages:
-            self._client.push(message)
-
-    def generate(self, messages: list[InputEvent]) -> None:
-        """Append conversation input and request the next assistant response.
-
-        Flips the controller to busy, pushes the input, then pushes
-        ``response.create``. The controller returns to idle when the matching
-        ``response.done`` arrives.
-        """
-        self._require_running()
-        if not self.is_idle():
-            raise RuntimeError("Cannot generate a response while one is already in progress.")
+        self._check_idle()
         self._state.set_busy()
-        for message in messages:
-            self._client.push(message)
+        added = asyncio.Event()
+        self._command_waiter = added
+        received = False
+
+        async def _on_added(_event: ServerContextEvent) -> None:
+            nonlocal received
+            received = True
+            added.set()
+
+        # Subscribe only to the echo that matches this input type, so a stray
+        # mismatched item-added event cannot release the command early.
+        echo_type = (
+            ServerContextEventType.USER_ITEM_ADDED
+            if isinstance(message, AddUserMessage)
+            else ServerContextEventType.TOOL_RESULT_ADDED
+        )
+        unsub = self._bus.subscribe(echo_type, _on_added)
+        self._client.push(message)
+        try:
+            await added.wait()
+        finally:
+            self._command_waiter = None
+            unsub()
+        if not received:
+            # We were released by teardown (the run-loop exit path in
+            # ``_run``'s finally) rather than by the echo handler, so the
+            # awaited confirmation never truly arrived. asyncio's FIFO
+            # scheduling guarantees the converse: if ``_run`` published the
+            # echo before exiting, the bus worker dispatched it — and thus ran
+            # ``_on_added`` — before we resume, so ``received`` would be True.
+            raise RuntimeError(
+                "ModelController run loop exited before the item-added echo arrived."
+            )
+        self._state.set_idle()
+
+    async def generate(self) -> None:
+        """Request the next assistant response and await its completion.
+
+        Pushes ``response.create``, flips the controller to busy, and blocks
+        until the backend emits the matching ``response.done``, then returns to
+        idle. Stage any input with :meth:`add_message` first.
+
+        Raises :class:`RuntimeError` if the controller is closing/closed or
+        already busy, or if the run loop exits before ``response.done`` arrives
+        (teardown / non-conformant backend) — the await never hangs.
+        """
+        self._require_running()
+        self._check_idle()
+        self._state.set_busy()
+        done = asyncio.Event()
+        self._command_waiter = done
+        received = False
+
+        async def _on_done(_event: ServerContextEvent) -> None:
+            nonlocal received
+            received = True
+            done.set()
+
+        unsub = self._bus.subscribe(ServerContextEventType.RESPONSE_DONE, _on_done)
         self._client.push(CreateResponse())
+        try:
+            await done.wait()
+        finally:
+            self._command_waiter = None
+            unsub()
+        if not received:
+            # Released by teardown rather than by the response.done handler —
+            # see :meth:`add_message` for the FIFO reasoning that makes this
+            # check sound.
+            raise RuntimeError("ModelController run loop exited before response.done arrived.")
+        self._state.set_idle()
 
     def abort(self) -> None:
         """Protocol-abort the in-progress generation, keeping the connection open.
@@ -256,6 +346,10 @@ class ModelController:
             # hang. Idempotent on the normal exit path (idle is already set by
             # the response.done handler). Whether the backend ended the inbound
             # gracefully or we were cancelled, also stop the bus so its worker
-            # can drain and exit.
+            # can drain and exit. Release an in-flight command await too, so
+            # add_message/generate parked on their confirmation event are not
+            # stranded when the drain loop exits.
             self._state.set_idle()
+            if self._command_waiter is not None:
+                self._command_waiter.set()
             self._bus.end()

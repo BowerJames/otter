@@ -145,12 +145,11 @@ serializable data model is unchanged.
   of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
 - [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
   — the high-level conversation driver built on a `ModelConnectionClient`:
-  `ModelController` (append input / request / abort a response, idle/busy
-  tracking), `ModelBus` (the zero-argument model-event specialization of the
-  generic bus, keyed on `ServerContextEventType`), and `State` (the idle/busy
-  latch + closing flag). Unlike the lower-level
-  subpackages, it is re-exported at the top level (`ModelController` /
-  `ModelBus` / `State`).
+  `ModelController` (async, confirmation-awaiting `add_message` / `generate` /
+  `abort`, idle/busy tracking, no-strand teardown of in-flight commands) and
+  `State` (the idle/busy latch + closing flag). Its `bus` is a generic `Bus`
+  keyed on `ServerContextEventType`. Unlike the lower-level subpackages, it is
+  re-exported at the top level (`ModelController` / `State`).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
   generic `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
 - [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —
