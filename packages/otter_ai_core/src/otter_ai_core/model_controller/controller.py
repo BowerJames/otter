@@ -199,15 +199,20 @@ class ModelController:
             received = True
             added.set()
 
-        user_unsub = self._bus.subscribe(ServerContextEventType.USER_ITEM_ADDED, _on_added)
-        tool_unsub = self._bus.subscribe(ServerContextEventType.TOOL_RESULT_ADDED, _on_added)
+        # Subscribe only to the echo that matches this input type, so a stray
+        # mismatched item-added event cannot release the command early.
+        echo_type = (
+            ServerContextEventType.USER_ITEM_ADDED
+            if isinstance(message, AddUserMessage)
+            else ServerContextEventType.TOOL_RESULT_ADDED
+        )
+        unsub = self._bus.subscribe(echo_type, _on_added)
         self._client.push(message)
         try:
             await added.wait()
         finally:
             self._command_waiter = None
-            user_unsub()
-            tool_unsub()
+            unsub()
         if not received:
             # We were released by teardown (the run-loop exit path in
             # ``_run``'s finally) rather than by the echo handler, so the

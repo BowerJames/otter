@@ -46,6 +46,7 @@ from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
 from otter_ai_core.model_connection import (
     AbortResponse,
+    AddToolResultMessage,
     AddUserMessage,
     ClientContextEvent,
     ClientContextEventType,
@@ -285,6 +286,34 @@ async def test_add_message_rejected_while_busy() -> None:
     with pytest.raises(RuntimeError, match="busy"):
         await controller.add_message(_input())
     backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_add_message_with_tool_result_awaits_tool_result_echo() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(
+        controller.add_message(AddToolResultMessage(message=_tool_result_message()))
+    )
+    pushed = await _take(backend, 1)
+    assert pushed[0].type == ClientContextEventType.ADD_TOOL_RESULT_MESSAGE
+    backend.push(ToolResultAdded(item=_tool_result_item()))
+    await asyncio.wait_for(task, 1)
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_add_message_ignores_mismatched_echo_type() -> None:
+    """An ``AddUserMessage`` await must not complete on a ``ToolResultAdded`` echo."""
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.add_message(_input()))
+    await _take(backend, 1)  # AddUserMessage pushed; awaiting USER_ITEM_ADDED
+
+    backend.push(ToolResultAdded(item=_tool_result_item()))  # mismatched — ignored
+    await asyncio.sleep(0.02)  # let the bus worker dispatch it
+    assert task.done() is False  # still awaiting the matching echo
+
+    backend.push(UserItemAdded(item=_user_item()))  # matching — completes
     await asyncio.wait_for(task, 1)
     await controller.aclose(timeout=0.2)
 
