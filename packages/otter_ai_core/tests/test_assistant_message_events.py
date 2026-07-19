@@ -20,6 +20,7 @@ from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
     AssistantErrorEvent,
     AssistantMessageEvent,
+    AssistantMessageEventType,
     AssistantStartEvent,
     AssistantTextDeltaEvent,
     AssistantTextEndEvent,
@@ -32,9 +33,7 @@ from otter_ai_core.assistant_message_stream import (
     AssistantToolCallStartEvent,
 )
 
-_ASSISTANT_ADAPTER: TypeAdapter[AssistantMessageEvent] = TypeAdapter(
-    AssistantMessageEvent
-)
+_ASSISTANT_ADAPTER: TypeAdapter[AssistantMessageEvent] = TypeAdapter(AssistantMessageEvent)
 
 
 def _usage() -> Usage:
@@ -44,9 +43,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -64,6 +61,36 @@ def _assistant_partial(**overrides: Any) -> dict[str, Any]:
     }
     base.update(overrides)
     return base
+
+
+# --------------------------------------------------------------------------- #
+# AssistantMessageEventType enum
+# --------------------------------------------------------------------------- #
+
+
+def test_assistant_message_event_type_members_and_values() -> None:
+    """The enum owns the 12 type values; string values preserve the wire format."""
+    assert {m.value for m in AssistantMessageEventType} == {
+        "start",
+        "text_start",
+        "text_delta",
+        "text_end",
+        "thinking_start",
+        "thinking_delta",
+        "thinking_end",
+        "tool_call_start",
+        "tool_call_delta",
+        "tool_call_end",
+        "done",
+        "error",
+    }
+
+
+def test_assistant_message_event_type_is_str_enum() -> None:
+    """Each member is a str (StrEnum), so string-based ``match`` still works."""
+    member: AssistantMessageEventType = AssistantMessageEventType.TEXT_DELTA
+    assert member == "text_delta"
+    assert isinstance(AssistantMessageEventType.TEXT_DELTA, str)
 
 
 # --------------------------------------------------------------------------- #
@@ -129,9 +156,7 @@ def test_assistant_thinking_and_tool_call_blocks_round_trip() -> None:
         "role": "assistant",
         "content": [
             ThinkingContent(type="thinking", thinking="hmm").model_dump(),
-            ToolCall(
-                type="tool_call", id="t1", name="get_time", arguments={}
-            ).model_dump(),
+            ToolCall(type="tool_call", id="t1", name="get_time", arguments={}).model_dump(),
         ],
         "api": "anthropic-messages",
         "provider": "anthropic",
@@ -142,7 +167,7 @@ def test_assistant_thinking_and_tool_call_blocks_round_trip() -> None:
     }
     ev = AssistantToolCallEndEvent(
         role="assistant",
-        type="tool_call_end",
+        type=AssistantMessageEventType.TOOL_CALL_END,
         content_index=1,
         tool_call=ToolCall(type="tool_call", id="t1", name="get_time", arguments={}),
         partial=__import__("otter_ai_core").AssistantMessage.model_validate(rich),
@@ -268,7 +293,7 @@ def test_assistant_error_round_trip_through_union() -> None:
 
     err = AssistantErrorEvent(
         role="assistant",
-        type="error",
+        type=AssistantMessageEventType.ERROR,
         reason="aborted",
         error=otter_ai_core.AssistantMessage.model_validate(
             _assistant_partial(stop_reason="aborted", error_message="user cancel")
@@ -306,7 +331,7 @@ def test_context_can_hold_messages_built_from_streamed_done_events() -> None:
     """End-to-end: assemble messages from a `done` event and persist via Context."""
     asst = AssistantDoneEvent(
         role="assistant",
-        type="done",
+        type=AssistantMessageEventType.DONE,
         reason="tool_use",
         message=__import__("otter_ai_core").AssistantMessage.model_validate(
             _assistant_partial(stop_reason="tool_use")
