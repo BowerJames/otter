@@ -157,8 +157,8 @@ their bidirectional peers — the model-connection event protocol
 (`ClientContextEvent` / `ServerContextEvent`) and the typed two-way connection
 aliases (`ModelConnectionClient` / `ModelConnectionBackend`) — live in
 [`model_connection/`](./src/otter_ai_core/model_connection). The high-level
-conversation driver layered over a `ModelConnectionClient` — `ModelController`,
-`ModelBus`, and `State` — lives in
+conversation driver layered over a `ModelConnectionClient` — `ModelController`
+and `State` — lives in
 [`model_controller/`](./src/otter_ai_core/model_controller) and is documented
 below.
 
@@ -166,23 +166,25 @@ below.
 
 [`model_controller/`](./src/otter_ai_core/model_controller) turns the low-level
 connection conduit into a stateful conversation. It is re-exported at the top
-level (`ModelController` / `ModelBus` / `State`) — the high-level convenience
-most callers want, unlike the subpackage-only `model_connection`.
+level (`ModelController` / `State`) — the high-level convenience most callers
+want, unlike the subpackage-only `model_connection`.
 
 - [`ModelController`](./src/otter_ai_core/model_controller/controller.py) —
-  wraps a `ModelConnectionClient`, drives the conversation
-  (`add_messages` / `generate` / `abort`), tracks idle/busy state from inbound
-  `response.done` events, and re-publishes every server event to its `bus`.
-- [`ModelBus`](./src/otter_ai_core/model_controller/bus.py) — the
-  zero-argument model-event specialization of the generic
-  [`Bus`](./src/otter_ai_core/bus.py), keyed on `ServerContextEventType`, with
-  its own worker task and per-handler error isolation (a raising handler is
-  logged at `ERROR` and skipped; siblings keep running).
+  wraps a `ModelConnectionClient`, drives the conversation via **async,
+  confirmation-awaiting commands** (`add_message` / `generate` / `abort`),
+  tracks idle/busy state from inbound `response.done` events, and re-publishes
+  every server event to its `bus` (a generic
+  [`Bus`](./src/otter_ai_core/bus.py) keyed on `ServerContextEventType`).
 - [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy
   `asyncio.Event` latch plus a `is_closing` flag.
 
-A fresh controller starts **idle**. `generate` flips it to busy and returns it
-to idle on `response.done`. Two distinct aborts:
+A fresh controller starts **idle**. Stage input with one or more
+`await add_message(...)` calls (each awaits the server's `user_item.added` /
+`tool_result_item.added` echo), then `await generate()` to request and await
+the next assistant response (it returns on `response.done`). Both commands
+are single-flight (rejected while busy) and never hang: if the run loop exits
+before the awaited confirmation arrives — teardown, or a non-conformant backend
+— the command raises rather than stranding its task. Two distinct aborts:
 
 - `abort()` — **protocol** abort: stop the in-flight generation but keep the
   connection open (pushes an `AbortResponse`).
@@ -200,33 +202,27 @@ Prefer `async with ModelController(client)` (or `await controller.aclose()`).
 
 The example shows the **consumer** side only. In practice a transport /
 provider task pumps `pair.backend` — pushing `ServerContextEvent`s and draining
-`ClientContextEvent`s — otherwise `wait_idle()` will never return.
+`ClientContextEvent`s — otherwise `generate()` will never return.
 
 ```python
 import asyncio
 
 from otter_ai_core import ModelController, UserMessage, create_connection
 from otter_ai_core.context import Role
-from otter_ai_core.model_connection import AddUserMessage, ServerContextEventType
+from otter_ai_core.model_connection import AddUserMessage
 
 
 async def main() -> None:
     pair = create_connection()  # a transport task pumps pair.backend in practice
     async with ModelController(pair.client) as controller:
-        done = asyncio.Event()
-
-        async def on_done(_event: object) -> None:
-            done.set()
-
-        controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, on_done)
-        controller.generate(
-            [
-                AddUserMessage(
-                    message=UserMessage(role=Role.User, content="Hi!", timestamp=0)
-                )
-            ]
+        # Stage input (each call awaits the server's item-added echo)...
+        await controller.add_message(
+            AddUserMessage(
+                message=UserMessage(role=Role.User, content="Hi!", timestamp=0)
+            )
         )
-        await controller.wait_idle()  # blocks until response.done
+        # ...then request and await the next assistant response.
+        await controller.generate()  # returns on response.done
 
 
 asyncio.run(main())

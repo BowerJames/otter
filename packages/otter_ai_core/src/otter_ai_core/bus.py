@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
 
-type Handler[TEvent] = Callable[[TEvent], Awaitable[None]]
+type BusHandler[TEvent] = Callable[[TEvent], Awaitable[None]]
 
 
 async def _await_or_cancel(task: asyncio.Task[None], timeout: float | None) -> None:
@@ -67,7 +67,7 @@ class Bus[TType: StrEnum, TEvent: EventLike]:
         channel_pair: ChannelPair[tuple[TType, TEvent]] = create_channel()
         self._reader = channel_pair.reader
         self._writer = channel_pair.writer
-        self._handlers: dict[TType, list[Handler[TEvent]]] = {
+        self._handlers: dict[TType, list[BusHandler[TEvent]]] = {
             member: [] for member in self.event_type
         }
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
@@ -103,7 +103,7 @@ class Bus[TType: StrEnum, TEvent: EventLike]:
                         exc_info=True,
                     )
 
-    def subscribe(self, event_type: TType, handler: Handler[TEvent]) -> Callable[[], None]:
+    def subscribe(self, event_type: TType, handler: BusHandler[TEvent]) -> Callable[[], None]:
         """Register ``handler`` for ``event_type``; return an unsubscribe callable.
 
         The returned callable removes the handler and is idempotent — calling

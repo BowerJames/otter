@@ -1,25 +1,31 @@
-"""ModelController / ModelBus / State: commands, fan-out, lifecycle, teardown.
+"""ModelController / State: async commands, fan-out, lifecycle, teardown.
 
-Tests exercise the three concerns of the ``model_controller`` package:
+Tests exercise the concerns of the ``model_controller`` package:
 
 * :class:`State` — the idle/busy latch (starts idle) and the closing flag;
-* :class:`ModelBus` — typed pub/sub with per-handler error isolation and
-  deadline-bounded teardown;
-* :class:`ModelController` — conversation commands, idle tracking, bus
-  fan-through, and the cooperative-then-deterministic teardown model.
+* :class:`ModelController` — the async, confirmation-awaiting commands
+  (:meth:`~ModelController.add_message` / :meth:`~ModelController.generate`),
+  the busy/closing guards, idle tracking, bus fan-through, the no-strand
+  teardown guarantee for in-flight commands, and the cooperative-then-
+  deterministic teardown model.
 
 The controller tests stand up a real ``create_connection()`` pair: the
 controller drives ``pair.client`` and the test pushes server events on
 ``pair.backend`` (and drains the client→server events the controller pushes).
 A small ``_conformant_backend`` task honours the abort contract — on
 ``abort_signal`` it ends the inbound so the controller's drain completes.
+
+Generic-bus behaviour (structural narrowing, foreign-family rejection,
+mutated-while-queued drop, per-handler isolation, end/aclose semantics) is
+covered in ``tests/test_bus.py``; the controller's bus is the same
+:class:`~otter_ai_core.bus.Bus` keyed on
+:class:`~otter_ai_core.model_connection.ServerContextEventType`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 
 import pytest
 
@@ -52,7 +58,7 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.model_controller import ModelBus, ModelController, State
+from otter_ai_core.model_controller import ModelController, State
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -175,205 +181,6 @@ async def test_state_wait_idle_returns_when_set() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelBus
-# --------------------------------------------------------------------------- #
-
-
-async def test_bus_matching_handler_fires() -> None:
-    bus = ModelBus()
-    seen: list[ServerContextEvent] = []
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        seen.append(event)
-        done.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    assert len(seen) == 1
-    await bus.aclose()
-
-
-async def test_model_bus_handler_preserves_server_event_narrowing() -> None:
-    bus = ModelBus()
-    seen: list[str] = []
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        match event.type:
-            case ServerContextEventType.RESPONSE_DONE:
-                # Strict mypy must narrow the full union before allowing .item.
-                seen.append(event.item.id)
-                done.set()
-            case _:
-                pass
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    assert seen == ["a1"]
-    await bus.aclose()
-
-
-async def test_bus_non_matching_type_not_dispatched() -> None:
-    bus = ModelBus()
-    wrong = asyncio.Event()
-    marker = asyncio.Event()
-
-    async def on_user_item(event: ServerContextEvent) -> None:
-        wrong.set()
-
-    async def on_done(event: ServerContextEvent) -> None:
-        marker.set()
-
-    bus.subscribe(ServerContextEventType.USER_ITEM_ADDED, on_user_item)
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, on_done)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(marker.wait(), 1)  # event processed
-    assert wrong.is_set() is False
-    await bus.aclose()
-
-
-async def test_bus_multiple_handlers_in_subscription_order() -> None:
-    bus = ModelBus()
-    order: list[int] = []
-    done = asyncio.Event()
-
-    async def first(event: ServerContextEvent) -> None:
-        order.append(1)
-
-    async def second(event: ServerContextEvent) -> None:
-        order.append(2)
-        done.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, first)
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, second)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    assert order == [1, 2]
-    await bus.aclose()
-
-
-async def test_bus_unsubscribe_is_idempotent() -> None:
-    bus = ModelBus()
-    seen: list[ServerContextEvent] = []
-    marker = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        seen.append(event)
-
-    async def marker_handler(event: ServerContextEvent) -> None:
-        marker.set()
-
-    unsubscribe = bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, marker_handler)
-    unsubscribe()
-    unsubscribe()  # idempotent — no error
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(marker.wait(), 1)  # worker processed the event
-    assert seen == []
-    await bus.aclose()
-
-
-async def test_bus_isolates_handler_errors(caplog: pytest.LogCaptureFixture) -> None:
-    """A raising handler is logged and skipped; siblings and later events still run."""
-    bus = ModelBus()
-    sibling = asyncio.Event()
-    next_event = asyncio.Event()
-
-    async def bad(event: ServerContextEvent) -> None:
-        raise ValueError("boom")
-
-    async def good(event: ServerContextEvent) -> None:
-        sibling.set()
-
-    async def on_user_item(event: ServerContextEvent) -> None:
-        next_event.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, bad)
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, good)
-    bus.subscribe(ServerContextEventType.USER_ITEM_ADDED, on_user_item)
-
-    with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
-        bus.publish(ResponseDone(item=_assistant_item()))
-        await asyncio.wait_for(sibling.wait(), 1)  # sibling ran despite bad raising
-        bus.publish(UserItemAdded(item=_user_item()))
-        await asyncio.wait_for(next_event.wait(), 1)  # bus survived to next event
-
-    assert sibling.is_set()
-    assert next_event.is_set()
-    assert any("handler raised" in r.getMessage() for r in caplog.records)
-    assert any(r.exc_info is not None for r in caplog.records)
-    await bus.aclose()
-
-
-async def test_bus_end_drains_queued_events() -> None:
-    bus = ModelBus()
-    seen: list[ServerContextEvent] = []
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        seen.append(event)
-        done.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    bus.end()
-    await asyncio.wait_for(done.wait(), 1)  # handler still fired after end()
-    assert len(seen) == 1
-    await bus.aclose()
-
-
-async def test_bus_publish_after_end_is_noop() -> None:
-    bus = ModelBus()
-    count = 0
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        nonlocal count
-        count += 1
-        done.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    assert count == 1
-    bus.end()
-    bus.publish(ResponseDone(item=_assistant_item()))  # dropped
-    await bus.aclose()
-    assert count == 1
-
-
-async def test_bus_aclose_drains_and_completes() -> None:
-    bus = ModelBus()
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        done.set()
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    await asyncio.wait_for(bus.aclose(timeout=1), 1)
-    assert bus._task.done()
-
-
-async def test_bus_aclose_cancels_wedged_handler() -> None:
-    bus = ModelBus()
-    release = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        await release.wait()  # hangs until released
-
-    bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
-    bus.publish(ResponseDone(item=_assistant_item()))
-    await asyncio.sleep(0.02)  # let the worker park in the handler
-    await asyncio.wait_for(bus.aclose(timeout=0.1), 1)  # force-cancelled
-    assert bus._task.done()
-
-
-# --------------------------------------------------------------------------- #
 # ModelController: construction & idle tracking
 # --------------------------------------------------------------------------- #
 
@@ -389,25 +196,24 @@ async def test_generate_flips_busy_then_idle_on_done() -> None:
     controller, backend = _pair()
     assert controller.is_idle()
 
-    controller.generate([_input()])
+    task = asyncio.create_task(controller.generate())
+    pushed = await _take(backend, 1)
+    assert pushed[0].type == ClientContextEventType.CREATE_RESPONSE
     assert controller.is_idle() is False  # busy
-
-    pushed = await _take(backend, 2)
-    assert pushed[0].type == ClientContextEventType.ADD_USER_MESSAGE
-    assert pushed[1].type == ClientContextEventType.CREATE_RESPONSE
 
     backend.push(ResponseStarted(partial=_assistant_item()))
     backend.push(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(controller.wait_idle(), 1)  # done -> idle
+    await asyncio.wait_for(task, 1)  # generate returned to idle
 
+    assert controller.is_idle()
     await controller.aclose(timeout=0.2)
 
 
 async def test_response_done_sets_idle_before_publish() -> None:
     """``_run`` sets idle before re-publishing, so handlers observe idle == True."""
     controller, backend = _pair()
-    controller.generate([_input()])
-    await _take(backend, 2)
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)
     seen_idle: list[bool] = []
     done = asyncio.Event()
 
@@ -419,6 +225,28 @@ async def test_response_done_sets_idle_before_publish() -> None:
     backend.push(ResponseDone(item=_assistant_item()))
     await asyncio.wait_for(done.wait(), 1)
     assert seen_idle == [True]
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_controller_bus_narrows_response_done() -> None:
+    """A handler on the controller's bus narrows ``ResponseDone`` to ``.item``."""
+    controller, backend = _pair()
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(event: ServerContextEvent) -> None:
+        match event.type:
+            case ServerContextEventType.RESPONSE_DONE:
+                seen.append(event.item.id)  # strict-mypy narrowing of the union
+                done.set()
+            case _:
+                pass
+
+    controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(done.wait(), 1)
+    assert seen == ["a1"]
     await controller.aclose(timeout=0.2)
 
 
@@ -428,36 +256,49 @@ async def test_response_done_sets_idle_before_publish() -> None:
 
 
 async def test_generate_while_busy_raises() -> None:
-    controller, _backend = _pair()
-    controller.generate([_input()])
-    with pytest.raises(RuntimeError, match="in progress"):
-        controller.generate([_input()])
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # CreateResponse pushed; controller busy + parked
+    with pytest.raises(RuntimeError, match="busy"):
+        await controller.generate()
+    # Release the in-flight generation so it doesn't leak.
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
     await controller.aclose(timeout=0.2)
 
 
-async def test_add_messages_pushes_when_idle() -> None:
+async def test_add_message_pushes_when_idle() -> None:
     controller, backend = _pair()
-    controller.add_messages([_input()])
+    task = asyncio.create_task(controller.add_message(_input()))
     pushed = await _take(backend, 1)
     assert isinstance(pushed[0], AddUserMessage)
+    backend.push(UserItemAdded(item=_user_item()))
+    await asyncio.wait_for(task, 1)
+    assert controller.is_idle()
     await controller.aclose(timeout=0.2)
 
 
-async def test_add_messages_rejected_while_busy() -> None:
-    controller, _backend = _pair()
-    controller.generate([_input()])
-    with pytest.raises(RuntimeError, match="in progress"):
-        controller.add_messages([_input()])
+async def test_add_message_rejected_while_busy() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # busy
+    with pytest.raises(RuntimeError, match="busy"):
+        await controller.add_message(_input())
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
     await controller.aclose(timeout=0.2)
 
 
 async def test_abort_pushes_abortresponse_when_busy() -> None:
     controller, backend = _pair()
-    controller.generate([_input()])
-    await _take(backend, 2)  # drain AddUserMessage + CreateResponse
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # CreateResponse; busy
     controller.abort()
     pushed = await _take(backend, 1)
     assert isinstance(pushed[0], AbortResponse)
+    # The server still ends the aborted generation with response.done.
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
     await controller.aclose(timeout=0.2)
 
 
@@ -515,6 +356,33 @@ async def test_controller_republishes_each_server_event(
 
 
 # --------------------------------------------------------------------------- #
+# ModelController: no-strand teardown of in-flight commands
+# --------------------------------------------------------------------------- #
+
+
+async def test_generate_raises_when_torn_down_mid_flight() -> None:
+    """A wedged backend + teardown must release ``generate``; it must not hang."""
+    controller, _backend = _pair()
+    task = asyncio.create_task(controller.generate())
+    await _take(_backend, 1)  # CreateResponse pushed; generate parked awaiting done
+    assert controller.is_idle() is False
+    await controller.aclose(timeout=0.2)  # wedged -> run loop cancelled
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
+
+
+async def test_add_message_raises_when_torn_down_mid_flight() -> None:
+    """A wedged backend + teardown must release ``add_message``; it must not hang."""
+    controller, _backend = _pair()
+    task = asyncio.create_task(controller.add_message(_input()))
+    await _take(_backend, 1)  # AddUserMessage pushed; awaiting item-added echo
+    assert controller.is_idle() is False
+    await controller.aclose(timeout=0.2)
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
+
+
+# --------------------------------------------------------------------------- #
 # ModelController: lifecycle / teardown
 # --------------------------------------------------------------------------- #
 
@@ -527,9 +395,9 @@ async def test_close_initiates_abort_and_guards_commands() -> None:
     assert backend.abort_signal.is_set() is True  # client.abort() fired
 
     with pytest.raises(RuntimeError, match="closing"):
-        controller.generate([_input()])
+        await controller.generate()
     with pytest.raises(RuntimeError, match="closing"):
-        controller.add_messages([_input()])
+        await controller.add_message(_input())
     with pytest.raises(RuntimeError, match="closing"):
         controller.abort()
 
@@ -548,18 +416,19 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
 
     controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
 
-    controller.generate([_input()])
-    await _take(backend, 2)
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # CreateResponse
 
     async def conformant() -> None:
         await backend.abort_signal.wait()
         backend.push(ResponseDone(item=_assistant_item()))  # final shutdown item
         backend.end()
 
-    task = asyncio.create_task(conformant())
+    conf = asyncio.create_task(conformant())
     controller.close()
     await asyncio.wait_for(done.wait(), 1)  # final item reached the handler
-    await task
+    await asyncio.wait_for(task, 1)  # generate completed from the response.done
+    await conf
     assert any(isinstance(e, ResponseDone) for e in received)
     await controller.aclose(timeout=0.2)
 
@@ -611,7 +480,7 @@ async def test_post_close_commands_rejected_even_when_idle() -> None:
     controller.close()
     assert controller.is_idle()  # no generation was ever started
     with pytest.raises(RuntimeError, match="closing"):
-        controller.generate([_input()])
+        await controller.generate()
     await controller.aclose(timeout=0.2)
     await task
 
@@ -621,13 +490,16 @@ async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
 
     With a wedged backend (no ``response.done`` ever arrives), ``aclose``
     force-cancels the drain loop. The ``_run`` ``finally`` defensively sets
-    idle so a caller parked on ``wait_idle()`` is released rather than hung.
+    idle so a caller parked on ``wait_idle()`` is released rather than hung,
+    and the in-flight ``generate()`` task raises rather than hanging.
     """
     controller, backend = _pair()
-    controller.generate([_input()])
-    await _take(backend, 2)
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)
     assert controller.is_idle() is False  # busy
     await controller.aclose(timeout=0.2)  # wedged backend -> cancel mid-flight
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
     # wait_idle() must return (defensive set_idle in _run's finally):
     await asyncio.wait_for(controller.wait_idle(), 1)
     assert controller.is_idle() is True

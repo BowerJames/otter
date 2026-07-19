@@ -7,12 +7,10 @@ from otter_ai_core.context import UserMessage
 from otter_ai_core.model_connection import (
     AddUserMessage,
     ResponseDone,
+    ServerContextEvent,
     ServerContextEventType,
 )
-from otter_ai_core.model_controller import (
-    ModelController,
-    create_model_controller_stream,
-)
+from otter_ai_core.model_controller import ModelController
 
 
 class QueueMode(StrEnum):
@@ -71,15 +69,19 @@ def _drain_queue[TItem](queue: asyncio.Queue[TItem], mode: QueueMode) -> list[TI
 
 
 async def _generate(controller: ModelController, messages: list[UserMessage]) -> ResponseDone:
-    controller.generate([AddUserMessage(message=message) for message in messages])
-    stream = create_model_controller_stream(controller)
-    done_event: ResponseDone | None = None
-    async for event in stream:
-        match event.type:
-            case ServerContextEventType.RESPONSE_DONE:
-                done_event = event
-            case _:
-                pass
-    if done_event is not None:
-        return done_event
-    raise RuntimeError("Model controller stream didn't return done response")
+    for message in messages:
+        await controller.add_message(AddUserMessage(message=message))
+    done: list[ResponseDone] = []
+
+    async def _on_done(event: ServerContextEvent) -> None:
+        if isinstance(event, ResponseDone):
+            done.append(event)
+
+    unsubscribe = controller.on(ServerContextEventType.RESPONSE_DONE, _on_done)
+    try:
+        await controller.generate()
+    finally:
+        unsubscribe()
+    if done:
+        return done[0]
+    raise RuntimeError("Model controller generate did not surface a done response")
