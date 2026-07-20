@@ -63,9 +63,7 @@ def _rich_context() -> Context:
                             thinking="reasoning",
                             thinking_signature="sig",
                         ),
-                        ToolCall(
-                            type="tool_call", id="t1", name="get_time", arguments={}
-                        ),
+                        ToolCall(type="tool_call", id="t1", name="get_time", arguments={}),
                     ],
                     api="anthropic-messages",
                     provider="anthropic",
@@ -76,9 +74,7 @@ def _rich_context() -> Context:
                         AssistantMessageDiagnostic(
                             type="retry",
                             timestamp=1_700_000_001_000,
-                            error=DiagnosticErrorInfo(
-                                name="RateLimitError", message="slow down"
-                            ),
+                            error=DiagnosticErrorInfo(name="RateLimitError", message="slow down"),
                             details={"attempt": 2},
                         )
                     ],
@@ -115,7 +111,7 @@ def test_context_roundtrip_json() -> None:
 def test_context_roundtrip_preserves_field_shapes() -> None:
     restored = Context.model_validate_json(_rich_context().model_dump_json())
 
-    assistant = restored.items[1].to_message()
+    assistant = restored.items[1].message
     assert isinstance(assistant, AssistantMessage)
     assert isinstance(assistant.content[0], ThinkingContent)
     assert assistant.content[0].thinking_signature == "sig"
@@ -125,7 +121,7 @@ def test_context_roundtrip_preserves_field_shapes() -> None:
     assert assistant.diagnostics is not None
     assert assistant.diagnostics[0].details == {"attempt": 2}
 
-    tool_result = restored.items[2].to_message()
+    tool_result = restored.items[2].message
     assert isinstance(tool_result, ToolResultMessage)
     assert tool_result.details == {"raw": 1234}
 

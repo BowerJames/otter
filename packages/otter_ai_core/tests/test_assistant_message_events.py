@@ -339,4 +339,4 @@ def test_context_can_hold_messages_built_from_streamed_done_events() -> None:
     ).message
     ctx = Context(items=[context_item(message=asst, id="a1")])
     restored = Context.model_validate_json(ctx.model_dump_json())
-    assert [i.to_message() for i in restored.items] == [asst]
+    assert [i.message for i in restored.items] == [asst]

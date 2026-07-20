@@ -1,7 +1,9 @@
-"""Unit tests for the context-item helpers: ``to_message``, ``from_message``,
-and the ``context_item`` dispatcher."""
+"""Unit tests for context items and the ``context_item`` dispatcher."""
 
 from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
 
 from otter_ai_core import (
     AssistantContextItem,
@@ -27,9 +29,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -69,83 +69,65 @@ def _tool_result() -> ToolResultMessage:
 
 
 # --------------------------------------------------------------------------- #
-# from_message
+# subclass construction wraps the message under ``message``
 # --------------------------------------------------------------------------- #
 
 
-def test_from_message_user_preserves_fields_and_sets_id() -> None:
+def test_user_item_wraps_message() -> None:
     msg = _user()
-    item = UserContextItem.from_message(msg, id="u1")
+    item = UserContextItem(id="u1", message=msg)
     assert isinstance(item, UserContextItem)
     assert item.id == "u1"
-    assert item.role == Role.User
-    assert item.content == msg.content
-    assert item.timestamp == msg.timestamp
+    assert item.message == msg
+    assert item.message.role == Role.User
 
 
-def test_from_message_assistant_preserves_fields_and_sets_id() -> None:
+def test_assistant_item_wraps_message() -> None:
     msg = _assistant()
-    item = AssistantContextItem.from_message(msg, id="a1")
+    item = AssistantContextItem(id="a1", message=msg)
     assert isinstance(item, AssistantContextItem)
     assert item.id == "a1"
-    assert item.role == Role.Assistant
-    assert item.content == msg.content
-    assert item.model == msg.model
-    assert item.response_model == msg.response_model
-    assert item.usage == msg.usage
+    assert item.message == msg
+    assert item.message.role == Role.Assistant
+    assert item.message.model == msg.model
+    assert item.message.usage == msg.usage
 
 
-def test_from_message_tool_result_preserves_fields_and_sets_id() -> None:
+def test_tool_result_item_wraps_message() -> None:
     msg = _tool_result()
-    item = ToolResultContextItem.from_message(msg, id="t1")
+    item = ToolResultContextItem(id="t1", message=msg)
     assert isinstance(item, ToolResultContextItem)
     assert item.id == "t1"
-    assert item.role == Role.ToolResult
-    assert item.tool_call_id == msg.tool_call_id
-    assert item.tool_name == msg.tool_name
-    assert item.details == msg.details
-    assert item.is_error is False
+    assert item.message == msg
+    assert item.message.is_error is False
+    assert item.message.details == {"raw": 1234}
 
 
 # --------------------------------------------------------------------------- #
-# to_message
+# variants are distinct subclasses (isinstance discriminates)
 # --------------------------------------------------------------------------- #
 
 
-def test_to_message_returns_concrete_type_and_drops_id() -> None:
-    user_item = UserContextItem.from_message(_user(), id="u1")
-    asst_item = AssistantContextItem.from_message(_assistant(), id="a1")
-    tool_item = ToolResultContextItem.from_message(_tool_result(), id="t1")
+def test_variants_are_distinct_subclasses() -> None:
+    user = UserContextItem(id="u1", message=_user())
+    asst = AssistantContextItem(id="a1", message=_assistant())
+    tool = ToolResultContextItem(id="t1", message=_tool_result())
 
-    user_msg = user_item.to_message()
-    asst_msg = asst_item.to_message()
-    tool_msg = tool_item.to_message()
+    assert isinstance(user, UserContextItem)
+    assert not isinstance(user, AssistantContextItem)
+    assert not isinstance(user, ToolResultContextItem)
 
-    assert isinstance(user_msg, UserMessage)
-    assert isinstance(asst_msg, AssistantMessage)
-    assert isinstance(tool_msg, ToolResultMessage)
+    assert isinstance(asst, AssistantContextItem)
+    assert not isinstance(asst, UserContextItem)
 
-    # The message types have no ``id`` field — wrapping was dropped.
-    for msg in (user_msg, asst_msg, tool_msg):
-        assert "id" not in type(msg).model_fields
+    assert isinstance(tool, ToolResultContextItem)
+    assert not isinstance(tool, UserContextItem)
 
 
-def test_to_message_equals_original_message() -> None:
-    user_msg = _user()
-    asst_msg = _assistant()
-    tool_msg = _tool_result()
-
-    assert UserContextItem.from_message(user_msg, id="u1").to_message() == user_msg
-    assert AssistantContextItem.from_message(asst_msg, id="a1").to_message() == asst_msg
-    assert (
-        ToolResultContextItem.from_message(tool_msg, id="t1").to_message() == tool_msg
-    )
-
-
-def test_to_message_from_message_are_inverses() -> None:
-    for msg in (_user(), _assistant(), _tool_result()):
-        item = context_item(message=msg, id="x")
-        assert item.to_message() == msg
+def test_item_rejects_unknown_top_level_fields() -> None:
+    """``extra="forbid"`` on ``BaseContextItem`` rejects stray top-level fields."""
+    with pytest.raises(ValidationError):
+        UserContextItem.model_validate({"id": "u1", "message": _user().model_dump(), "bogus": 1})
 
 
 # --------------------------------------------------------------------------- #
@@ -156,11 +138,9 @@ def test_to_message_from_message_are_inverses() -> None:
 def test_context_item_dispatches_by_role() -> None:
     assert isinstance(context_item(message=_user(), id="u1"), UserContextItem)
     assert isinstance(context_item(message=_assistant(), id="a1"), AssistantContextItem)
-    assert isinstance(
-        context_item(message=_tool_result(), id="t1"), ToolResultContextItem
-    )
+    assert isinstance(context_item(message=_tool_result(), id="t1"), ToolResultContextItem)
 
 
 def test_context_item_preserves_message() -> None:
     for msg in (_user(), _assistant(), _tool_result()):
-        assert context_item(message=msg, id="x").to_message() == msg
+        assert context_item(message=msg, id="x").message == msg
