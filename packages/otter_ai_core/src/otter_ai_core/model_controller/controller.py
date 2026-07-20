@@ -73,6 +73,7 @@ from types import TracebackType
 from typing import Self
 
 from otter_ai_core.bus import Bus, BusHandler
+from otter_ai_core.context import ToolResultContextItem, UserContextItem
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
@@ -81,6 +82,8 @@ from otter_ai_core.model_connection import (
     ModelConnectionClient,
     ServerContextEvent,
     ServerContextEventType,
+    ToolResultAdded,
+    UserItemAdded,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
 from otter_ai_core.model_controller.state import State
@@ -174,7 +177,7 @@ class ModelController:
         if not self.is_idle():
             raise RuntimeError("ModelController is busy; command rejected.")
 
-    async def add_message(self, message: InputEvent) -> None:
+    async def add_message(self, message: InputEvent) -> UserContextItem | ToolResultContextItem:
         """Append one conversation input and await the server's item-added echo.
 
         Pushes a ``user_message.add`` / ``tool_result.add`` client event, flips
@@ -182,6 +185,10 @@ class ModelController:
         ``user_item.added`` / ``tool_result_item.added`` server event, then
         returns to idle. Call one or more times to stage input before
         :meth:`generate`.
+
+        Returns the echoed :class:`~otter_ai_core.context.UserContextItem` /
+        :class:`~otter_ai_core.context.ToolResultContextItem` (carrying the
+        server-assigned ``id``), matching the type of ``message``.
 
         Raises :class:`RuntimeError` if the controller is closing/closed or
         already busy, or if the run loop exits before the echo arrives
@@ -193,9 +200,13 @@ class ModelController:
         added = asyncio.Event()
         self._command_waiter = added
         received = False
+        item: UserContextItem | ToolResultContextItem | None
 
-        async def _on_added(_event: ServerContextEvent) -> None:
-            nonlocal received
+        async def _on_added(event: ServerContextEvent) -> None:
+            nonlocal received, item
+            match event:
+                case UserItemAdded() | ToolResultAdded():
+                    item = event.item
             received = True
             added.set()
 
@@ -224,6 +235,11 @@ class ModelController:
                 "ModelController run loop exited before the item-added echo arrived."
             )
         self._state.set_idle()
+        match item:
+            case UserContextItem() | ToolResultContextItem():
+                return item
+            case _:
+                raise RuntimeError("Add message did not receive an item")
 
     async def generate(self) -> None:
         """Request the next assistant response and await its completion.
