@@ -220,8 +220,9 @@ from otter_ai_core.model_connection import AddUserMessage
 async def main() -> None:
     pair = create_connection()  # a transport task pumps pair.backend in practice
     async with ModelController(pair.client) as controller:
-        # Stage input (each call awaits the server's item-added echo)...
-        await controller.add_message(
+        # Stage input. Each call awaits the server's item-added echo and
+        # returns the echoed item (carrying the server-assigned id).
+        user_item = await controller.add_message(
             AddUserMessage(
                 message=UserMessage(role=Role.User, content="Hi!", timestamp=0)
             )

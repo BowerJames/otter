@@ -274,7 +274,8 @@ async def test_add_message_pushes_when_idle() -> None:
     pushed = await _take(backend, 1)
     assert isinstance(pushed[0], AddUserMessage)
     backend.push(UserItemAdded(item=_user_item()))
-    await asyncio.wait_for(task, 1)
+    result = await asyncio.wait_for(task, 1)
+    assert result == _user_item()
     assert controller.is_idle()
     await controller.aclose(timeout=0.2)
 
@@ -298,7 +299,8 @@ async def test_add_message_with_tool_result_awaits_tool_result_echo() -> None:
     pushed = await _take(backend, 1)
     assert pushed[0].type == ClientContextEventType.ADD_TOOL_RESULT_MESSAGE
     backend.push(ToolResultAdded(item=_tool_result_item()))
-    await asyncio.wait_for(task, 1)
+    result = await asyncio.wait_for(task, 1)
+    assert result == _tool_result_item()
     assert controller.is_idle()
     await controller.aclose(timeout=0.2)
 
