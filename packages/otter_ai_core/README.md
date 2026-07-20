@@ -186,7 +186,8 @@ want, unlike the subpackage-only `model_connection`.
 A fresh controller starts **idle**. Stage input with one or more
 `await add_message(...)` calls (each awaits the server's `user_item.added` /
 `tool_result_item.added` echo), then `await generate()` to request and await
-the next assistant response (it returns on `response.done`). Both commands
+the next assistant response (it returns the echoed assistant item on
+`response.done`). Both commands
 are single-flight (rejected while busy) and never hang: if the run loop exits
 before the awaited confirmation arrives — teardown, or a non-conformant backend
 — the command raises rather than stranding its task. Two distinct aborts:
@@ -227,8 +228,9 @@ async def main() -> None:
                 message=UserMessage(role=Role.User, content="Hi!", timestamp=0)
             )
         )
-        # ...then request and await the next assistant response.
-        await controller.generate()  # returns on response.done
+        # ...then request and await the next assistant response. Returns the
+        # echoed final assistant item (carrying the server-assigned id).
+        assistant_item = await controller.generate()  # returns on response.done
 
 
 asyncio.run(main())
