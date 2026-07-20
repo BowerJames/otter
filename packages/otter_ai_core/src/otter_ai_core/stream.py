@@ -1,71 +1,3 @@
-"""Generic abortable stream runtime layered over the channel.
-
-A :class:`Stream` is a **one-way facade** over
-:func:`~otter_ai_core.channel.create_channel`: a consumer handle
-(:class:`StreamClient`) that can *iterate* **and** *abort*, paired with a
-producer handle (:class:`StreamBackend`) that *pushes* events and *observes*
-the abort signal — sharing one queue (via the channel) and one
-:class:`asyncio.Event` (the abort signal).
-
-Why a facade, not abort baked into the channel
-----------------------------------------------
-The generic channel is a pure single-consumer queue split into a read end and
-a write end. Not every channel consumer needs abort (the session bus, internal
-plumbing, the two directions of a
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelClient` /
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelBackend`
-pair), so cancellation does not belong on the primitive. A *stream*, by
-contrast, is the domain concept for "an iterable a consumer can cancel" —
-exactly like :class:`~otter_ai_core.connection.ConnectionClient` /
-:class:`~otter_ai_core.connection.ConnectionBackend` is a facade composed of a
-:class:`~otter_ai_core.bidirectional_channel.BidirectionalChannelPair` plus one
-shared abort event, rather than a modification of the bidirectional channel
-primitive.
-
-The layering is therefore:
-
-* :mod:`otter_ai_core.channel` — the queue primitive (``ChannelReader`` /
-  ``ChannelWriter`` / ``ChannelPair``).
-* :mod:`otter_ai_core.stream` — the abortable consumer/producer facade
-  (``StreamClient`` / ``StreamBackend`` / ``StreamPair``), composed **of** a
-  channel plus one shared abort event.
-* :mod:`otter_ai_core.assistant_message_stream` — the typed aliases that fix
-  ``TEvent`` to :data:`~otter_ai_core.assistant_message_stream.AssistantMessageEvent`.
-
-Abort is intrinsic, not out-of-band
------------------------------------
-The abort signal is **created with** the stream by
-:func:`create_stream` and shared by both ends: the client sets it
-(:meth:`StreamClient.abort`), the backend observes it
-(:attr:`StreamBackend.abort_signal`). This removes the separate
-``asyncio.Event`` argument previously threaded through every stream seam — a
-producer no longer takes an abort argument; it makes its own abort via the
-factory.
-
-Symmetry with the bidirectional runtime
----------------------------------------
-The abortable one-way facade here is mirrored by the abortable two-way facade
-in :mod:`otter_ai_core.connection`:
-:class:`~otter_ai_core.connection.ConnectionClient` (consumer side, iterate +
-abort) / :class:`~otter_ai_core.connection.ConnectionBackend` (producer side,
-push + observe abort) / ``ConnectionPair`` /
-:func:`~otter_ai_core.connection.create_connection`, itself layered over the
-abort-free :func:`~otter_ai_core.bidirectional_channel.create_bidirectional_channel`
-primitive. The product type mirrors
-:class:`~otter_ai_core.channel.ChannelPair` (``StreamPair`` /
-:func:`create_stream`). The one-way consumer is the role-explicit
-:class:`StreamClient` and the producer is :class:`StreamBackend`; their
-bidirectional peers are :class:`~otter_ai_core.connection.ConnectionClient`
-and :class:`~otter_ai_core.connection.ConnectionBackend`.
-
-Scope
------
-Otter defines **no transports, providers, API registry, or dispatch** here —
-only the generic abortable stream runtime. Like the channel runtime,
-:class:`StreamClient` and :class:`StreamBackend` are runtime objects and are
-**not** JSON-serializable; the serializable data model is unchanged.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -81,7 +13,7 @@ from otter_ai_core.channel import (
 
 
 class StreamClient[TEvent]:
-    """Consumer end of a stream: iterate **and** abort.
+    """Consumer interface to a stream: iterate **and** abort.
 
     Iterate with ``async for event in client:`` or drive it directly with
     ``await anext(client)`` (the connection adapter uses the latter); both
@@ -97,9 +29,7 @@ class StreamClient[TEvent]:
 
     __slots__ = ("_reader", "_abort_signal")
 
-    def __init__(
-        self, reader: ChannelReader[TEvent], abort_signal: asyncio.Event
-    ) -> None:
+    def __init__(self, reader: ChannelReader[TEvent], abort_signal: asyncio.Event) -> None:
         self._reader = reader
         self._abort_signal = abort_signal
 
@@ -125,7 +55,7 @@ class StreamClient[TEvent]:
 
 
 class StreamBackend[TEvent]:
-    """Producer end of a stream: push events, end, and observe abort.
+    """Producer interface to a stream: push events, end, and observe abort.
 
     A thin facade over a :class:`~otter_ai_core.channel.ChannelWriter`
     (:meth:`push` / :meth:`end` delegate to it) plus the shared abort signal
@@ -141,9 +71,7 @@ class StreamBackend[TEvent]:
 
     __slots__ = ("_writer", "_abort_signal")
 
-    def __init__(
-        self, writer: ChannelWriter[TEvent], abort_signal: asyncio.Event
-    ) -> None:
+    def __init__(self, writer: ChannelWriter[TEvent], abort_signal: asyncio.Event) -> None:
         self._writer = writer
         self._abort_signal = abort_signal
 
@@ -181,7 +109,7 @@ class StreamPair[TEvent]:
     backend: StreamBackend[TEvent]
 
 
-def create_stream[TEvent]() -> StreamPair[TEvent]:
+def create_stream_pair[TEvent]() -> StreamPair[TEvent]:
     """Create a linked client/backend pair sharing one queue and one abort signal.
 
     A producer task keeps the :class:`StreamBackend` (pushing events, observing

@@ -3,7 +3,7 @@ from collections.abc import Callable
 
 from otter_ai_core.model_connection import ServerContextEvent, ServerContextEventType
 from otter_ai_core.model_controller import ModelController
-from otter_ai_core.stream import StreamBackend, StreamClient, StreamPair, create_stream
+from otter_ai_core.stream import StreamBackend, StreamClient, StreamPair, create_stream_pair
 
 
 class ModelControllerStreamProducer:
@@ -57,6 +57,6 @@ class ModelControllerStreamProducer:
 
 
 def create_model_controller_stream(controller: ModelController) -> StreamClient[ServerContextEvent]:
-    stream_pair: StreamPair[ServerContextEvent] = create_stream()
+    stream_pair: StreamPair[ServerContextEvent] = create_stream_pair()
     _ = ModelControllerStreamProducer(controller, stream_pair.backend)
     return stream_pair.client

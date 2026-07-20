@@ -16,7 +16,7 @@ from otter_ai_core import (
     Usage,
     UsageCost,
     create_channel,
-    create_stream,
+    create_stream_pair,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
@@ -35,9 +35,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -70,9 +68,7 @@ def _assistant_events() -> list[AssistantMessageEvent]:
             delta="hi",
             partial=partial,
         ),
-        AssistantDoneEvent(
-            role="assistant", type="done", reason="stop", message=partial
-        ),
+        AssistantDoneEvent(role="assistant", type="done", reason="stop", message=partial),
     ]
 
 
@@ -224,7 +220,7 @@ def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> No
 
         def stream_fn(context: Context) -> AssistantMessageStreamClient:
             del context
-            pair: StreamPair[AssistantMessageEvent] = create_stream()
+            pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
             return pair.client
 
         return stream_fn

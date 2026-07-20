@@ -14,7 +14,7 @@ from otter_ai_core import (
     StreamPair,
     Usage,
     UsageCost,
-    create_stream,
+    create_stream_pair,
 )
 from otter_ai_core.assistant_message_stream import (
     AssistantDoneEvent,
@@ -32,9 +32,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -58,7 +56,7 @@ def _message() -> AssistantMessage:
 
 def test_create_stream_returns_stream_pair_with_named_fields() -> None:
     """``create_stream()`` returns a frozen ``StreamPair`` (client, backend)."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
 
     assert isinstance(pair.client, StreamClient)
     assert isinstance(pair.backend, StreamBackend)
@@ -69,7 +67,7 @@ def test_create_stream_returns_stream_pair_with_named_fields() -> None:
 
 def test_client_and_backend_share_one_abort_signal() -> None:
     """The abort signal set by the client is the one the backend observes."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
 
     assert not pair.backend.abort_signal.is_set()
     pair.client.abort()
@@ -80,15 +78,15 @@ def test_client_and_backend_share_one_abort_signal() -> None:
 
 
 def test_abort_is_idempotent() -> None:
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
     pair.client.abort()
     pair.client.abort()  # second set is a no-op, not an error
     assert pair.backend.abort_signal.is_set()
 
 
 def test_create_stream_distinct_pairs_have_distinct_signals() -> None:
-    a: StreamPair[AssistantMessageEvent] = create_stream()
-    b: StreamPair[AssistantMessageEvent] = create_stream()
+    a: StreamPair[AssistantMessageEvent] = create_stream_pair()
+    b: StreamPair[AssistantMessageEvent] = create_stream_pair()
     a.client.abort()
     assert a.backend.abort_signal.is_set()
     assert not b.backend.abort_signal.is_set()
@@ -101,11 +99,9 @@ def test_create_stream_distinct_pairs_have_distinct_signals() -> None:
 
 async def test_backend_push_then_end_drives_client_iteration() -> None:
     """Events pushed on the backend are read by iterating the client."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
     start = AssistantStartEvent(role="assistant", type="start", partial=_message())
-    done = AssistantDoneEvent(
-        role="assistant", type="done", reason="stop", message=_message()
-    )
+    done = AssistantDoneEvent(role="assistant", type="done", reason="stop", message=_message())
 
     pair.backend.push(start)
     pair.backend.push(done)
@@ -116,15 +112,13 @@ async def test_backend_push_then_end_drives_client_iteration() -> None:
 
 
 async def test_backend_end_is_idempotent_and_push_after_end_is_noop() -> None:
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
     start = AssistantStartEvent(role="assistant", type="start", partial=_message())
 
     pair.backend.push(start)
     pair.backend.end()
     pair.backend.push(
-        AssistantDoneEvent(
-            role="assistant", type="done", reason="stop", message=_message()
-        )
+        AssistantDoneEvent(role="assistant", type="done", reason="stop", message=_message())
     )
     pair.backend.end()  # idempotent
 
@@ -140,10 +134,8 @@ async def test_backend_end_is_idempotent_and_push_after_end_is_noop() -> None:
 
 async def test_second_iteration_raises_via_delegated_guard() -> None:
     """A second ``async for`` on the client raises (single-pass via reader)."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
-    pair.backend.push(
-        AssistantStartEvent(role="assistant", type="start", partial=_message())
-    )
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
+    pair.backend.push(AssistantStartEvent(role="assistant", type="start", partial=_message()))
     pair.backend.end()
 
     async for _event in pair.client:
@@ -155,14 +147,12 @@ async def test_second_iteration_raises_via_delegated_guard() -> None:
 
 async def test_abort_signal_can_be_awaited_by_producer() -> None:
     """A producer task can ``await backend.abort_signal.wait()`` and resolve."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
 
     async def producer() -> None:
         await pair.backend.abort_signal.wait()
         pair.backend.push(
-            AssistantDoneEvent(
-                role="assistant", type="done", reason="stop", message=_message()
-            )
+            AssistantDoneEvent(role="assistant", type="done", reason="stop", message=_message())
         )
         pair.backend.end()
 
@@ -190,7 +180,7 @@ def test_assistant_aliases_are_specializations_of_stream() -> None:
 
 def test_assistant_alias_unpack_is_usable_via_create_stream() -> None:
     """The assistant alias is usable via an annotated ``create_stream()`` pair."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
     client: AssistantMessageStreamClient = pair.client
     backend: AssistantMessageStreamBackend = pair.backend
     assert isinstance(client, StreamClient)
@@ -199,7 +189,7 @@ def test_assistant_alias_unpack_is_usable_via_create_stream() -> None:
 
 def test_stream_client_delegates_iteration_and_does_not_own_a_writer() -> None:
     """The client iterates (delegated) and the backend owns the push surface."""
-    pair: StreamPair[AssistantMessageEvent] = create_stream()
+    pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
     # The client is an async iterable but exposes no push/end surface; the
     # backend is the only side that pushes.
     assert hasattr(pair.client, "__aiter__")
