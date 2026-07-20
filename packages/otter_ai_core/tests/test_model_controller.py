@@ -95,7 +95,7 @@ def _assistant_message(
 def _assistant_item(
     stop_reason: StopReason | None = StopReason.Stop,
 ) -> AssistantContextItem:
-    return AssistantContextItem.from_message(_assistant_message(stop_reason), id="a1")
+    return AssistantContextItem(id="a1", message=_assistant_message(stop_reason))
 
 
 def _user_message() -> UserMessage:
@@ -103,7 +103,7 @@ def _user_message() -> UserMessage:
 
 
 def _user_item() -> UserContextItem:
-    return UserContextItem.from_message(_user_message(), id="u1")
+    return UserContextItem(id="u1", message=_user_message())
 
 
 def _tool_result_message() -> ToolResultMessage:
@@ -118,7 +118,7 @@ def _tool_result_message() -> ToolResultMessage:
 
 
 def _tool_result_item() -> ToolResultContextItem:
-    return ToolResultContextItem.from_message(_tool_result_message(), id="tr1")
+    return ToolResultContextItem(id="tr1", message=_tool_result_message())
 
 
 def _input() -> AddUserMessage:

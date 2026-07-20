@@ -29,11 +29,11 @@ A conversation is a [`Context`](./src/otter_ai_core/context/context.py): an
 optional `system_prompt`, an `items` list, and optional `tools`. Everything is
 pure-JSON-serializable so a context can be persisted, transferred, and replayed.
 
-- [`ContextItem`](./src/otter_ai_core/context/context_item.py) — the `id`-tagged
-  wrapper layer between `Context` and `Message`. Each item *is* a message (it
-  inherits the message's fields directly) plus a caller/provider-supplied `id`;
-  it is **not** generated inside assistant message streams. Build one with
-  `context_item(message=..., id=...)` (or `XxxContextItem.from_message(...)`).
+- [`ContextItem`](./src/otter_ai_core/context/context_item.py) — the `{id, message}`
+  wrapper layer between `Context` and `Message`. Each item *wraps* a message
+  plus a caller/provider-supplied `id`; it is **not** generated inside assistant
+  message streams. Build one with `context_item(message=..., id=...)`
+  (or `XxxContextItem(id=..., message=...)`).
 - [`Message`](./src/otter_ai_core/context/messages.py) — a discriminated union
   of `UserMessage`, `AssistantMessage`, `ToolResultMessage`.
 - Content blocks in [`content.py`](./src/otter_ai_core/context/content.py):

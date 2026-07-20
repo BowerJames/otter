@@ -29,9 +29,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -118,32 +116,34 @@ def test_discriminated_union_dispatch_assistant() -> None:
             "items": [
                 {
                     "id": "i1",
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": "hi"}],
-                    "api": "anthropic-messages",
-                    "provider": "anthropic",
-                    "model": "claude-3",
-                    "usage": {
-                        "input": 1,
-                        "output": 1,
-                        "cache_read": 0,
-                        "cache_write": 0,
-                        "total_tokens": 2,
-                        "cost": {
-                            "input": 0,
-                            "output": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "hi"}],
+                        "api": "anthropic-messages",
+                        "provider": "anthropic",
+                        "model": "claude-3",
+                        "usage": {
+                            "input": 1,
+                            "output": 1,
                             "cache_read": 0,
                             "cache_write": 0,
-                            "total": 0,
+                            "total_tokens": 2,
+                            "cost": {
+                                "input": 0,
+                                "output": 0,
+                                "cache_read": 0,
+                                "cache_write": 0,
+                                "total": 0,
+                            },
                         },
+                        "stop_reason": "stop",
+                        "timestamp": 1,
                     },
-                    "stop_reason": "stop",
-                    "timestamp": 1,
                 }
             ],
         }
     )
-    assert isinstance(ctx.items[0].to_message(), AssistantMessage)
+    assert isinstance(ctx.items[0].message, AssistantMessage)
 
 
 def test_unknown_role_rejected() -> None:

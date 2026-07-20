@@ -38,9 +38,7 @@ def _usage() -> Usage:
         cache_read=0,
         cache_write=0,
         total_tokens=15,
-        cost=UsageCost(
-            input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0
-        ),
+        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
     )
 
 
@@ -59,14 +57,14 @@ def _tool_result_message() -> dict[str, Any]:
     }
 
 
-def _assistant_item(**overrides: Any) -> dict[str, Any]:
-    """An ``AssistantContextItem`` dict (id + assistant message fields).
+def _assistant_item(**message_overrides: Any) -> dict[str, Any]:
+    """An ``AssistantContextItem`` dict (id + nested assistant ``message``).
 
     ``stop_reason`` defaults to ``None`` (in flight); callers pass a terminal
-    value (e.g. ``"stop"``) for a ``response.done`` item.
+    value (e.g. ``"stop"``) for a ``response.done`` item. Overrides apply to
+    the nested ``message``.
     """
-    base = {
-        "id": "a1",
+    message: dict[str, Any] = {
         "role": "assistant",
         "content": [TextContent(type="text", text="hi").model_dump()],
         "api": "responses",
@@ -76,16 +74,16 @@ def _assistant_item(**overrides: Any) -> dict[str, Any]:
         "stop_reason": None,
         "timestamp": 0,
     }
-    base.update(overrides)
-    return base
+    message.update(message_overrides)
+    return {"id": "a1", "message": message}
 
 
 def _user_item() -> dict[str, Any]:
-    return {"id": "u1", **_user_message()}
+    return {"id": "u1", "message": _user_message()}
 
 
 def _tool_result_item() -> dict[str, Any]:
-    return {"id": "tr1", **_tool_result_message()}
+    return {"id": "tr1", "message": _tool_result_message()}
 
 
 # --------------------------------------------------------------------------- #
@@ -182,17 +180,15 @@ def test_extra_fields_forbidden_on_server_event() -> None:
 def test_partial_item_allows_none_stop_reason() -> None:
     """An in-flight ``response.started`` partial may carry ``stop_reason=None``."""
     ev = ResponseStarted(partial=AssistantContextItem.model_validate(_assistant_item()))
-    assert ev.partial.to_message().stop_reason is None
+    assert ev.partial.message.stop_reason is None
     restored = _SERVER_ADAPTER.validate_json(ev.model_dump_json())
     assert isinstance(restored, ResponseStarted)
     assert restored == ev
 
 
 def test_done_item_carries_terminal_stop_reason() -> None:
-    ev = ResponseDone(
-        item=AssistantContextItem.model_validate(_assistant_item(stop_reason="stop"))
-    )
-    assert ev.item.to_message().stop_reason == "stop"
+    ev = ResponseDone(item=AssistantContextItem.model_validate(_assistant_item(stop_reason="stop")))
+    assert ev.item.message.stop_reason == "stop"
 
 
 # --------------------------------------------------------------------------- #
@@ -201,9 +197,7 @@ def test_done_item_carries_terminal_stop_reason() -> None:
 
 
 def test_response_done_round_trip_through_union() -> None:
-    ev = ResponseDone(
-        item=AssistantContextItem.model_validate(_assistant_item(stop_reason="stop"))
-    )
+    ev = ResponseDone(item=AssistantContextItem.model_validate(_assistant_item(stop_reason="stop")))
     restored = _SERVER_ADAPTER.validate_json(ev.model_dump_json())
     assert restored == ev
 
