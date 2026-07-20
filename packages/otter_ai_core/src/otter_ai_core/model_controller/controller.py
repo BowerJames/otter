@@ -236,9 +236,7 @@ class ModelController:
             )
         self._state.set_idle()
         match item:
-            case UserContextItem():
-                return item
-            case ToolResultContextItem():
+            case UserContextItem() | ToolResultContextItem():
                 return item
             case _:
                 raise RuntimeError("Add message did not receive an item")
