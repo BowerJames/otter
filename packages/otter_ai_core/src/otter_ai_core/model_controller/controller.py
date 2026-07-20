@@ -73,13 +73,14 @@ from types import TracebackType
 from typing import Self
 
 from otter_ai_core.bus import Bus, BusHandler
-from otter_ai_core.context import ToolResultContextItem, UserContextItem
+from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
     CreateResponse,
     ModelConnectionClient,
+    ResponseDone,
     ServerContextEvent,
     ServerContextEventType,
     ToolResultAdded,
@@ -241,12 +242,15 @@ class ModelController:
             case _:
                 raise RuntimeError("Add message did not receive an item")
 
-    async def generate(self) -> None:
+    async def generate(self) -> AssistantContextItem:
         """Request the next assistant response and await its completion.
 
         Pushes ``response.create``, flips the controller to busy, and blocks
         until the backend emits the matching ``response.done``, then returns to
         idle. Stage any input with :meth:`add_message` first.
+
+        Returns the echoed :class:`~otter_ai_core.context.AssistantContextItem`
+        (the final assistant item carrying the server-assigned ``id``).
 
         Raises :class:`RuntimeError` if the controller is closing/closed or
         already busy, or if the run loop exits before ``response.done`` arrives
@@ -258,9 +262,13 @@ class ModelController:
         done = asyncio.Event()
         self._command_waiter = done
         received = False
+        item: AssistantContextItem | None
 
-        async def _on_done(_event: ServerContextEvent) -> None:
-            nonlocal received
+        async def _on_done(event: ServerContextEvent) -> None:
+            nonlocal received, item
+            match event:
+                case ResponseDone():
+                    item = event.item
             received = True
             done.set()
 
@@ -277,6 +285,11 @@ class ModelController:
             # check sound.
             raise RuntimeError("ModelController run loop exited before response.done arrived.")
         self._state.set_idle()
+        match item:
+            case AssistantContextItem():
+                return item
+            case _:
+                raise RuntimeError("Generate did not receive an item")
 
     def abort(self) -> None:
         """Protocol-abort the in-progress generation, keeping the connection open.

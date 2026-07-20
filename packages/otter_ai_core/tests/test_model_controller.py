@@ -204,7 +204,8 @@ async def test_generate_flips_busy_then_idle_on_done() -> None:
 
     backend.push(ResponseStarted(partial=_assistant_item()))
     backend.push(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(task, 1)  # generate returned to idle
+    result = await asyncio.wait_for(task, 1)  # generate returned to idle
+    assert result == _assistant_item()
 
     assert controller.is_idle()
     await controller.aclose(timeout=0.2)
