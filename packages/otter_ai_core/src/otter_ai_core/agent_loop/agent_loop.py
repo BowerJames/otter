@@ -107,9 +107,11 @@ class AgentLoop:
             case ToolExecMode.CONCURRENT:
                 pairs = await asyncio.gather(*(self._execute_one(c) for c in tool_calls))
 
-        for result, _terminate in pairs:
+        terminate = False
+        for result, terminated in pairs:
             _ = await self._controller.add_message(AddToolResultMessage(message=result))
-        return any(terminate for _, terminate in pairs)
+            terminate = terminate or terminated
+        return terminate
 
     async def _execute_one(self, call: ToolCall) -> tuple[ToolResultMessage, bool]:
         """Execute one tool call. Returns ``(result_message, terminate)``.
