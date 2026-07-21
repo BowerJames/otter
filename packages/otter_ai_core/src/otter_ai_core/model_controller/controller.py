@@ -72,7 +72,7 @@ from collections.abc import Callable
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core.bus import Bus, BusHandler
+from otter_ai_core.bus import Bus, BusEvent, BusHandler
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.model_connection import (
     AbortResponse,
@@ -81,12 +81,16 @@ from otter_ai_core.model_connection import (
     CreateResponse,
     ModelConnectionClient,
     ResponseDone,
-    ServerContextEvent,
-    ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
+from otter_ai_core.model_controller.events import (
+    RESPONSE_DONE,
+    SERVER_EVENT_BY_TYPE,
+    TOOL_RESULT_ADDED,
+    USER_ITEM_ADDED,
+)
 from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`ModelController.aclose`.
@@ -98,9 +102,6 @@ _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 InputEvent = AddUserMessage | AddToolResultMessage
 
 _log = logging.getLogger(__name__)
-
-#: An async subscriber invoked for a matching inbound server event.
-type ModelControllerHandler = BusHandler[ServerContextEvent]
 
 
 class ModelController:
@@ -127,7 +128,7 @@ class ModelController:
 
     def __init__(self, client: ModelConnectionClient) -> None:
         self._client = client
-        self._bus: Bus[ServerContextEventType, ServerContextEvent] = Bus(ServerContextEventType)
+        self._bus: Bus = Bus()
         self._state = State()
         self._command_waiter: asyncio.Event | None = None
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
@@ -137,8 +138,8 @@ class ModelController:
     # ------------------------------------------------------------------ #
 
     @property
-    def bus(self) -> Bus[ServerContextEventType, ServerContextEvent]:
-        """The pub/sub bus every inbound server event is re-published to."""
+    def bus(self) -> Bus:
+        """The descriptor-keyed pub/sub bus every inbound server event is re-published to."""
         return self._bus
 
     @property
@@ -153,10 +154,10 @@ class ModelController:
     async def wait_for_idle(self) -> None:
         await self._state.wait_for_idle()
 
-    def on(
-        self, event_type: ServerContextEventType, handler: ModelControllerHandler
+    def on[TPayload](
+        self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
     ) -> Callable[[], None]:
-        return self._bus.subscribe(event_type, handler)
+        return self._bus.subscribe(event, handler)
 
     def is_closing(self) -> bool:
         """``True`` once teardown has begun (commands are then rejected)."""
@@ -203,22 +204,21 @@ class ModelController:
         received = False
         item: UserContextItem | ToolResultContextItem | None
 
-        async def _on_added(event: ServerContextEvent) -> None:
+        async def _on_added(event: UserItemAdded | ToolResultAdded) -> None:
             nonlocal received, item
-            match event:
-                case UserItemAdded() | ToolResultAdded():
-                    item = event.item
+            item = event.item
             received = True
             added.set()
 
         # Subscribe only to the echo that matches this input type, so a stray
-        # mismatched item-added event cannot release the command early.
-        echo_type = (
-            ServerContextEventType.USER_ITEM_ADDED
-            if isinstance(message, AddUserMessage)
-            else ServerContextEventType.TOOL_RESULT_ADDED
-        )
-        unsub = self._bus.subscribe(echo_type, _on_added)
+        # mismatched item-added event cannot release the command early. The
+        # wider ``_on_added`` handler (contravariance) satisfies either
+        # per-variant descriptor; subscribe in-branch so each call binds a
+        # single concrete descriptor.
+        if isinstance(message, AddUserMessage):
+            unsub = self._bus.subscribe(USER_ITEM_ADDED, _on_added)
+        else:
+            unsub = self._bus.subscribe(TOOL_RESULT_ADDED, _on_added)
         self._client.push(message)
         try:
             await added.wait()
@@ -264,15 +264,13 @@ class ModelController:
         received = False
         item: AssistantContextItem | None
 
-        async def _on_done(event: ServerContextEvent) -> None:
+        async def _on_done(event: ResponseDone) -> None:
             nonlocal received, item
-            match event:
-                case ResponseDone():
-                    item = event.item
+            item = event.item
             received = True
             done.set()
 
-        unsub = self._bus.subscribe(ServerContextEventType.RESPONSE_DONE, _on_done)
+        unsub = self._bus.subscribe(RESPONSE_DONE, _on_done)
         self._client.push(CreateResponse())
         try:
             await done.wait()
@@ -359,9 +357,9 @@ class ModelController:
     async def _run(self) -> None:
         try:
             async for event in self._client:
-                if event.type == ServerContextEventType.RESPONSE_DONE:
+                if isinstance(event, ResponseDone):
                     self._state.set_idle()
-                self._bus.publish(event)
+                self._bus.publish(SERVER_EVENT_BY_TYPE[event.type], event)
         except asyncio.CancelledError:
             raise  # teardown (aclose); expected — let the finally clean up
         except Exception:

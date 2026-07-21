@@ -1,27 +1,114 @@
-"""Generic typed asynchronous event bus.
+"""Generic typed asynchronous event bus (descriptor-keyed, fan-out).
 
-A :class:`Bus` fans events out to async handlers subscribed to their ``type``
-discriminator. The complete event family is a type parameter, so handlers keep
-discriminated-union narrowing rather than receiving only a generic base model.
-Events need not inherit from a particular class or use Pydantic; they only need
-to satisfy :class:`~otter_ai_core.event.EventLike` structurally.
+A :class:`Bus` fans events out to the async handlers subscribed to a typed
+:class:`BusEvent` descriptor. It is the fan-out (fire-and-forget) counterpart
+to :mod:`otter_ai_core.hook_runner`: where
+:class:`~otter_ai_core.hook_runner.HookRunner` invokes a *single* handler and
+returns its result to the caller (emit-and-await), the bus invokes *every*
+registered handler (side-effects only, each isolated) over a queue + worker.
+
+Why descriptors, not an enum key
+--------------------------------
+Each event has its own payload type, and the set of events is open (consumers —
+e.g. :class:`~otter_ai_core.model_controller.ModelController` — define their
+own). A :class:`~enum.StrEnum` key cannot carry per-member type parameters, so
+the type checker could not recover the payload type from
+``publish(event_type, ...)``. Instead the key is a typed :class:`BusEvent`
+descriptor: a frozen, hashable object parameterized over ``TPayload``.
+:meth:`Bus.subscribe` / :meth:`Bus.publish` infer ``TPayload`` from the
+descriptor, so the public API is fully type-safe with no ``@overload`` and the
+set of events is infinitely extensible — new events need no change to
+:class:`Bus`. This mirrors the existing
+:class:`~otter_ai_core.hook_runner.Hook` / :class:`~otter_ai_core.hook_runner.HookRunner`
+idiom, and the ``AgentLoopHookTypes`` + ``Hook`` split in
+:mod:`otter_ai_core.agent_loop.hooks`.
+
+Many handlers per event (fan-out)
+---------------------------------
+Unlike a hook (at most one handler), an event may have ``N`` handlers.
+:meth:`Bus.subscribe` appends to a per-descriptor list; :meth:`Bus.publish`
+fans the payload out to all of them. Handler exceptions are isolated and logged
+(not propagated to the publisher), so one bad subscriber cannot break the
+others — the bus does for its subscribers what
+:class:`~otter_ai_core.hook_runner.HookRunner` deliberately does *not* (a hook
+caller depends on the response, so its exceptions propagate).
+
+Queue + worker / teardown
+-------------------------
+Unlike :class:`~otter_ai_core.hook_runner.HookRunner` (direct dispatch, no owned
+task, no teardown), the bus owns a background worker task draining a
+:class:`~otter_ai_core.channel.ChannelReader`. :meth:`publish` is synchronous
+(enqueue); the worker awaits each handler in subscription order.
+:meth:`end` signals no more events; :meth:`aclose` ends and awaits the worker's
+drain to completion under a deadline (force-cancelling it if a non-conformant
+handler hangs), so no owned task is left pending. The constructor schedules the
+worker and must therefore be called from within a running :mod:`asyncio` loop.
+
+No runtime discriminator checks
+-------------------------------
+The old enum-keyed bus validated that ``event.type`` belonged to its enum and
+defensively dropped events whose discriminator was mutated while queued. Under
+descriptor keying both are moot: the descriptor *is* the immutable routing key
+(captured in the ``(descriptor, payload)`` pair at publish time), so mutating a
+payload's fields cannot re-route it, and a cross-family mismatch is a *static*
+type error rather than a runtime one — exactly the trade ``HookRunner`` already
+makes ("public API fully type-safe; only the internals erased").
+
+Scope
+-----
+:class:`Bus` defines no event families of its own — only the generic runtime.
+:class:`BusEvent` and :class:`Bus` are runtime objects and are **not**
+JSON-serializable (unlike :class:`~otter_ai_core.context.Context`).
 """
+
+from __future__ import annotations
 
 import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from enum import StrEnum
+from dataclasses import dataclass
+from typing import cast
 
 from otter_ai_core.channel import ChannelPair, create_channel
-from otter_ai_core.event import EventLike
 
 _logger = logging.getLogger(__name__)
 
 _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
 
-type BusHandler[TEvent] = Callable[[TEvent], Awaitable[None]]
+@dataclass(frozen=True, slots=True)
+class BusEvent[TPayload]:
+    """A typed event key; the value passed to :meth:`Bus.subscribe` / ``publish``.
+
+    Frozen and hashable so a descriptor works as a :class:`dict` key. Define
+    events as module-level singletons (one per event), annotated with their
+    ``TPayload`` so ``subscribe`` / ``publish`` infer it::
+
+        ITEM_DONE: BusEvent[Item] = BusEvent("item.done")
+
+    .. note::
+       Construct via ``BusEvent("name")`` with an annotation, not
+       ``BusEvent[P]("name")``. Subscript-then-construct raises at runtime:
+       CPython's generic-alias call tries to set ``__orig_class__``, which a
+       frozen + slots dataclass rejects.
+
+    .. note::
+       At runtime Python's generic parameters are erased, so two descriptors
+       with the same :attr:`name` are the *same key* regardless of their type
+       parameters (e.g. a ``BusEvent[Item]`` and a ``BusEvent[Other]`` built
+       with the same name collide). Hence the "define each event once as a
+       module-level singleton" convention. Building the descriptor from a
+       :class:`~enum.StrEnum` member (see
+       :mod:`otter_ai_core.model_controller.events`) centralizes the name
+       strings so they are discoverable rather than magic-string literals.
+    """
+
+    name: str
+
+
+#: The handler signature for ``BusEvent[TPayload]``.
+type BusHandler[TPayload] = Callable[[TPayload], Awaitable[None]]
 
 
 async def _await_or_cancel(task: asyncio.Task[None], timeout: float | None) -> None:
@@ -47,69 +134,58 @@ async def _await_or_cancel(task: asyncio.Task[None], timeout: float | None) -> N
         raise
 
 
-class Bus[TType: StrEnum, TEvent: EventLike]:
-    """A pub/sub bus for a structurally typed discriminated event family.
+class Bus:
+    """A descriptor-keyed pub/sub bus: fan-out to ``N`` handlers per event.
 
-    ``TEvent`` should be the complete event union. This lets a handler match on
-    ``event.type`` and narrow to a concrete variant. Python cannot statically
-    express that ``TEvent.type`` belongs specifically to ``TType``, so
-    :meth:`publish` validates that relationship before enqueueing and the
-    worker checks it defensively again before dispatch.
-
-    The constructor schedules a background worker task and must therefore be
-    called from within a running :mod:`asyncio` event loop.
+    :meth:`subscribe` appends a handler to an event's fan-out list (and returns
+    an idempotent unsubscribe callable); :meth:`publish` enqueues a payload for
+    the worker to fan out to every subscriber of that event. The bus owns a
+    background worker task draining a channel; tear it down with
+    :meth:`aclose` (or :meth:`end` to stop accepting events while letting
+    already-published ones drain).
     """
 
-    __slots__ = ("_event_type", "_reader", "_writer", "_handlers", "_task")
+    __slots__ = ("_reader", "_writer", "_handlers", "_task")
 
-    def __init__(self, event_type: type[TType]) -> None:
-        self._event_type = event_type
-        channel_pair: ChannelPair[tuple[TType, TEvent]] = create_channel()
+    def __init__(self) -> None:
+        channel_pair: ChannelPair[tuple[object, object]] = create_channel()
         self._reader = channel_pair.reader
         self._writer = channel_pair.writer
-        self._handlers: dict[TType, list[BusHandler[TEvent]]] = {
-            member: [] for member in self.event_type
-        }
+        # Heterogeneous registry: the per-event TPayload relationship cannot be
+        # tracked through a runtime dict, so storage is erased to ``object`` and
+        # recovered with ``cast`` at the typed API boundary — mirroring
+        # :class:`~otter_ai_core.hook_runner.HookRunner`. The public API stays
+        # fully type-safe; only the internals are erased.
+        self._handlers: dict[object, list[object]] = {}
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
 
-    @property
-    def event_type(self) -> type[TType]:
-        return self._event_type
-
     async def _run(self) -> None:
-        async for published_type, event in self._reader:
-            event_type = event.type
-            if not isinstance(event_type, self._event_type) or event_type is not published_type:
-                # publish() validates and snapshots the discriminator before
-                # enqueueing. Do not let an event mutated while queued poison
-                # the worker or dispatch to handlers for another variant.
-                _logger.error(
-                    "bus dropped event whose discriminator changed from %r to %r",
-                    published_type,
-                    event_type,
-                )
-                continue
-
-            for handler in self._handlers[published_type]:
+        async for event, payload in self._reader:
+            for handler in self._handlers.get(event, ()):
                 try:
-                    await handler(event)
+                    await cast(BusHandler[object], handler)(payload)
                 except Exception:
                     # Isolate the subscriber: log and keep dispatching. Do not
                     # catch BaseException — CancelledError must propagate so the
                     # worker can be torn down on aclose().
                     _logger.error(
                         "bus handler raised for %r; continuing",
-                        published_type,
+                        event,
                         exc_info=True,
                     )
 
-    def subscribe(self, event_type: TType, handler: BusHandler[TEvent]) -> Callable[[], None]:
-        """Register ``handler`` for ``event_type``; return an unsubscribe callable.
+    def subscribe[TPayload](
+        self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
+    ) -> Callable[[], None]:
+        """Append ``handler`` to ``event``'s fan-out list; return an unsubscribe callable.
 
         The returned callable removes the handler and is idempotent — calling
         it more than once is a no-op after the first.
+
+        ``TPayload`` is inferred from ``event``, so the handler's signature is
+        checked against the event's payload type.
         """
-        self._handlers[event_type].append(handler)
+        self._handlers.setdefault(event, []).append(handler)
         removed = False
 
         def _unsubscribe() -> None:
@@ -118,23 +194,18 @@ class Bus[TType: StrEnum, TEvent: EventLike]:
                 return
             removed = True
             with contextlib.suppress(ValueError):  # already gone / never added
-                self._handlers[event_type].remove(handler)
+                self._handlers[event].remove(handler)
 
         return _unsubscribe
 
-    def publish(self, event: TEvent) -> None:
-        """Validate and enqueue an event for the worker to fan out.
+    def publish[TPayload](self, event: BusEvent[TPayload], payload: TPayload) -> None:
+        """Enqueue ``payload`` for the worker to fan out to ``event``'s subscribers.
 
-        Raises:
-            RuntimeError: If ``event.type`` does not belong to this bus's
-                discriminator enum.
+        ``TPayload`` is inferred from ``event``, so ``payload`` is checked
+        against the event's payload type. Publishing an event with no
+        subscribers is a no-op (the worker fans out to an empty list).
         """
-        event_type = event.type
-        if not isinstance(event_type, self._event_type):
-            raise RuntimeError(
-                f"event discriminator {event_type!r} does not belong to {self._event_type.__name__}"
-            )
-        self._writer.push((event_type, event))
+        self._writer.push((event, payload))
 
     def end(self) -> None:
         """Signal that no more events will be published.
