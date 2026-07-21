@@ -7,7 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop.agent_tool import AgentTool
+from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
+from otter_ai_core.agent_loop.hooks import BEFORE_TOOL_CALL
 from otter_ai_core.agent_loop.state import State
 from otter_ai_core.context import (
     AssistantContextItem,
@@ -51,9 +52,8 @@ class AgentLoop:
     #: runs at least one turn regardless.
     _max_turns: int | None = None
     #: Extension registry callers attach typed hooks to via :meth:`on`. The loop
-    #: itself emits no hooks yet (there are no ``emit`` call sites); the surface
-    #: exists so hooks can be registered ahead of the emit points added in a
-    #: follow-up.
+    #: emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL` before each
+    #: tool call is executed (see :meth:`_execute_one`).
     _hook_runner: HookRunner = field(default_factory=HookRunner)
     _state: State = field(default_factory=State)
     _abort_signal: asyncio.Event = field(default_factory=asyncio.Event)
@@ -72,9 +72,9 @@ class AgentLoop:
     def hook_runner(self) -> HookRunner:
         """The typed emit-and-await registry callers register hooks on.
 
-        The loop itself emits no hooks yet; this surface exists so callers can
-        register handlers (via this property or :meth:`on`) ahead of the emit
-        points added in a follow-up.
+        The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
+        before each tool call is executed; register a handler via this property
+        (with :meth:`HookRunner.register`) or :meth:`on`.
         """
         return self._hook_runner
 
@@ -88,8 +88,9 @@ class AgentLoop:
         raises :class:`RuntimeError` if ``hook`` already has a handler
         (unregister first to replace).
 
-        Note: the loop emits no hooks yet, so registering only takes effect
-        once emit points are added in a follow-up.
+        The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
+        before each tool call, so a handler registered against it takes effect
+        immediately for subsequent tool calls.
         """
         return self._hook_runner.register(hook, handler)
 
@@ -152,24 +153,46 @@ class AgentLoop:
     async def _execute_one(self, call: ToolCall) -> tuple[ToolResultMessage, bool]:
         """Execute one tool call. Returns ``(result_message, terminate)``.
 
+        Emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL` first: a
+        handler may short-circuit execution by returning an
+        :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` (the tool's
+        ``execute`` is not called; the result is still wrapped and fed back as
+        a ``ToolResultMessage``, with ``terminate`` honoured); ``None`` defers
+        to normal execution. Handler exceptions propagate (the
+        :class:`~otter_ai_core.hook_runner.HookRunner` contract), matching how a
+        tool's own ``execute`` exceptions surface.
+
         Unknown tool names synthesize an ``is_error`` result naming the
         available tools so the model can self-correct.
         """
+        intercepted = await self._hook_runner.emit(BEFORE_TOOL_CALL, call)
+        if intercepted is not None:
+            return self._to_tool_result_message(call, intercepted), intercepted.terminate
+
         tool = next((t for t in self._tools if t.name == call.name), None)
         if tool is None:
             return self._unknown_tool_result(call), False
         result = await tool.execute(call.id, call.arguments, self._abort_signal)
-        return (
-            ToolResultMessage(
-                role=Role.ToolResult,
-                tool_call_id=call.id,
-                tool_name=call.name,
-                content=result.result,
-                details=result.details,
-                is_error=result.is_error,
-                timestamp=_now_ms(),
-            ),
-            result.terminate,
+        return self._to_tool_result_message(call, result), result.terminate
+
+    def _to_tool_result_message(
+        self, call: ToolCall, result: AgentToolResult[Any]
+    ) -> ToolResultMessage:
+        """Wrap an ``AgentToolResult`` into the ``ToolResultMessage`` fed back.
+
+        Shared by the ``before_tool_call`` short-circuit path and normal
+        execution so both produce identical messages: ``tool_call_id`` /
+        ``tool_name`` / ``timestamp`` come from the call/loop; ``content`` /
+        ``details`` / ``is_error`` come from the result.
+        """
+        return ToolResultMessage(
+            role=Role.ToolResult,
+            tool_call_id=call.id,
+            tool_name=call.name,
+            content=result.result,
+            details=result.details,
+            is_error=result.is_error,
+            timestamp=_now_ms(),
         )
 
     def _unknown_tool_result(self, call: ToolCall) -> ToolResultMessage:
