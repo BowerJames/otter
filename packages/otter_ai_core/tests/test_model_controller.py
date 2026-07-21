@@ -59,7 +59,8 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.model_controller import ModelController, State
+from otter_ai_core.model_controller import RESPONSE_DONE, ModelController, State
+from otter_ai_core.model_controller.events import SERVER_EVENT_BY_TYPE
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -223,7 +224,7 @@ async def test_response_done_sets_idle_before_publish() -> None:
         seen_idle.append(controller.is_idle())
         done.set()
 
-    controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
+    controller.bus.subscribe(RESPONSE_DONE, handler)
     backend.push(ResponseDone(item=_assistant_item()))
     await asyncio.wait_for(done.wait(), 1)
     assert seen_idle == [True]
@@ -245,7 +246,7 @@ async def test_controller_bus_narrows_response_done() -> None:
             case _:
                 pass
 
-    controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
+    controller.bus.subscribe(RESPONSE_DONE, handler)
     backend.push(ResponseDone(item=_assistant_item()))
     await asyncio.wait_for(done.wait(), 1)
     assert seen == ["a1"]
@@ -347,41 +348,24 @@ async def test_abort_when_idle_raises() -> None:
 
 
 @pytest.mark.parametrize(
-    "event_type, event",
+    "event",
     [
-        (
-            ServerContextEventType.RESPONSE_STARTED,
-            ResponseStarted(partial=_assistant_item()),
-        ),
-        (
-            ServerContextEventType.RESPONSE_UPDATED,
-            ResponseUpdated(partial=_assistant_item()),
-        ),
-        (ServerContextEventType.RESPONSE_DONE, ResponseDone(item=_assistant_item())),
-        (
-            ServerContextEventType.USER_ITEM_ADDED,
-            UserItemAdded(item=_user_item()),
-        ),
-        (
-            ServerContextEventType.USER_ITEM_UPDATED,
-            UserItemUpdated(item=_user_item()),
-        ),
-        (
-            ServerContextEventType.TOOL_RESULT_ADDED,
-            ToolResultAdded(item=_tool_result_item()),
-        ),
+        ResponseStarted(partial=_assistant_item()),
+        ResponseUpdated(partial=_assistant_item()),
+        ResponseDone(item=_assistant_item()),
+        UserItemAdded(item=_user_item()),
+        UserItemUpdated(item=_user_item()),
+        ToolResultAdded(item=_tool_result_item()),
     ],
 )
-async def test_controller_republishes_each_server_event(
-    event_type: ServerContextEventType, event: ServerContextEvent
-) -> None:
+async def test_controller_republishes_each_server_event(event: ServerContextEvent) -> None:
     controller, backend = _pair()
     done = asyncio.Event()
 
     async def handler(_event: ServerContextEvent) -> None:
         done.set()
 
-    controller.bus.subscribe(event_type, handler)
+    controller.bus.subscribe(SERVER_EVENT_BY_TYPE[event.type], handler)
     backend.push(event)
     await asyncio.wait_for(done.wait(), 1)
     await controller.aclose(timeout=0.2)
@@ -446,7 +430,7 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
         if isinstance(event, ResponseDone):
             done.set()
 
-    controller.bus.subscribe(ServerContextEventType.RESPONSE_DONE, handler)
+    controller.bus.subscribe(RESPONSE_DONE, handler)
 
     task = asyncio.create_task(controller.generate())
     await _take(backend, 1)  # CreateResponse

@@ -130,10 +130,12 @@ through, plus the seam types a provider/transport package will implement:
 - [`channel.py`](./src/otter_ai_core/channel.py) — a single-consumer async
   push-queue split into a read end and a write end
   (`ChannelReader` / `ChannelWriter` / `create_channel`).
-- [`bus.py`](./src/otter_ai_core/bus.py) — a structurally typed pub/sub bus
-  keyed by a `StrEnum` discriminator. Its event parameter is the complete
-  discriminated union, so handlers retain variant narrowing; the bus validates
-  at runtime that each event's discriminator belongs to its configured enum.
+- [`bus.py`](./src/otter_ai_core/bus.py) — a descriptor-keyed pub/sub bus.
+  Its key is a typed `BusEvent[TPayload]` descriptor (the fan-out counterpart
+  to `Hook`/`HookRunner`); `subscribe`/`publish` infer `TPayload` per call, so
+  the public API is fully type-safe and the set of events is open. The bus
+  retains its queue + worker and fans each published payload out to every
+  subscriber of its descriptor (handler exceptions isolated and logged).
 - [`stream.py`](./src/otter_ai_core/stream.py) — an abortable one-way stream
   facade layered over the channel (`StreamClient` / `StreamBackend` /
   `create_stream`); the abort signal is intrinsic to the stream, not threaded
@@ -178,8 +180,12 @@ want, unlike the subpackage-only `model_connection`.
   wraps a `ModelConnectionClient`, drives the conversation via **async,
   confirmation-awaiting commands** (`add_message` / `generate` / `abort`),
   tracks idle/busy state from inbound `response.done` events, and re-publishes
-  every server event to its `bus` (a generic
-  [`Bus`](./src/otter_ai_core/bus.py) keyed on `ServerContextEventType`).
+  every server event to its `bus` (a descriptor-keyed
+  [`Bus`](./src/otter_ai_core/bus.py)). Subscribe via the per-variant
+  `BusEvent` descriptors in
+  [`model_controller/events.py`](./src/otter_ai_core/model_controller/events.py)
+  (`RESPONSE_DONE`, `USER_ITEM_ADDED`, …), built from the
+  `ModelControllerEventTypes` `StrEnum`.
 - [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy
   `asyncio.Event` latch plus a `is_closing` flag.
 
