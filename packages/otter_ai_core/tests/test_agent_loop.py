@@ -280,6 +280,24 @@ async def test_max_turns_caps_completed_turns_without_dropping_tools() -> None:
     assert len(_tool_result_adds(fake)) == 2
 
 
+async def test_max_turns_one_executes_tool_calls_without_dropping() -> None:
+    fake = _FakeController([_assistant_message([_tool_call("echo", arguments={"text": "only"})])])
+
+    loop = _build(
+        fake,
+        tools=_tools(_echo_tool()),
+        max_turns=1,
+        follow_ups=[_user_message()],
+    )
+    await _await(loop)
+
+    assert fake.generate_calls == 1
+    # The single turn's tool call was executed and its result added (not dropped).
+    results = _tool_result_adds(fake)
+    assert len(results) == 1
+    assert results[0].message.tool_name == "echo"
+
+
 async def test_abort_between_turns_stops_loop() -> None:
     class _P(BaseModel):
         pass
@@ -298,6 +316,23 @@ async def test_abort_between_turns_stops_loop() -> None:
         await _await(loop)
 
     assert fake.generate_calls == 1  # stopped before the second generate
+
+
+async def test_abort_preset_before_first_turn_stops_after_turn() -> None:
+    fake = _FakeController(
+        [_assistant_message([_tool_call("echo", arguments={"text": "x"})]), _assistant_message()]
+    )
+
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+    loop._abort_signal.set()  # pre-set before the run task gets CPU
+
+    with pytest.raises(asyncio.CancelledError):
+        await _await(loop)
+
+    # The first turn still ran to completion (generate + tool result) before
+    # the abort fired at the turn boundary.
+    assert fake.generate_calls == 1
+    assert len(_tool_result_adds(fake)) == 1
 
 
 # --------------------------------------------------------------------------- #

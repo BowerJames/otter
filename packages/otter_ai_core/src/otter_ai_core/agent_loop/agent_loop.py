@@ -52,7 +52,7 @@ class AgentLoop:
     _abort_signal: asyncio.Event = field(default_factory=asyncio.Event)
     _steering_queue: asyncio.Queue[UserMessage] = field(default_factory=asyncio.Queue)
     _follow_up_queue: asyncio.Queue[UserMessage] = field(default_factory=asyncio.Queue)
-    _task: asyncio.Task[None] | None = None
+    _task: asyncio.Task[None] | None = field(default=None)
 
     def __post_init__(self) -> None:
         self._task = asyncio.create_task(self._run())
