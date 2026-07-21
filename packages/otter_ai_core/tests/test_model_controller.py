@@ -15,11 +15,12 @@ controller drives ``pair.client`` and the test pushes server events on
 A small ``_conformant_backend`` task honours the abort contract — on
 ``abort_signal`` it ends the inbound so the controller's drain completes.
 
-Generic-bus behaviour (structural narrowing, foreign-family rejection,
-mutated-while-queued drop, per-handler isolation, end/aclose semantics) is
-covered in ``tests/test_bus.py``; the controller's bus is the same
-:class:`~otter_ai_core.bus.Bus` keyed on
-:class:`~otter_ai_core.model_connection.ServerContextEventType`.
+Descriptor-keyed bus behaviour (fan-out, per-descriptor dispatch,
+idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
+end/aclose semantics) is covered in ``tests/test_bus.py``; the controller's
+bus is the same descriptor-keyed :class:`~otter_ai_core.bus.Bus`, with its
+per-variant :class:`~otter_ai_core.bus.BusEvent` descriptors defined in
+:mod:`otter_ai_core.model_controller.events`.
 """
 
 from __future__ import annotations
