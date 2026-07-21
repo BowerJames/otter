@@ -19,6 +19,7 @@ drives the FSM.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
@@ -39,12 +40,27 @@ from otter_ai_core import (
 from otter_ai_core.agent_loop.agent_loop import AgentLoop, QueueMode, ToolExecMode
 from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
 from otter_ai_core.context import Role
+from otter_ai_core.hook_runner import Hook, HookRunner
 from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
 from otter_ai_core.model_controller import ModelController
 
 # --------------------------------------------------------------------------- #
 # Builders
 # --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True, slots=True)
+class _Ping:
+    msg: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Pong:
+    echoed: str
+
+
+#: Module-level hook singleton — the intended usage pattern.
+_PING: Hook[_Ping, _Pong] = Hook("ping")
 
 
 def _usage() -> Usage:
@@ -432,3 +448,62 @@ async def test_follow_ups_drive_multiple_inner_loops() -> None:
 
     assert fake.generate_calls == 2  # one inner loop (one generate) per follow-up
     assert len(_user_adds(fake)) == 2
+
+
+# --------------------------------------------------------------------------- #
+# HookRunner surface
+# --------------------------------------------------------------------------- #
+
+
+async def test_hook_runner_property_returns_a_hook_runner() -> None:
+    loop = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+    await _await(loop)
+
+    assert isinstance(loop.hook_runner, HookRunner)
+
+
+async def test_each_loop_gets_an_independent_hook_runner() -> None:
+    loop_a = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+    loop_b = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+
+    async def handler(ping: _Ping) -> _Pong:
+        return _Pong(echoed=ping.msg)
+
+    loop_a.on(_PING, handler)
+    await _await(loop_a)
+    await _await(loop_b)
+
+    # Registering on loop A must not be visible on loop B (default_factory
+    # gives each loop its own runner).
+    assert await loop_a.hook_runner.emit(_PING, _Ping(msg="hi")) == _Pong(echoed="hi")
+    assert await loop_b.hook_runner.emit(_PING, _Ping(msg="hi")) is None
+
+
+async def test_on_registers_handler_observed_via_emit() -> None:
+    loop = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+
+    async def handler(ping: _Ping) -> _Pong:
+        return _Pong(echoed=ping.msg.upper())
+
+    unsub = loop.on(_PING, handler)
+    await _await(loop)
+
+    assert await loop.hook_runner.emit(_PING, _Ping(msg="hi")) == _Pong(echoed="HI")
+
+    unsub()
+    assert await loop.hook_runner.emit(_PING, _Ping(msg="hi")) is None
+
+
+async def test_on_unsubscribe_is_idempotent() -> None:
+    loop = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+
+    async def handler(ping: _Ping) -> _Pong:
+        return _Pong(echoed=ping.msg)
+
+    unsub = loop.on(_PING, handler)
+    await _await(loop)
+
+    unsub()
+    unsub()  # second call is a no-op, must not raise
+
+    assert await loop.hook_runner.emit(_PING, _Ping(msg="hi")) is None

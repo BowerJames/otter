@@ -1,5 +1,6 @@
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -17,6 +18,7 @@ from otter_ai_core.context import (
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.hook_runner import Hook, HookHandler, HookRunner
 from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
 from otter_ai_core.model_controller import ModelController
 
@@ -48,6 +50,11 @@ class AgentLoop:
     #: ``None`` (default) loops to completion. Must be ``>= 1``; the loop always
     #: runs at least one turn regardless.
     _max_turns: int | None = None
+    #: Extension registry callers attach typed hooks to via :meth:`on`. The loop
+    #: itself emits no hooks yet (there are no ``emit`` call sites); the surface
+    #: exists so hooks can be registered ahead of the emit points added in a
+    #: follow-up.
+    _hook_runner: HookRunner = field(default_factory=HookRunner)
     _state: State = field(default_factory=State)
     _abort_signal: asyncio.Event = field(default_factory=asyncio.Event)
     _steering_queue: asyncio.Queue[UserMessage] = field(default_factory=asyncio.Queue)
@@ -56,6 +63,35 @@ class AgentLoop:
 
     def __post_init__(self) -> None:
         self._task = asyncio.create_task(self._run())
+
+    # ------------------------------------------------------------------ #
+    # Hook surface
+    # ------------------------------------------------------------------ #
+
+    @property
+    def hook_runner(self) -> HookRunner:
+        """The typed emit-and-await registry callers register hooks on.
+
+        The loop itself emits no hooks yet; this surface exists so callers can
+        register handlers (via this property or :meth:`on`) ahead of the emit
+        points added in a follow-up.
+        """
+        return self._hook_runner
+
+    def on[TParams, TReturn](
+        self, hook: Hook[TParams, TReturn], handler: HookHandler[TParams, TReturn]
+    ) -> Callable[[], None]:
+        """Register ``handler`` as the single handler for ``hook``.
+
+        Thin wrapper over :meth:`HookRunner.register` (the emit-and-await,
+        single-handler registry). Returns the idempotent unregister callable;
+        raises :class:`RuntimeError` if ``hook`` already has a handler
+        (unregister first to replace).
+
+        Note: the loop emits no hooks yet, so registering only takes effect
+        once emit points are added in a follow-up.
+        """
+        return self._hook_runner.register(hook, handler)
 
     async def _run(self) -> None:
         try:
