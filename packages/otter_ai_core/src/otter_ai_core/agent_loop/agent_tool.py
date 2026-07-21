@@ -19,23 +19,19 @@ class AgentTool[TParams: BaseModel, TDetails]:
     name: str
     description: str
     parameters: type[TParams]
-    _execute: Callable[
-        [str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]
-    ]
+    _execute: Callable[[str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]]
 
     def __init__(
         self,
         name: str,
         description: str,
         parameters: type[TParams],
-        execute: Callable[
-            [str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]
-        ]
+        execute: Callable[[str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]],
     ) -> None:
-        self.name=name
-        self.description=description
-        self.parameters=parameters
-        self._execute=execute
+        self.name = name
+        self.description = description
+        self.parameters = parameters
+        self._execute = execute
 
     async def execute(
         self, tool_call_id: str, params: object, signal: asyncio.Event
@@ -50,23 +46,13 @@ class AgentTool[TParams: BaseModel, TDetails]:
                 validated_params = params_cls.model_validate_json(params)
             case _:
                 raise RuntimeError(f"Invalid object passed to tool execution {params}")
-        return await self._execute(
-            tool_call_id,
-            validated_params,
-            signal
-        )
-    
+        return await self._execute(tool_call_id, validated_params, signal)
+
+
 def create_agent_tool[TParams: BaseModel, TDetails](
     name: str,
     description: str,
     parameters: type[TParams],
-    execute: Callable[
-        [str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]
-    ]
+    execute: Callable[[str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]],
 ) -> AgentTool[TParams, TDetails]:
-    return AgentTool(
-        name,
-        description,
-        parameters,
-        execute
-    )
+    return AgentTool(name, description, parameters, execute)
