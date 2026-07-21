@@ -15,6 +15,7 @@ compare equal to their value, ``Hook(AgentLoopHookTypes.X)`` keys identically to
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -27,6 +28,7 @@ class AgentLoopHookTypes(StrEnum):
     """The ``name`` of a hook emitted by :class:`AgentLoop`."""
 
     BEFORE_TOOL_CALL = "before_tool_call"
+    TOOL_RESULT = "tool_result"
 
 
 #: Emitted before each :class:`~otter_ai_core.context.ToolCall` is executed —
@@ -42,4 +44,33 @@ BEFORE_TOOL_CALL: Hook[ToolCall, AgentToolResult[Any] | None] = Hook(
 )
 
 
-__all__ = ["AgentLoopHookTypes", "BEFORE_TOOL_CALL"]
+@dataclass(frozen=True, slots=True)
+class ToolResultHookParams:
+    """Params for :data:`TOOL_RESULT`: the call and its executed result.
+
+    Carries the :class:`~otter_ai_core.context.ToolCall` that was executed and
+    the :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` the tool's
+    ``execute`` returned. The handler may return a replacement result (see
+    :data:`TOOL_RESULT`) or ``None`` to persist this one.
+    """
+
+    tool_call: ToolCall
+    result: AgentToolResult[Any]
+
+
+#: Emitted after a tool **actually executes** (i.e. its ``execute`` returned) —
+#: the post-execution counterpart to :data:`BEFORE_TOOL_CALL`. It is **not**
+#: emitted when :data:`BEFORE_TOOL_CALL` short-circuits the call (the tool never
+#: ran), nor for unknown-tool synthesis (no tool ran). The handler receives the
+#: ``ToolCall`` and the executed ``AgentToolResult``; returning ``None``
+#: **persists** the original result, while returning an ``AgentToolResult``
+#: **fully replaces** it — its ``result`` / ``details`` / ``is_error`` flow
+#: through to the ``ToolResultMessage`` and its ``terminate`` is honoured
+#: (exactly as :data:`BEFORE_TOOL_CALL` honours an intercepted result's
+#: ``terminate``).
+TOOL_RESULT: Hook[ToolResultHookParams, AgentToolResult[Any] | None] = Hook(
+    AgentLoopHookTypes.TOOL_RESULT
+)
+
+
+__all__ = ["AgentLoopHookTypes", "BEFORE_TOOL_CALL", "TOOL_RESULT", "ToolResultHookParams"]

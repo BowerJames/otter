@@ -8,7 +8,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
-from otter_ai_core.agent_loop.hooks import BEFORE_TOOL_CALL
+from otter_ai_core.agent_loop.hooks import (
+    BEFORE_TOOL_CALL,
+    TOOL_RESULT,
+    ToolResultHookParams,
+)
 from otter_ai_core.agent_loop.state import State
 from otter_ai_core.context import (
     AssistantContextItem,
@@ -53,7 +57,9 @@ class AgentLoop:
     _max_turns: int | None = None
     #: Extension registry callers attach typed hooks to via :meth:`on`. The loop
     #: emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL` before each
-    #: tool call is executed (see :meth:`_execute_one`).
+    #: tool call is executed and
+    #: :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` after a tool actually
+    #: executes (see :meth:`_execute_one`).
     _hook_runner: HookRunner = field(default_factory=HookRunner)
     _state: State = field(default_factory=State)
     _abort_signal: asyncio.Event = field(default_factory=asyncio.Event)
@@ -73,8 +79,10 @@ class AgentLoop:
         """The typed emit-and-await registry callers register hooks on.
 
         The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
-        before each tool call is executed; register a handler via this property
-        (with :meth:`HookRunner.register`) or :meth:`on`.
+        before each tool call is executed and
+        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` after a tool
+        actually executes; register a handler via this property (with
+        :meth:`HookRunner.register`) or :meth:`on`.
         """
         return self._hook_runner
 
@@ -89,7 +97,9 @@ class AgentLoop:
         (unregister first to replace).
 
         The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
-        before each tool call, so a handler registered against it takes effect
+        before each tool call and
+        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` after a tool
+        actually executes, so a handler registered against either takes effect
         immediately for subsequent tool calls.
         """
         return self._hook_runner.register(hook, handler)
@@ -162,6 +172,15 @@ class AgentLoop:
         :class:`~otter_ai_core.hook_runner.HookRunner` contract), matching how a
         tool's own ``execute`` exceptions surface.
 
+        After a tool **actually executes**, emits
+        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` with the call and
+        the executed result: a handler may return a replacement
+        :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` (its
+        ``result`` / ``details`` / ``is_error`` / ``terminate`` fully replace
+        the executed one) or ``None`` to persist it. This emit is skipped on
+        the ``BEFORE_TOOL_CALL`` short-circuit path (the tool never ran) and on
+        the unknown-tool path (no tool ran).
+
         Unknown tool names synthesize an ``is_error`` result naming the
         available tools so the model can self-correct.
         """
@@ -173,6 +192,11 @@ class AgentLoop:
         if tool is None:
             return self._unknown_tool_result(call), False
         result = await tool.execute(call.id, call.arguments, self._abort_signal)
+        override = await self._hook_runner.emit(
+            TOOL_RESULT, ToolResultHookParams(tool_call=call, result=result)
+        )
+        if override is not None:
+            result = override
         return self._to_tool_result_message(call, result), result.terminate
 
     def _to_tool_result_message(

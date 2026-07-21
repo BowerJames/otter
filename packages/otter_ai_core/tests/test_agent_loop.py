@@ -37,7 +37,7 @@ from otter_ai_core import (
     UserContextItem,
     UserMessage,
 )
-from otter_ai_core.agent_loop import BEFORE_TOOL_CALL
+from otter_ai_core.agent_loop import BEFORE_TOOL_CALL, TOOL_RESULT, ToolResultHookParams
 from otter_ai_core.agent_loop.agent_loop import AgentLoop, QueueMode, ToolExecMode
 from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
 from otter_ai_core.context import Role
@@ -719,3 +719,210 @@ async def test_before_tool_call_fires_per_call_in_concurrent_mode() -> None:
     await _await(loop)
 
     assert sorted(seen) == ["c1", "c2"]  # fired once per call (order not guaranteed)
+
+
+# --------------------------------------------------------------------------- #
+# tool_result hook
+# --------------------------------------------------------------------------- #
+
+
+async def test_tool_result_receives_call_and_executed_result() -> None:
+    fake = _FakeController(
+        [
+            _assistant_message([_tool_call("echo", id="c1", arguments={"text": "hi"})]),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+
+    seen: list[ToolResultHookParams] = []
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any] | None:
+        seen.append(params)
+        return None  # defer to the executed result
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    # The handler saw the call (id/name/args) and the executed result (content).
+    assert len(seen) == 1
+    assert seen[0].tool_call.id == "c1"
+    assert seen[0].tool_call.name == "echo"
+    assert seen[0].tool_call.arguments == {"text": "hi"}
+    assert seen[0].result.is_error is False
+    text = seen[0].result.result[0]
+    assert isinstance(text, TextContent)
+    assert text.text == "hi"  # the echo tool's execute() output
+
+
+async def test_tool_result_none_persists_original_result() -> None:
+    fake = _FakeController(
+        [
+            _assistant_message([_tool_call("echo", id="c1", arguments={"text": "real"})]),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any] | None:
+        return None  # persist the original
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    results = _tool_result_adds(fake)
+    assert len(results) == 1
+    msg = results[0].message
+    assert msg.is_error is False
+    text = msg.content[0]
+    assert isinstance(text, TextContent)
+    assert text.text == "real"  # the executed result, unchanged
+    assert msg.tool_call_id == "c1"
+    assert msg.tool_name == "echo"
+
+
+async def test_tool_result_override_replaces_result() -> None:
+    fake = _FakeController(
+        [
+            _assistant_message([_tool_call("echo", id="c1", arguments={"text": "real"})]),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any]:
+        # Replace the executed result wholesale.
+        return AgentToolResult(
+            result=[TextContent(type="text", text="overridden")],
+            details={"from": "tool_result_hook"},
+            is_error=True,
+        )
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    results = _tool_result_adds(fake)
+    assert len(results) == 1
+    msg = results[0].message
+    # content / details / is_error come from the override...
+    text = msg.content[0]
+    assert isinstance(text, TextContent)
+    assert text.text == "overridden"
+    assert msg.details == {"from": "tool_result_hook"}
+    assert msg.is_error is True
+    # ...but tool_call_id / tool_name still come from the call.
+    assert msg.tool_call_id == "c1"
+    assert msg.tool_name == "echo"
+
+
+async def test_tool_result_override_terminate_terminates_loop() -> None:
+    fake = _FakeController(
+        [
+            _assistant_message([_tool_call("echo", id="c1", arguments={"text": "x"})]),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any]:
+        return AgentToolResult(
+            result=[TextContent(type="text", text="done")], details=None, terminate=True
+        )
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    assert fake.generate_calls == 1  # override's terminate stopped the loop
+    assert len(_tool_result_adds(fake)) == 1  # result still fed back to the model
+
+
+async def test_tool_result_not_fired_when_before_tool_call_intercepts() -> None:
+    executed: list[str] = []
+
+    class _P(BaseModel):
+        text: str = ""
+
+    async def execute(tool_call_id: str, params: _P, signal: asyncio.Event) -> AgentToolResult[Any]:
+        executed.append("should-not-run")
+        return AgentToolResult(result=[TextContent(type="text", text=params.text)], details=None)
+
+    tool = AgentTool("echo", "echo back", _P, execute)
+    fake = _FakeController(
+        [
+            _assistant_message([_tool_call("echo", id="c1", arguments={"text": "real"})]),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(fake, tools=_tools(tool), follow_ups=[_user_message()])
+
+    seen: list[ToolResultHookParams] = []
+
+    async def before(call: ToolCall) -> AgentToolResult[Any]:
+        # Short-circuit before execution; the tool never runs.
+        return AgentToolResult(result=[TextContent(type="text", text="intercepted")], details=None)
+
+    async def after(params: ToolResultHookParams) -> AgentToolResult[Any] | None:
+        seen.append(params)
+        return None
+
+    loop.on(BEFORE_TOOL_CALL, before)
+    loop.on(TOOL_RESULT, after)
+    await _await(loop)
+
+    assert executed == []  # tool never executed
+    assert seen == []  # tool_result did not fire (tool never ran)
+
+
+async def test_tool_result_not_fired_for_unknown_tool() -> None:
+    fake = _FakeController([_assistant_message([_tool_call("nope")]), _assistant_message()])
+    loop = _build(fake, tools=_tools(_echo_tool()), follow_ups=[_user_message()])
+
+    seen: list[ToolResultHookParams] = []
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any] | None:
+        seen.append(params)
+        return None
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    # tool_result did not fire (no tool ran); synthesized error still fed back.
+    assert seen == []
+    results = _tool_result_adds(fake)
+    assert len(results) == 1
+    msg = results[0].message
+    assert msg.is_error is True
+    text = msg.content[0]
+    assert isinstance(text, TextContent)
+    assert "Unknown tool 'nope'" in text.text
+
+
+async def test_tool_result_fires_per_call_in_concurrent_mode() -> None:
+    fake = _FakeController(
+        [
+            _assistant_message(
+                [
+                    _tool_call("echo", id="c1", arguments={"text": "a"}),
+                    _tool_call("echo", id="c2", arguments={"text": "b"}),
+                ]
+            ),
+            _assistant_message(),
+        ]
+    )
+    loop = _build(
+        fake,
+        tools=_tools(_echo_tool()),
+        tool_exec_mode=ToolExecMode.CONCURRENT,
+        follow_ups=[_user_message()],
+    )
+
+    seen: list[str] = []
+
+    async def handler(params: ToolResultHookParams) -> AgentToolResult[Any] | None:
+        seen.append(params.tool_call.id)
+        return None
+
+    loop.on(TOOL_RESULT, handler)
+    await _await(loop)
+
+    assert sorted(seen) == ["c1", "c2"]  # fired once per executed call
