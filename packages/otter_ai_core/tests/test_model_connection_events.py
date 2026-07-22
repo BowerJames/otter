@@ -267,6 +267,13 @@ def test_branch_move_round_trip() -> None:
     assert restored == ev
 
 
+def test_branch_moved_requires_at_item_id() -> None:
+    """``BranchMoved`` echoes the request target, so ``at_item_id`` is required
+    even on the refusal path — same invariant as the request ``BranchMove``."""
+    with pytest.raises(ValidationError):
+        _SERVER_ADAPTER.validate_python({"type": "branch.moved"})
+
+
 def test_compaction_done_success_round_trip() -> None:
     ev = CompactionDone(
         summary="s",
