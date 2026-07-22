@@ -164,9 +164,9 @@ def _build(
         _max_turns=max_turns,
     )
     for msg in follow_ups or []:
-        loop._follow_up_queue.put_nowait(msg)
+        loop.follow_up(msg)
     for msg in steering or []:
-        loop._steering_queue.put_nowait(msg)
+        loop.steer(msg)
     return loop
 
 
@@ -449,6 +449,36 @@ async def test_follow_ups_drive_multiple_inner_loops() -> None:
 
     assert fake.generate_calls == 2  # one inner loop (one generate) per follow-up
     assert len(_user_adds(fake)) == 2
+
+
+async def test_follow_up_before_await_starts_loop() -> None:
+    # The run task scheduled in __post_init__ does not start until the first
+    # await, so follow_up() called synchronously after construction reaches the
+    # queue before _run_outer_loop's ``while not empty`` check runs.
+    fake = _FakeController([_assistant_message()])
+
+    loop = _build(fake)  # no follow-ups at construction
+    loop.follow_up(_user_message())
+    await _await(loop)
+
+    assert fake.generate_calls == 1
+    assert len(_user_adds(fake)) == 1
+
+
+async def test_follow_up_raises_after_run_task_done() -> None:
+    loop = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+    await _await(loop)
+
+    with pytest.raises(RuntimeError):
+        loop.follow_up(_user_message())
+
+
+async def test_steer_raises_after_run_task_done() -> None:
+    loop = _build(_FakeController([_assistant_message()]), follow_ups=[_user_message()])
+    await _await(loop)
+
+    with pytest.raises(RuntimeError):
+        loop.steer(_user_message())
 
 
 # --------------------------------------------------------------------------- #

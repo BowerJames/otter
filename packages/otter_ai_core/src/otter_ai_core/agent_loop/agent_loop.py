@@ -104,6 +104,46 @@ class AgentLoop:
         """
         return self._hook_runner.register(hook, handler)
 
+    # ------------------------------------------------------------------ #
+    # Steering & follow-ups
+    # ------------------------------------------------------------------ #
+
+    def _require_running(self, action: str) -> None:
+        task = self._task
+        if task is not None and task.done():
+            raise RuntimeError(f"AgentLoop run task has finished; cannot {action}.")
+
+    def steer(self, message: UserMessage) -> None:
+        """Queue a steering :class:`UserMessage` injected before the next turn.
+
+        Steering is drained inside the inner loop before each ``generate()``
+        (see :meth:`_run_inner_loop`), so a queued steering message reaches the
+        model at the next turn boundary of the current inner loop — use it to
+        redirect an in-progress run.
+
+        Synchronous and safe to call before the first ``await`` (the run task
+        scheduled in ``__post_init__`` does not start until the caller yields to
+        the event loop) or mid-run. Raises :class:`RuntimeError` if the run task
+        has already finished (the message would otherwise be stranded).
+        """
+        self._require_running("steer")
+        self._steering_queue.put_nowait(message)
+
+    def follow_up(self, message: UserMessage) -> None:
+        """Queue a follow-up :class:`UserMessage` that drives another inner loop.
+
+        Follow-ups are drained at the top of the outer loop, each driving a full
+        inner loop (see :meth:`_run_outer_loop`). Because the run task does not
+        start until the caller's first ``await``, you may construct the loop,
+        call :meth:`follow_up` one or more times, then ``await`` the run; you may
+        also call it mid-run to queue a follow-up for after the current inner
+        loop completes.
+
+        Raises :class:`RuntimeError` if the run task has already finished.
+        """
+        self._require_running("follow_up")
+        self._follow_up_queue.put_nowait(message)
+
     async def _run(self) -> None:
         try:
             await self._run_outer_loop()
