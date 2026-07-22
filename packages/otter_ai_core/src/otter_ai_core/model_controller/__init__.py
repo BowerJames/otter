@@ -30,6 +30,8 @@ high-level convenience most callers want. The public surface is declared via
 
 from otter_ai_core.model_controller.controller import ModelController
 from otter_ai_core.model_controller.events import (
+    BRANCH_MOVED,
+    COMPACTION_DONE,
     RESPONSE_DONE,
     RESPONSE_STARTED,
     RESPONSE_UPDATED,
@@ -53,4 +55,6 @@ __all__ = [
     "USER_ITEM_ADDED",
     "USER_ITEM_UPDATED",
     "TOOL_RESULT_ADDED",
+    "COMPACTION_DONE",
+    "BRANCH_MOVED",
 ]

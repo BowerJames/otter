@@ -33,6 +33,12 @@ band, the server emits ``user_item.added`` / ``user_item.updated`` /
 ``user_item.updated`` signals that an existing user item was amended (e.g. an
 asynchronously-transcribed audio item revised after it was first added, as in
 the OpenAI Realtime API), so a client must refresh any local copy.
+
+For the stateful-connection session ops the server emits a single confirm per
+request: ``compaction.done`` for ``compaction.create`` and ``branch.moved`` for
+``branch.move``. Each carries ``error_message`` so a server can report an
+unsupported/failed op (e.g. a connection that cannot compact in place); on
+``error_message`` set, the success-payload fields are absent.
 """
 
 from __future__ import annotations
@@ -45,6 +51,7 @@ from pydantic import ConfigDict, Field
 from otter_ai_core.context import (
     AssistantContextItem,
     ToolResultContextItem,
+    Usage,
     UserContextItem,
 )
 from otter_ai_core.event import Event
@@ -59,6 +66,8 @@ class ServerContextEventType(StrEnum):
     USER_ITEM_ADDED = "user_item.added"
     USER_ITEM_UPDATED = "user_item.updated"
     TOOL_RESULT_ADDED = "tool_result_item.added"
+    COMPACTION_DONE = "compaction.done"
+    BRANCH_MOVED = "branch.moved"
 
 
 class ResponseStarted(Event[ServerContextEventType]):
@@ -130,6 +139,45 @@ class ToolResultAdded(Event[ServerContextEventType]):
     item: ToolResultContextItem
 
 
+class CompactionDone(Event[ServerContextEventType]):
+    """Confirm a ``compaction.create``: the live history was collapsed in place.
+
+    On success the payload fields are populated; when ``error_message`` is set
+    (the server refused/failed — e.g. an unsupported op on a connection that
+    cannot compact in place) the payload fields are absent. A driver checks
+    ``error_message`` first.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[ServerContextEventType.COMPACTION_DONE] = ServerContextEventType.COMPACTION_DONE  # noqa: E501
+    summary: str | None = None
+    summary_item_id: str | None = None
+    first_kept_item_id: str | None = None
+    removed_item_ids: list[str] | None = None
+    tokens_before: int | None = None
+    usage: Usage | None = None
+    error_message: str | None = None
+
+
+class BranchMoved(Event[ServerContextEventType]):
+    """Confirm a ``branch.move``: the live conversation was truncated to ``at_item_id``.
+
+    ``at_item_id`` echoes the request target (known even on refusal). On success
+    the payload fields are populated; when ``error_message`` is set the rest is
+    absent. A driver checks ``error_message`` first.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[ServerContextEventType.BRANCH_MOVED] = ServerContextEventType.BRANCH_MOVED  # noqa: E501
+    at_item_id: str
+    removed_item_ids: list[str] | None = None
+    summary_item_id: str | None = None
+    usage: Usage | None = None
+    error_message: str | None = None
+
+
 #: Discriminated union of all server→client (inbound) model-connection events.
 ServerContextEvent = Annotated[
     ResponseStarted
@@ -137,6 +185,8 @@ ServerContextEvent = Annotated[
     | ResponseDone
     | UserItemAdded
     | UserItemUpdated
-    | ToolResultAdded,
+    | ToolResultAdded
+    | CompactionDone
+    | BranchMoved,
     Field(discriminator="type"),
 ]

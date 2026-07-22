@@ -143,6 +143,12 @@ serializable data model is unchanged.
   `ServerContextEvent`) and typed connection aliases
   (`ModelConnectionClient` / `ModelConnectionBackend`); the bidirectional peer
   of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
+  `CreateResponse` carries advisory per-request `model` / `thinking_level`
+  overrides, and the protocol adds two **stateful-connection** session ops —
+  `compaction.create` / `compaction.done` and `branch.move` / `branch.moved` —
+  whose `*.done` / `*.moved` confirms carry `error_message` so a server can
+  report an unsupported op. (Stateless providers rebuild context each turn and
+  ignore these; see #118.)
 - [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
   — the high-level conversation driver built on a `ModelConnectionClient`:
   `ModelController` (async, confirmation-awaiting `add_message` / `generate` /

@@ -49,8 +49,10 @@ from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
+    BranchMoved,
     ClientContextEvent,
     ClientContextEventType,
+    CompactionDone,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -357,6 +359,8 @@ async def test_abort_when_idle_raises() -> None:
         UserItemAdded(item=_user_item()),
         UserItemUpdated(item=_user_item()),
         ToolResultAdded(item=_tool_result_item()),
+        CompactionDone(),
+        BranchMoved(at_item_id="i1"),
     ],
 )
 async def test_controller_republishes_each_server_event(event: ServerContextEvent) -> None:

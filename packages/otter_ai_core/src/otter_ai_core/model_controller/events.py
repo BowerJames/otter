@@ -49,6 +49,8 @@ from typing import Any
 
 from otter_ai_core.bus import BusEvent
 from otter_ai_core.model_connection import (
+    BranchMoved,
+    CompactionDone,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -76,6 +78,8 @@ class ModelControllerEventTypes(StrEnum):
     USER_ITEM_ADDED = ServerContextEventType.USER_ITEM_ADDED
     USER_ITEM_UPDATED = ServerContextEventType.USER_ITEM_UPDATED
     TOOL_RESULT_ADDED = ServerContextEventType.TOOL_RESULT_ADDED
+    COMPACTION_DONE = ServerContextEventType.COMPACTION_DONE
+    BRANCH_MOVED = ServerContextEventType.BRANCH_MOVED
 
 
 #: Emitted when a response generation starts (``partial`` is the empty-start item).
@@ -90,6 +94,12 @@ USER_ITEM_ADDED: BusEvent[UserItemAdded] = BusEvent(ModelControllerEventTypes.US
 USER_ITEM_UPDATED: BusEvent[UserItemUpdated] = BusEvent(ModelControllerEventTypes.USER_ITEM_UPDATED)
 #: Emitted when the server accepts a tool result and assigns it an item ``id``.
 TOOL_RESULT_ADDED: BusEvent[ToolResultAdded] = BusEvent(ModelControllerEventTypes.TOOL_RESULT_ADDED)
+#: Emitted when a stateful server confirms a ``compaction.create`` (the live
+#: history was collapsed in place; carries ``error_message`` if refused/failed).
+COMPACTION_DONE: BusEvent[CompactionDone] = BusEvent(ModelControllerEventTypes.COMPACTION_DONE)
+#: Emitted when a stateful server confirms a ``branch.move`` (the live
+#: conversation was truncated to ``at_item_id``; carries ``error_message``).
+BRANCH_MOVED: BusEvent[BranchMoved] = BusEvent(ModelControllerEventTypes.BRANCH_MOVED)
 
 
 #: Dispatch glue: wire discriminator -> bus descriptor. The controller's drain
@@ -102,6 +112,8 @@ SERVER_EVENT_BY_TYPE: dict[ServerContextEventType, BusEvent[Any]] = {
     ServerContextEventType.USER_ITEM_ADDED: USER_ITEM_ADDED,
     ServerContextEventType.USER_ITEM_UPDATED: USER_ITEM_UPDATED,
     ServerContextEventType.TOOL_RESULT_ADDED: TOOL_RESULT_ADDED,
+    ServerContextEventType.COMPACTION_DONE: COMPACTION_DONE,
+    ServerContextEventType.BRANCH_MOVED: BRANCH_MOVED,
 }
 
 #: Every controller bus event, in :class:`ModelControllerEventTypes` order, for
@@ -117,4 +129,6 @@ __all__ = [
     "USER_ITEM_ADDED",
     "USER_ITEM_UPDATED",
     "TOOL_RESULT_ADDED",
+    "COMPACTION_DONE",
+    "BRANCH_MOVED",
 ]
