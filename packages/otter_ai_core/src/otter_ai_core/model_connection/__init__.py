@@ -26,8 +26,10 @@ from .client_context_events import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
+    BranchMove,
     ClientContextEvent,
     ClientContextEventType,
+    CreateCompaction,
     CreateResponse,
 )
 from .model_connection import (
@@ -36,6 +38,8 @@ from .model_connection import (
     ModelConnectionPair,
 )
 from .server_context_events import (
+    BranchMoved,
+    CompactionDone,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -57,6 +61,8 @@ __all__ = [
     "AddUserMessage",
     "ClientContextEvent",
     "CreateResponse",
+    "CreateCompaction",
+    "BranchMove",
     "AbortResponse",
     # server→client events
     "ServerContextEventType",
@@ -67,4 +73,6 @@ __all__ = [
     "ToolResultAdded",
     "UserItemAdded",
     "UserItemUpdated",
+    "CompactionDone",
+    "BranchMoved",
 ]
