@@ -44,6 +44,15 @@ from otter_ai_core.session_manager.metadata import (
     SessionMetadata,
     SessionStats,
 )
+from otter_ai_core.session_manager.projection import (
+    SessionDerivedState,
+    SessionProjection,
+    apply_compaction_transform,
+    apply_updates,
+    derive_state,
+    entries_to_items,
+    project,
+)
 
 __all__ = [
     # entries
@@ -68,4 +77,12 @@ __all__ = [
     # errors
     "SessionError",
     "SessionErrorCode",
+    # projection (pure functions)
+    "SessionDerivedState",
+    "SessionProjection",
+    "apply_compaction_transform",
+    "apply_updates",
+    "derive_state",
+    "entries_to_items",
+    "project",
 ]
