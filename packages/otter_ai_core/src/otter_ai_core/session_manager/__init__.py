@@ -16,12 +16,19 @@ Public surface
   (:mod:`otter_ai_core.session_manager.metadata`).
 * :class:`SessionError` / :class:`SessionErrorCode`
   (:mod:`otter_ai_core.session_manager.errors`).
+* the pure projection functions
+  (:mod:`otter_ai_core.session_manager.projection`).
+* :class:`SessionStore` — the backend protocol
+  (:mod:`otter_ai_core.session_manager.store`).
+* :class:`SessionStoreController` — the concrete public surface + its
+  :class:`~otter_ai_core.bus.Bus` notification descriptors
+  (:mod:`otter_ai_core.session_manager.controller` / ``events``).
 
-(Projection functions, the :class:`SessionStore` protocol, and the
-:class:`SessionStoreController` are added by later modules in this subpackage
-and re-exported here once present.)
+Scope is deliberately per-session (no multi-session catalog, no connection
+reconciliation, no LLM-step hooks). See the issue spec.
 """
 
+from otter_ai_core.session_manager.controller import SessionStoreController
 from otter_ai_core.session_manager.entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
@@ -39,6 +46,15 @@ from otter_ai_core.session_manager.entries import (
     ThinkingLevelChangeEntry,
 )
 from otter_ai_core.session_manager.errors import SessionError, SessionErrorCode
+from otter_ai_core.session_manager.events import (
+    COMPACTED,
+    ENTRY_APPENDED,
+    ITEM_ADDED,
+    ITEM_UPDATED,
+    TREE_CHANGED,
+    SessionStoreControllerEventTypes,
+    TreeChangedPayload,
+)
 from otter_ai_core.session_manager.metadata import (
     BranchSummaryInput,
     SessionMetadata,
@@ -88,4 +104,13 @@ __all__ = [
     "project",
     # store protocol (backend seam)
     "SessionStore",
+    # controller + observability
+    "SessionStoreController",
+    "SessionStoreControllerEventTypes",
+    "TreeChangedPayload",
+    "ENTRY_APPENDED",
+    "ITEM_ADDED",
+    "ITEM_UPDATED",
+    "COMPACTED",
+    "TREE_CHANGED",
 ]
