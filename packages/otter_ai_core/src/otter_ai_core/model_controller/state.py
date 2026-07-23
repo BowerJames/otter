@@ -14,8 +14,8 @@ it drives a :data:`~otter_ai_core.model_connection.ModelConnectionClient`:
 * :attr:`is_closing` — a ``bool`` flipped by the controller's
   :meth:`~otter_ai_core.model_controller.ModelController.close`. Once ``True``
   the controller rejects new commands (``generate`` / ``add_message`` /
-  ``abort``); teardown has begun. It is a plain ``bool`` (not an
-  :class:`~asyncio.Event`) because nothing awaits the closed transition —
+  ``abort`` / ``compact`` / ``branch``); teardown has begun. It is a plain
+  ``bool`` (not an :class:`~asyncio.Event`) because nothing awaits the closed transition —
   :meth:`~otter_ai_core.model_controller.ModelController.aclose` awaits the
   controller's run task directly for completion.
 
