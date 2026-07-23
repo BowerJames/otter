@@ -6,8 +6,8 @@ it drives a :data:`~otter_ai_core.model_connection.ModelConnectionClient`:
 
 * :attr:`is_idle` — an :class:`asyncio.Event` acting as the idle/busy latch.
   The controller starts **idle** (the event is set in :meth:`__post_init__`),
-  flips to busy (:meth:`set_busy`) when a ``response.create`` is pushed, and
-  back to idle (:meth:`set_idle`) when the matching ``response.done`` arrives.
+  flips to busy (:meth:`set_busy`) when a command is pushed, and back to idle
+  (:meth:`set_idle`) when that command's confirmation event arrives.
   Idle is an :class:`~asyncio.Event` (not a plain ``bool``) so a consumer can
   ``await state.is_idle.wait()`` / :meth:`State.is_idle.wait`-via-controller
   for generation completion.
