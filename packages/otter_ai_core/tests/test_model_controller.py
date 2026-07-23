@@ -236,26 +236,6 @@ async def test_generate_flips_busy_then_idle_on_done() -> None:
     await controller.aclose(timeout=0.2)
 
 
-async def test_response_done_sets_idle_before_publish() -> None:
-    """``_run`` sets idle before re-publishing, so handlers observe idle == True."""
-    controller, backend = _pair()
-    task = asyncio.create_task(controller.generate())
-    await _take(backend, 1)
-    seen_idle: list[bool] = []
-    done = asyncio.Event()
-
-    async def handler(event: ServerContextEvent) -> None:
-        seen_idle.append(controller.is_idle())
-        done.set()
-
-    controller.bus.subscribe(RESPONSE_DONE, handler)
-    backend.push(ResponseDone(item=_assistant_item()))
-    await asyncio.wait_for(done.wait(), 1)
-    assert seen_idle == [True]
-    await asyncio.wait_for(task, 1)
-    await controller.aclose(timeout=0.2)
-
-
 async def test_controller_bus_narrows_response_done() -> None:
     """A handler on the controller's bus narrows ``ResponseDone`` to ``.item``."""
     controller, backend = _pair()

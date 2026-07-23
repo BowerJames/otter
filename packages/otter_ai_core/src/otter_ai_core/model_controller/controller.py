@@ -5,8 +5,9 @@ A :class:`ModelController` wraps a
 low-level push/iterate/abort conduit into a conversation: it appends input
 (``user_message.add`` / ``tool_result.add``), asks the server to generate
 (``response.create``), asks it to stop the current generation
-(``response.abort``), and tracks idle/busy state from the inbound
-``response.done`` events. Every inbound server event is also re-published to a
+(``response.abort``), and tracks idle/busy state within each command method
+(busy on push, idle when that command's confirmation event arrives). Every
+inbound server event is also re-published to a
 :class:`~otter_ai_core.bus.Bus` for fan-out to subscribers (renderers,
 persistence, metrics, …).
 
@@ -493,8 +494,6 @@ class ModelController:
     async def _run(self) -> None:
         try:
             async for event in self._client:
-                if isinstance(event, ResponseDone):
-                    self._state.set_idle()
                 self._bus.publish(SERVER_EVENT_BY_TYPE[event.type], event)
         except asyncio.CancelledError:
             raise  # teardown (aclose); expected — let the finally clean up
@@ -507,7 +506,8 @@ class ModelController:
             # Defensively release any waiter: on an abnormal exit (unexpected
             # error or cancellation) a caller parked on wait_idle() must not
             # hang. Idempotent on the normal exit path (idle is already set by
-            # the response.done handler). Whether the backend ended the inbound
+            # the in-flight command method once its confirmation event arrives).
+            # Whether the backend ended the inbound
             # gracefully or we were cancelled, also stop the bus so its worker
             # can drain and exit. Release an in-flight command await too, so
             # add_message/generate parked on their confirmation event are not

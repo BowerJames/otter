@@ -6,8 +6,9 @@ This package groups the high-level conversation driver built atop the
 * :class:`ModelController` — wraps a
   :data:`~otter_ai_core.model_connection.ModelConnectionClient`, drives the
   conversation (``add_message`` / ``generate`` / ``abort`` / ``compact`` /
-  ``branch``), tracks idle/busy state from inbound ``response.done`` events, and
-  re-publishes every server event to a descriptor-keyed
+  ``branch``), tracks idle/busy state within each command method (busy on push,
+  idle when its confirmation event arrives), and re-publishes every server event
+  to a descriptor-keyed
   :class:`otter_ai_core.bus.Bus`. Subscribe via the per-variant
   :class:`otter_ai_core.bus.BusEvent` descriptors in
   :mod:`otter_ai_core.model_controller.events` (``RESPONSE_DONE``, …).

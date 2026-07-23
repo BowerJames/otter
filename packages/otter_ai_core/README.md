@@ -179,8 +179,9 @@ want, unlike the subpackage-only `model_connection`.
 - [`ModelController`](./src/otter_ai_core/model_controller/controller.py) —
   wraps a `ModelConnectionClient`, drives the conversation via **async,
   confirmation-awaiting commands** (`add_message` / `generate` / `abort`),
-  tracks idle/busy state from inbound `response.done` events, and re-publishes
-  every server event to its `bus` (a descriptor-keyed
+  tracks idle/busy state within each command method (busy on push, idle when
+  its confirmation event arrives), and re-publishes every server event to its
+  `bus` (a descriptor-keyed
   [`Bus`](./src/otter_ai_core/bus.py)). Subscribe via the per-variant
   `BusEvent` descriptors in
   [`model_controller/events.py`](./src/otter_ai_core/model_controller/events.py)
