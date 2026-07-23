@@ -53,6 +53,7 @@ from otter_ai_core.session_manager.projection import (
     entries_to_items,
     project,
 )
+from otter_ai_core.session_manager.store import SessionStore
 
 __all__ = [
     # entries
@@ -85,4 +86,6 @@ __all__ = [
     "derive_state",
     "entries_to_items",
     "project",
+    # store protocol (backend seam)
+    "SessionStore",
 ]
