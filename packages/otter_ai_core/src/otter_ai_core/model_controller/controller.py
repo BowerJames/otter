@@ -21,6 +21,16 @@ returning:
   input.
 * :meth:`generate` — pushes ``response.create`` and awaits the matching
   ``response.done``.
+* :meth:`compact` — pushes ``compaction.create`` and awaits the matching
+  ``compaction.done`` (a session op for **stateful** connections).
+* :meth:`branch` — pushes ``branch.move`` and awaits the matching
+  ``branch.moved`` (a session op for **stateful** connections).
+
+The session ops (:meth:`compact` / :meth:`branch`) return the confirm event
+*verbatim* — a refused/unsupported op surfaces as a confirm with
+``error_message`` set (the server did not perform the op); the caller checks
+``error_message`` first rather than the controller raising. Like the other
+commands they are single-flight (rejected while busy) and never hang.
 
 Both are single-flight (rejected while busy) and never hang: if the run loop
 exits before the awaited echo arrives — teardown via :meth:`close` /
@@ -60,8 +70,8 @@ Teardown is **cooperative first, deterministic second**:
   cleanup.) ``aclose`` is also available via ``async with``.
 
 Once :meth:`close` / :meth:`aclose` has begun, the command methods
-(:meth:`add_message`, :meth:`generate`, :meth:`abort`) reject with
-:class:`RuntimeError`.
+(:meth:`add_message`, :meth:`generate`, :meth:`abort`, :meth:`compact`,
+:meth:`branch`) reject with :class:`RuntimeError`.
 """
 
 from __future__ import annotations
@@ -78,6 +88,10 @@ from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
+    BranchMove,
+    BranchMoved,
+    CompactionDone,
+    CreateCompaction,
     CreateResponse,
     ModelConnectionClient,
     ResponseDone,
@@ -86,6 +100,8 @@ from otter_ai_core.model_connection import (
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
 from otter_ai_core.model_controller.events import (
+    BRANCH_MOVED,
+    COMPACTION_DONE,
     RESPONSE_DONE,
     SERVER_EVENT_BY_TYPE,
     TOOL_RESULT_ADDED,
@@ -288,6 +304,126 @@ class ModelController:
                 return item
             case _:
                 raise RuntimeError("Generate did not receive an item")
+
+    async def compact(
+        self,
+        *,
+        first_kept_item_id: str | None = None,
+        custom_instructions: str | None = None,
+        summary: str | None = None,
+    ) -> CompactionDone:
+        """Ask a stateful server to compact its live conversation history in place.
+
+        Pushes a ``compaction.create`` client event (carrying the retention /
+        summary / custom-instructions params), flips the controller to busy, and
+        blocks until the backend emits the matching ``compaction.done`` confirm,
+        then returns to idle.
+
+        Returns the :class:`~otter_ai_core.model_connection.CompactionDone`
+        confirm **verbatim**. A refused / unsupported op (e.g. a connection that
+        cannot compact in place) surfaces as a confirm with ``error_message``
+        set — the server did not perform the op — and is returned, not raised;
+        the caller checks ``error_message`` first.
+
+        Raises :class:`RuntimeError` if the controller is closing/closed or
+        already busy, or if the run loop exits before ``compaction.done`` arrives
+        (teardown / non-conformant backend) — the await never hangs.
+        """
+        self._require_running()
+        self._check_idle()
+        self._state.set_busy()
+        done = asyncio.Event()
+        self._command_waiter = done
+        received = False
+        result: CompactionDone | None
+
+        async def _on_done(event: CompactionDone) -> None:
+            nonlocal received, result
+            result = event
+            received = True
+            done.set()
+
+        unsub = self._bus.subscribe(COMPACTION_DONE, _on_done)
+        self._client.push(
+            CreateCompaction(
+                first_kept_item_id=first_kept_item_id,
+                custom_instructions=custom_instructions,
+                summary=summary,
+            )
+        )
+        try:
+            await done.wait()
+        finally:
+            self._command_waiter = None
+            unsub()
+        if not received:
+            # Released by teardown (the run-loop exit path in ``_run``'s
+            # finally) rather than by the confirm handler — see
+            # :meth:`add_message` for the FIFO reasoning that makes this check
+            # sound.
+            raise RuntimeError("ModelController run loop exited before compaction.done arrived.")
+        self._state.set_idle()
+        match result:
+            case CompactionDone():
+                return result
+            case _:
+                raise RuntimeError("Compact did not receive a confirm")
+
+    async def branch(
+        self,
+        at_item_id: str,
+        *,
+        summary: str | None = None,
+    ) -> BranchMoved:
+        """Ask a stateful server to truncate its live conversation to an earlier item.
+
+        Pushes a ``branch.move`` client event — ``at_item_id`` becomes the new
+        live head; an optional ``summary`` may be injected at the branch point —
+        flips the controller to busy, and blocks until the backend emits the
+        matching ``branch.moved`` confirm, then returns to idle.
+
+        Returns the :class:`~otter_ai_core.model_connection.BranchMoved` confirm
+        **verbatim**. A refused / unsupported op surfaces as a confirm with
+        ``error_message`` set — returned, not raised; the caller checks
+        ``error_message`` first.
+
+        Raises :class:`RuntimeError` if the controller is closing/closed or
+        already busy, or if the run loop exits before ``branch.moved`` arrives
+        (teardown / non-conformant backend) — the await never hangs.
+        """
+        self._require_running()
+        self._check_idle()
+        self._state.set_busy()
+        done = asyncio.Event()
+        self._command_waiter = done
+        received = False
+        result: BranchMoved | None
+
+        async def _on_done(event: BranchMoved) -> None:
+            nonlocal received, result
+            result = event
+            received = True
+            done.set()
+
+        unsub = self._bus.subscribe(BRANCH_MOVED, _on_done)
+        self._client.push(BranchMove(at_item_id=at_item_id, summary=summary))
+        try:
+            await done.wait()
+        finally:
+            self._command_waiter = None
+            unsub()
+        if not received:
+            # Released by teardown (the run-loop exit path in ``_run``'s
+            # finally) rather than by the confirm handler — see
+            # :meth:`add_message` for the FIFO reasoning that makes this check
+            # sound.
+            raise RuntimeError("ModelController run loop exited before branch.moved arrived.")
+        self._state.set_idle()
+        match result:
+            case BranchMoved():
+                return result
+            case _:
+                raise RuntimeError("Branch did not receive a confirm")
 
     def abort(self) -> None:
         """Protocol-abort the in-progress generation, keeping the connection open.

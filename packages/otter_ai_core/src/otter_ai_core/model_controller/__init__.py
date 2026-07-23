@@ -5,10 +5,11 @@ This package groups the high-level conversation driver built atop the
 
 * :class:`ModelController` — wraps a
   :data:`~otter_ai_core.model_connection.ModelConnectionClient`, drives the
-  conversation (``add_message`` / ``generate`` / ``abort``), tracks idle/busy
-  state from inbound ``response.done`` events, and re-publishes every server
-  event to a descriptor-keyed :class:`otter_ai_core.bus.Bus`. Subscribe via the
-  per-variant :class:`otter_ai_core.bus.BusEvent` descriptors in
+  conversation (``add_message`` / ``generate`` / ``abort`` / ``compact`` /
+  ``branch``), tracks idle/busy state from inbound ``response.done`` events, and
+  re-publishes every server event to a descriptor-keyed
+  :class:`otter_ai_core.bus.Bus`. Subscribe via the per-variant
+  :class:`otter_ai_core.bus.BusEvent` descriptors in
   :mod:`otter_ai_core.model_controller.events` (``RESPONSE_DONE``, …).
 * :class:`State` — the controller's mutable idle/busy latch and closing flag.
 * :mod:`otter_ai_core.model_controller.events` — the
@@ -18,7 +19,9 @@ This package groups the high-level conversation driver built atop the
 
 The commands are async and await a backend confirmation (an item-added echo
 for :meth:`~otter_ai_core.ModelController.add_message`, a ``response.done``
-for :meth:`~otter_ai_core.ModelController.generate`); see the controller module
+for :meth:`~otter_ai_core.ModelController.generate`, a ``compaction.done``
+for :meth:`~otter_ai_core.ModelController.compact`, a ``branch.moved``
+for :meth:`~otter_ai_core.ModelController.branch`); see the controller module
 docstring for the no-strand teardown guarantee.
 
 Unlike the lower-level :mod:`otter_ai_core.model_connection` (subpackage-only),

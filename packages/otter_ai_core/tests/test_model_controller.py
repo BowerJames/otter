@@ -49,10 +49,12 @@ from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
+    BranchMove,
     BranchMoved,
     ClientContextEvent,
     ClientContextEventType,
     CompactionDone,
+    CreateCompaction,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -127,6 +129,25 @@ def _tool_result_item() -> ToolResultContextItem:
 
 def _input() -> AddUserMessage:
     return AddUserMessage(message=_user_message())
+
+
+def _compaction_done() -> CompactionDone:
+    return CompactionDone(
+        summary="compacted history",
+        summary_item_id="cs1",
+        first_kept_item_id="k1",
+        removed_item_ids=["r1", "r2"],
+        tokens_before=100,
+        usage=_usage(),
+    )
+
+
+def _branch_moved() -> BranchMoved:
+    return BranchMoved(
+        at_item_id="u1",
+        removed_item_ids=["a1"],
+        summary_item_id="bs1",
+    )
 
 
 def _pair() -> tuple[
@@ -346,6 +367,197 @@ async def test_abort_when_idle_raises() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# ModelController: session ops (compact / branch)
+# --------------------------------------------------------------------------- #
+
+
+async def test_compact_pushes_createcompaction_when_idle() -> None:
+    controller, backend = _pair()
+    confirm = _compaction_done()
+    task = asyncio.create_task(controller.compact())
+    pushed = await _take(backend, 1)
+    assert isinstance(pushed[0], CreateCompaction)
+    backend.push(confirm)
+    result = await asyncio.wait_for(task, 1)
+    assert result == confirm
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_considered_busy() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.compact())
+    await _take(backend, 1)  # CreateCompaction pushed
+    assert controller.is_idle() is False  # busy
+    backend.push(_compaction_done())
+    await asyncio.wait_for(task, 1)
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_forwards_params() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(
+        controller.compact(
+            first_kept_item_id="k1",
+            custom_instructions="be terse",
+            summary="client summary",
+        )
+    )
+    pushed = await _take(backend, 1)
+    event = pushed[0]
+    assert isinstance(event, CreateCompaction)
+    assert event.first_kept_item_id == "k1"
+    assert event.custom_instructions == "be terse"
+    assert event.summary == "client summary"
+    backend.push(_compaction_done())
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_rejected_while_busy() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # busy
+    with pytest.raises(RuntimeError, match="busy"):
+        await controller.compact()
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_ignores_mismatched_echo_type() -> None:
+    """A compact await must not complete on a ``BranchMoved`` confirm."""
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.compact())
+    await _take(backend, 1)  # CreateCompaction pushed; awaiting COMPACTION_DONE
+
+    backend.push(_branch_moved())  # mismatched — ignored
+    await asyncio.sleep(0.02)  # let the bus worker dispatch it
+    assert task.done() is False  # still awaiting the matching confirm
+
+    backend.push(_compaction_done())  # matching — completes
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_returns_confirm_verbatim_with_error_message() -> None:
+    """A refused compaction surfaces as a confirm with ``error_message`` (not raised)."""
+    controller, backend = _pair()
+    refused = CompactionDone(error_message="unsupported")
+    task = asyncio.create_task(controller.compact())
+    await _take(backend, 1)
+    backend.push(refused)
+    result = await asyncio.wait_for(task, 1)
+    assert result is refused
+    assert result.error_message == "unsupported"
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_compact_raises_when_torn_down_mid_flight() -> None:
+    """A wedged backend + teardown must release ``compact``; it must not hang."""
+    controller, _backend = _pair()
+    task = asyncio.create_task(controller.compact())
+    await _take(_backend, 1)  # CreateCompaction pushed; awaiting compaction.done
+    assert controller.is_idle() is False
+    await controller.aclose(timeout=0.2)  # wedged -> run loop cancelled
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
+
+
+async def test_branch_pushes_branchmove_when_idle() -> None:
+    controller, backend = _pair()
+    confirm = _branch_moved()
+    task = asyncio.create_task(controller.branch("u1"))
+    pushed = await _take(backend, 1)
+    assert isinstance(pushed[0], BranchMove)
+    backend.push(confirm)
+    result = await asyncio.wait_for(task, 1)
+    assert result == confirm
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_considered_busy() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.branch("u1"))
+    await _take(backend, 1)  # BranchMove pushed
+    assert controller.is_idle() is False  # busy
+    backend.push(_branch_moved())
+    await asyncio.wait_for(task, 1)
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_forwards_at_item_id_and_summary() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.branch("u1", summary="fork note"))
+    pushed = await _take(backend, 1)
+    event = pushed[0]
+    assert isinstance(event, BranchMove)
+    assert event.at_item_id == "u1"
+    assert event.summary == "fork note"
+    backend.push(_branch_moved())
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_rejected_while_busy() -> None:
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.generate())
+    await _take(backend, 1)  # busy
+    with pytest.raises(RuntimeError, match="busy"):
+        await controller.branch("u1")
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_ignores_mismatched_echo_type() -> None:
+    """A branch await must not complete on a ``CompactionDone`` confirm."""
+    controller, backend = _pair()
+    task = asyncio.create_task(controller.branch("u1"))
+    await _take(backend, 1)  # BranchMove pushed; awaiting BRANCH_MOVED
+
+    backend.push(_compaction_done())  # mismatched — ignored
+    await asyncio.sleep(0.02)  # let the bus worker dispatch it
+    assert task.done() is False  # still awaiting the matching confirm
+
+    backend.push(_branch_moved())  # matching — completes
+    await asyncio.wait_for(task, 1)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_returns_confirm_verbatim_with_error_message() -> None:
+    """A refused branch surfaces as a confirm with ``error_message`` (not raised).
+
+    ``at_item_id`` is required even on refusal (echo of the request target).
+    """
+    controller, backend = _pair()
+    refused = BranchMoved(at_item_id="u1", error_message="unsupported")
+    task = asyncio.create_task(controller.branch("u1"))
+    await _take(backend, 1)
+    backend.push(refused)
+    result = await asyncio.wait_for(task, 1)
+    assert result is refused
+    assert result.error_message == "unsupported"
+    assert controller.is_idle()
+    await controller.aclose(timeout=0.2)
+
+
+async def test_branch_raises_when_torn_down_mid_flight() -> None:
+    """A wedged backend + teardown must release ``branch``; it must not hang."""
+    controller, _backend = _pair()
+    task = asyncio.create_task(controller.branch("u1"))
+    await _take(_backend, 1)  # BranchMove pushed; awaiting branch.moved
+    assert controller.is_idle() is False
+    await controller.aclose(timeout=0.2)  # wedged -> run loop cancelled
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
+
+
+# --------------------------------------------------------------------------- #
 # ModelController: bus fan-through (every server event type)
 # --------------------------------------------------------------------------- #
 
@@ -421,6 +633,10 @@ async def test_close_initiates_abort_and_guards_commands() -> None:
         await controller.add_message(_input())
     with pytest.raises(RuntimeError, match="closing"):
         controller.abort()
+    with pytest.raises(RuntimeError, match="closing"):
+        await controller.compact()
+    with pytest.raises(RuntimeError, match="closing"):
+        await controller.branch("i1")
 
     await controller.aclose(timeout=0.2)
 
@@ -502,6 +718,10 @@ async def test_post_close_commands_rejected_even_when_idle() -> None:
     assert controller.is_idle()  # no generation was ever started
     with pytest.raises(RuntimeError, match="closing"):
         await controller.generate()
+    with pytest.raises(RuntimeError, match="closing"):
+        await controller.compact()
+    with pytest.raises(RuntimeError, match="closing"):
+        await controller.branch("i1")
     await controller.aclose(timeout=0.2)
     await task
 
