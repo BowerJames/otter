@@ -13,9 +13,10 @@ used to drive a model connection over an abortable two-way conduit:
   :mod:`otter_ai_core.connection` (itself layered over the bidirectional
   channel runtime in :mod:`otter_ai_core.bidirectional_channel`).
 
-It is the bidirectional peer of :mod:`otter_ai_core.assistant_message_stream`,
-and a supported import surface (Strategy A — two-layer facade): callers import
-from :mod:`otter_ai_core.model_connection`. The public surface is declared via
+It specializes :mod:`otter_ai_core.connection` (the abortable two-way facade)
+with otter's model-connection event protocol, and is a supported import
+surface (Strategy A — two-layer facade): callers import from
+:mod:`otter_ai_core.model_connection`. The public surface is declared via
 :data:`__all__`.
 
 No producer-side seam type is defined yet; a connection-level seam will be

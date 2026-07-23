@@ -68,10 +68,9 @@ only the generic bidirectional runtime. **No producer-side seam type is
 defined yet** (the former ``BidirectionalChannelFn`` was removed; a
 connection-level seam will be added in a future dispatch package). A typed
 ``ConnectionClient[ClientEvent, ServerEvent]`` alias belongs in a
-specialising subpackage, mirroring how
-:class:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
-specialises :class:`~otter_ai_core.stream.StreamClient` (the abortable
-facade layered over :class:`~otter_ai_core.channel.ChannelReader`). Like the
+specialising subpackage, mirroring
+:class:`~otter_ai_core.stream.StreamClient` (the abortable facade layered over
+:class:`~otter_ai_core.channel.ChannelReader`). Like the
 one-way channel runtime, :class:`BidirectionalChannelClient` and
 :class:`BidirectionalChannelBackend` are runtime objects and are **not**
 JSON-serializable.
@@ -108,9 +107,7 @@ class BidirectionalChannelClient[TClient, TBackend]:
 
     __slots__ = ("_inbound", "_outbound")
 
-    def __init__(
-        self, inbound: ChannelReader[TBackend], outbound: ChannelWriter[TClient]
-    ) -> None:
+    def __init__(self, inbound: ChannelReader[TBackend], outbound: ChannelWriter[TClient]) -> None:
         self._inbound = inbound
         self._outbound = outbound
 
@@ -158,9 +155,7 @@ class BidirectionalChannelBackend[TClient, TBackend]:
 
     __slots__ = ("_inbound", "_outbound")
 
-    def __init__(
-        self, inbound: ChannelWriter[TBackend], outbound: ChannelReader[TClient]
-    ) -> None:
+    def __init__(self, inbound: ChannelWriter[TBackend], outbound: ChannelReader[TClient]) -> None:
         self._inbound = inbound
         self._outbound = outbound
 

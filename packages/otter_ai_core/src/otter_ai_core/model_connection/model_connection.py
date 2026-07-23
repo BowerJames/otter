@@ -15,9 +15,9 @@ protocol:
 * :data:`ModelConnectionPair` — the linked pair returned by an annotated
   :func:`~otter_ai_core.connection.create_connection`.
 
-These specialize the generic abortable two-way facade, mirroring how
-:mod:`otter_ai_core.assistant_message_stream` specializes the one-way
-:mod:`otter_ai_core.stream` runtime.
+These specialize the generic abortable two-way facade
+(:mod:`otter_ai_core.connection`) with otter's model-connection event
+protocol.
 
 No producer-side seam type is defined yet (no ``ModelConnectionFn`` /
 ``ModelConnectionFnBuilder``); a connection-level seam will be added in a

@@ -88,14 +88,6 @@ restored = Context.model_validate_json(context.model_dump_json())
 assert restored == context
 ```
 
-### Assistant message stream
-
-The [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream/)
-subpackage defines the streaming-event **protocol** (`AssistantMessageEvent`
-family) and the **typed stream aliases** (`AssistantMessageStreamClient` /
-`AssistantMessageStreamBackend` / the `AssistantMessageStreamFnBuilder` seam).
-Import from `otter_ai_core.assistant_message_stream`.
-
 ### Generic channel runtime
 
 [`channel.py`](./packages/otter_ai_core/src/otter_ai_core/channel.py) is a faithful
@@ -141,9 +133,10 @@ serializable data model is unchanged.
 - [`model_connection/`](./packages/otter_ai_core/src/otter_ai_core/model_connection/)
   — the typed two-way event protocol (`ClientContextEvent` /
   `ServerContextEvent`) and typed connection aliases
-  (`ModelConnectionClient` / `ModelConnectionBackend`); the bidirectional peer
-  of [`assistant_message_stream/`](./packages/otter_ai_core/src/otter_ai_core/assistant_message_stream).
-  `CreateResponse` carries advisory per-request `model` / `thinking_level`
+  (`ModelConnectionClient` / `ModelConnectionBackend`); it specializes
+  [`connection.py`](./packages/otter_ai_core/src/otter_ai_core/connection.py)
+  with otter's model-connection event protocol. `CreateResponse` carries
+  advisory per-request `model` / `thinking_level`
   overrides, and the protocol adds two **stateful-connection** session ops —
   `compaction.create` / `compaction.done` and `branch.move` / `branch.moved` —
   whose `*.done` / `*.moved` confirms carry `error_message` so a server can
@@ -170,8 +163,7 @@ yet; a connection-level seam will be added in a future dispatch package.
 ```python
 import asyncio
 
-from otter_ai_core import AssistantMessage, create_channel
-from otter_ai_core.assistant_message_stream import AssistantDoneEvent
+from otter_ai_core import create_channel
 
 
 async def main() -> None:
@@ -180,25 +172,12 @@ async def main() -> None:
     writer = wiring.writer
 
     async def produce() -> None:
-        msg = AssistantMessage(
-            role="assistant",
-            content=[],
-            api="anthropic-messages",
-            provider="anthropic",
-            model="claude-3",
-            usage=...,  # a Usage instance
-            stop_reason="stop",
-            timestamp=0,
-        )
-        # Push every event, including the terminal ``done``, then end:
-        writer.push(
-            AssistantDoneEvent(role="assistant", type="done", reason="stop", message=msg)
-        )
-        writer.end()
+        for i in range(3):
+            writer.push(i)
+        writer.end()  # signal end-of-stream (idempotent)
 
     task = asyncio.create_task(produce())
-    async for event in reader:  # the terminal "done" event is the last one yielded
-        ...
+    received = [event async for event in reader]  # [0, 1, 2]; iteration ends at end()
     await task
 ```
 

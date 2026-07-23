@@ -3,8 +3,8 @@
 A faithful Python/``asyncio`` port of the ``EventStream`` push-queue from
 ``@earendil-works/pi-ai``. This module provides the *runtime* — an async
 single-consumer queue split into a read end (:class:`ChannelReader`) and a
-write end (:class:`ChannelWriter`). The typed message-stream aliases live in
-:mod:`otter_ai_core.assistant_message_stream`.
+write end (:class:`ChannelWriter`). The abortable one-way facade layered over
+this channel lives in :mod:`otter_ai_core.stream`.
 
 Why "channel"
 --------------
@@ -17,10 +17,9 @@ right down to the sender closing to signal completion. A "stream", by contrast,
 is usually a single iterable object one actor pulls from; and in Python
 ``asyncio.StreamReader``/``StreamWriter`` read *bytes* off a transport, a
 connotation that does not fit a typed-event conduit. (The *values* flowing
-through a channel — an LLM response — are genuinely a stream; the typed
-:data:`~otter_ai_core.assistant_message_stream.AssistantMessageStreamClient`
-alias keeps that domain vocabulary, and just specializes the read end of the
-abortable :mod:`~otter_ai_core.stream` facade layered over this channel.)
+through a channel — an LLM response — are genuinely a stream; the abortable
+:mod:`~otter_ai_core.stream` facade layered over this channel supplies that
+one-way conduit.)
 
 Writer contract (matches pi-ai)
 -------------------------------
@@ -93,9 +92,7 @@ class ChannelReader[TEvent]:
 
     def __aiter__(self) -> Self:
         if self._iterating:
-            raise RuntimeError(
-                "ChannelReader is single-consumer and single-pass: already iterated"
-            )
+            raise RuntimeError("ChannelReader is single-consumer and single-pass: already iterated")
         self._iterating = True
         return self
 
