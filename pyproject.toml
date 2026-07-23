@@ -30,7 +30,7 @@ known-first-party = ["otter_ai_core", "otter_ai_logging"]
 python_version = "3.12"
 strict = true
 files = ["packages"]
-mypy_path = ["packages/otter_ai_core/src", "packages/otter_ai_logging/src"]
+mypy_path = ["packages/otter_ai_core/src", "packages/otter_ai_logging/src", "packages/otter_ai_core"]
 explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 

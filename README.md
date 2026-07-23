@@ -205,6 +205,69 @@ async def main() -> None:
 Otter defines the runtime and types only — **no providers, no registry, no
 `stream()` dispatch**.
 
+### Session manager
+
+[`session_manager/`](./packages/otter_ai_core/src/otter_ai_core/session_manager/)
+adds a **per-session persistence layer**: a conversation that is **persisted**
+(by a swappable backend), **restorable** (rebuilt from the store),
+**observable** (typed `Bus` notifications), **branchable** (rewind/diverge
+without mutating history), **compactable** (collapse a long history to a
+summary + retained tail), and **updatable** (amend a recorded item in a
+strictly append-only fashion — the one capability upstream `pi` lacks, made
+first-class here).
+
+It is pure logic + a backend seam — **no LLM, no connection, no catalog, and
+no concrete backend** (the in-memory store exists only as test infrastructure).
+
+```
+session_manager/
+├── entries.py        # SessionEntry union + variants + SessionEntryType (append-only tree)
+├── projection.py     # PURE functions: project / apply_compaction_transform /
+│                     #   entries_to_items / apply_updates / derive_state
+├── store.py          # SessionStore protocol (backend seam — the first generic Protocol in core)
+├── controller.py     # SessionStoreController CONCRETE class (owns Bus + asyncio.Lock)
+├── events.py         # Bus notifications (ENTRY_APPENDED / ITEM_ADDED / … / TREE_CHANGED)
+├── metadata.py       # SessionMetadata / SessionStats / BranchSummaryInput
+└── errors.py         # SessionError + SessionErrorCode
+```
+
+- [`SessionStore`](./packages/otter_ai_core/src/otter_ai_core/session_manager/store.py)
+  *(generic `Protocol`)* — the per-session backend seam (memory / JSONL /
+  SQLite / Postgres). The first generic `Protocol` in `otter-ai-core`: a backend
+  seam needs both structural typing and a metadata type parameter, which a
+  `type` alias cannot express.
+- [`SessionStoreController`](./packages/otter_ai_core/src/otter_ai_core/session_manager/controller.py)
+  *(concrete)* — an open session: `append_message` / `update_message` /
+  `append_compaction` / `move_to` (branch) / `append_*_change` / `append_label` /
+  `append_session_name`. Pure logic over a `SessionStore`; observable via its
+  `bus`; concurrency-safe via an append `Lock`. Lock-free snapshot reads
+  (`projection` / `build_context` / `get_branch`). Tear down with `aclose`
+  (or `async with`), mirroring `ModelController`.
+- **Pure projection functions** *(concrete, loop-free)* — `project(path)`,
+  `derive_state(path)`, `apply_compaction_transform`, `entries_to_items`,
+  `apply_updates`: sync, unit-testable with a hand-built list and no store. A
+  `SessionProjection` carries an items-only `Context` (`system_prompt=None`,
+  `tools=None`) plus derived state (model / thinking level / active tools).
+
+A session is **restorable by construction**: `SessionStoreController(store)` +
+`await controller.projection()` rebuilds the current `Context` from any
+populated store; re-constructing over the same store always yields an identical
+projection.
+
+```python
+from otter_ai_core import SessionStoreController, UserMessage, context_item
+
+controller = SessionStoreController(my_store)  # any SessionStore impl
+await controller.append_message(context_item(UserMessage(role="user", content="hi", timestamp=0), id="u1"))
+await controller.append_model_change("anthropic", "claude-3")
+projection = await controller.projection()
+print(projection.context.items)        # the projected ContextItems
+print(projection.state.model)          # ("anthropic", "claude-3")
+
+# Branch: rewind to an earlier item and diverge — history is never mutated.
+await controller.move_to(earlier_tree_id)
+```
+
 ## `otter-ai-logging`
 
 `otter-ai-logging` configures the stdlib [`logging`](https://docs.python.org/3/library/logging.html)
