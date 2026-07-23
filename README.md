@@ -254,7 +254,15 @@ module for the monorepo's logging conventions. It depends on nothing but the
 standard library.
 
 - **Line format** — `<timestamp_utc> <level> <message>` (ISO-8601 UTC), e.g.
-  `2026-07-09T10:56:29Z INFO user 42 authenticated`.
+  `2026-07-09T10:56:29Z INFO user 42 authenticated`. Pass `format="json"` to
+  `configure_logging` to render each line as a single-line JSON object instead
+  (`{"level": ..., "time": ..., "msg": ...}`).
+- **Scoped context** — `logging_context(**fields)` binds structured fields (a
+  session/request ID, a user ID, a hook name, …) to the current scope for the
+  lifetime of a block; every log line within it carries them. In text they
+  appear as a trailing `key=value …` suffix; in JSON as top-level keys written
+  *before* the reserved fields. Fields merge on nesting and unwind cleanly on
+  exit, and propagate across `asyncio` tasks with no per-call-site plumbing.
 - **Stream routing** — `DEBUG`/`INFO`/`WARNING` → stdout, `ERROR` → stderr
   (stderr only; never mirrored). `ERROR` is the alertable channel.
 - **Level** — driven by the `LOG_LEVEL` environment variable (one of
@@ -265,15 +273,21 @@ Application code configures logging once at startup; libraries and modules
 obtain a logger with the stdlib idiom `logging.getLogger(__name__)`.
 
 ```python
-from otter_ai_logging import configure_logging
+from otter_ai_logging import configure_logging, logging_context
 
 configure_logging()  # reads LOG_LEVEL (default INFO); idempotent
+# configure_logging(format="json")  # opt in to single-line JSON output
 
 import logging
 
 log = logging.getLogger(__name__)
 log.info("user %s authenticated", 42)        # -> stdout
 log.error("database connection refused")     # -> stderr (alertable)
+
+# bind scope-bound structured fields; every line inside carries them
+with logging_context(session_id="call-123", user_id=42):
+    log.info("authenticated")
+    # -> stdout: ... INFO authenticated session_id=call-123 user_id=42
 ```
 
 ## Tooling

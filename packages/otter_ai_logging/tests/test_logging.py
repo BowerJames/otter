@@ -16,22 +16,26 @@ plugin.
 from __future__ import annotations
 
 import calendar
+import json
 import logging
 import re
+import sys
 import time
+from datetime import datetime
 
 import pytest
 
 from otter_ai_logging import (
     _HANDLER_TAG,  # implementation detail under test
     LOG_LEVEL_ENV_VAR,
+    JsonFormatter,
+    TextFormatter,
     _MaxLevelFilter,  # implementation detail under test
     configure_logging,
+    logging_context,
 )
 
-_LINE_RE = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (DEBUG|INFO|WARNING|ERROR) .*$"
-)
+_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z) (DEBUG|INFO|WARNING|ERROR) .*$")
 
 
 def _emit_all(log: logging.Logger) -> None:
@@ -185,9 +189,7 @@ def _count_owned_handlers() -> int:
     what ``configure_logging`` attached. Counting only tagged handlers isolates
     the idempotency contract from that pollution.
     """
-    return sum(
-        1 for h in logging.getLogger().handlers if getattr(h, _HANDLER_TAG, False)
-    )
+    return sum(1 for h in logging.getLogger().handlers if getattr(h, _HANDLER_TAG, False))
 
 
 def test_idempotent_no_duplicate_handlers() -> None:
@@ -245,3 +247,207 @@ def test_max_level_filter_rejects_above() -> None:
     filt = _MaxLevelFilter(logging.WARNING)
     assert filt.filter(_record(logging.ERROR)) is False
     assert filt.filter(_record(logging.CRITICAL)) is False
+
+
+# --------------------------------------------------------------------------- #
+# Scoped context — text formatter (default)
+# --------------------------------------------------------------------------- #
+
+
+def test_text_no_suffix_outside_scope() -> None:
+    # Byte-identical to the pre-refactor core-fields line when no context is
+    # bound: no trailing ``key=value`` suffix.
+    f = TextFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hello %d", (42,), None)
+    line = f.format(record)
+    assert _LINE_RE.match(line) is not None
+    assert line.endswith("INFO hello 42")
+
+
+def test_text_context_suffix_when_bound(capfd: pytest.CaptureFixture[str]) -> None:
+    configure_logging("INFO")
+    log = logging.getLogger("otter.test.ctx")
+    with logging_context(session_id="call-123", user_id=42):
+        log.info("authenticated")
+    out, _ = capfd.readouterr()
+    line = out.strip()
+    # reserved fields stay positional (level precedes the message); the suffix
+    # is absorbed by _LINE_RE's trailing ``.*$``.
+    assert _LINE_RE.match(line) is not None
+    assert line.endswith("INFO authenticated session_id=call-123 user_id=42")
+
+
+def test_text_reserved_fields_stay_positional() -> None:
+    # A context field named like a reserved core field renders as a trailing
+    # ``key=value`` and never displaces the positional ``INFO``.
+    f = TextFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "msg", (), None)
+    with logging_context(level="bogus"):
+        line = f.format(record)
+    assert line.index(" INFO ") < line.index("level=bogus")
+
+
+def test_text_logger_exception_appends_traceback(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging("ERROR")
+    log = logging.getLogger("otter.test.exc")
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        log.exception("db refused")
+    _, err = capfd.readouterr()
+    assert "ERROR db refused" in err
+    assert "Traceback (most recent call last):" in err
+    assert "ValueError: boom" in err
+
+
+def test_text_message_ending_in_newline_single_newline_before_trace() -> None:
+    # The byte-identical edge case: a record whose message already ends in
+    # ``\n`` paired with ``exc_info`` must still produce exactly ONE newline
+    # before the traceback — never a blank line. Only ``formatMessage`` is
+    # overridden, so the base ``format()``'s ``if s[-1:] != "\n"`` guard still
+    # applies. (Reimplementing ``format()`` by hand would risk diverging here.)
+    f = TextFormatter()
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        record = logging.LogRecord("x", logging.ERROR, "", 0, "db refused\n", (), sys.exc_info())
+    out = f.format(record)
+    assert "ERROR db refused\n\nTraceback" not in out  # no blank line
+    assert "ERROR db refused\nTraceback" in out  # exactly one newline
+
+
+# --------------------------------------------------------------------------- #
+# Scoped context — JSON formatter (opt-in)
+# --------------------------------------------------------------------------- #
+
+
+def _owned_handlers() -> list[logging.Handler]:
+    return [h for h in logging.getLogger().handlers if getattr(h, _HANDLER_TAG, False)]
+
+
+def test_json_context_before_reserved_fields() -> None:
+    f = JsonFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hello", (), None)
+    with logging_context(session_id="call-123", user_id=42):
+        payload = json.loads(f.format(record))
+    keys = list(payload)
+    # context keys are written FIRST, before level/time/msg.
+    assert keys.index("session_id") < keys.index("level")
+    assert keys.index("user_id") < keys.index("level")
+    assert payload["level"] == "info"
+    assert payload["msg"] == "hello"
+    assert "traceback" not in payload
+
+
+def test_json_reserved_keys_not_clobbered() -> None:
+    # A caller binding a reserved name cannot clobber the reserved field: the
+    # context update happens first, then the reserved keys overwrite it. With
+    # exc_info set, all four reserved keys (level/time/msg/traceback) are
+    # protected — the bogus context values do not survive.
+    f = JsonFormatter()
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        record = logging.LogRecord("x", logging.ERROR, "", 0, "real msg", (), sys.exc_info())
+    with logging_context(level="bogus", time="bogus", msg="bogus", traceback="bogus"):
+        payload = json.loads(f.format(record))
+    assert payload["level"] == "error"
+    assert payload["msg"] == "real msg"
+    assert payload["time"] != "bogus"
+    assert "Traceback (most recent call last):" in payload["traceback"]
+
+
+def test_json_default_str_for_non_serialisable() -> None:
+    # default=str so a non-serialisable value never crashes a log call.
+    f = JsonFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hi", (), None)
+    when = datetime(2026, 7, 23, 20, 4, 5)
+    with logging_context(when=when):
+        payload = json.loads(f.format(record))
+    assert payload["when"] == "2026-07-23 20:04:05"  # str(datetime)
+
+
+def test_json_traceback_present_with_exc_info() -> None:
+    f = JsonFormatter()
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        record = logging.LogRecord("x", logging.ERROR, "", 0, "db refused", (), sys.exc_info())
+    payload = json.loads(f.format(record))
+    assert "Traceback (most recent call last):" in payload["traceback"]
+    assert "ValueError: boom" in payload["traceback"]
+
+
+def test_json_traceback_absent_without_exc_info() -> None:
+    f = JsonFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hi", (), None)
+    payload = json.loads(f.format(record))
+    assert "traceback" not in payload
+
+
+def test_json_none_renders_as_null() -> None:
+    f = JsonFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hi", (), None)
+    with logging_context(n=None):
+        payload = json.loads(f.format(record))
+    assert payload["n"] is None
+
+
+def test_json_time_is_utc() -> None:
+    f = JsonFormatter()
+    record = logging.LogRecord("x", logging.INFO, "", 0, "hi", (), None)
+    payload = json.loads(f.format(record))
+    t = payload["time"]
+    # millisecond precision, ISO-8601 UTC.
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$", t)
+    parsed = calendar.timegm(time.strptime(t[:19], "%Y-%m-%dT%H:%M:%S"))
+    assert abs(parsed - time.time()) < 120
+
+
+def test_json_routes_by_level(capfd: pytest.CaptureFixture[str]) -> None:
+    # Context/format is orthogonal to routing: JSON lines still split across
+    # stdout/stderr by level (the handlers are unchanged).
+    configure_logging("DEBUG", format="json")
+    log = logging.getLogger("otter.test.json")
+    log.info("ok")
+    log.error("boom")
+    out, err = capfd.readouterr()
+    assert json.loads(out.strip())["level"] == "info"
+    assert json.loads(err.strip())["level"] == "error"
+
+
+# --------------------------------------------------------------------------- #
+# Formatter selection / swap (configure_logging format=)
+# --------------------------------------------------------------------------- #
+
+
+def test_default_format_is_text() -> None:
+    configure_logging("DEBUG")
+    assert all(isinstance(h.formatter, TextFormatter) for h in _owned_handlers())
+
+
+def test_format_json_selects_json_formatter() -> None:
+    configure_logging("DEBUG", format="json")
+    assert all(isinstance(h.formatter, JsonFormatter) for h in _owned_handlers())
+
+
+def test_format_swap_json_then_text() -> None:
+    # format is keyword-only; swapping re-attaches the tagged pair with the new
+    # formatter (idempotent pair count unchanged).
+    configure_logging("DEBUG", format="json")
+    assert len(_owned_handlers()) == 2
+    assert all(isinstance(h.formatter, JsonFormatter) for h in _owned_handlers())
+
+    configure_logging("INFO", format="text")
+    assert len(_owned_handlers()) == 2
+    assert all(isinstance(h.formatter, TextFormatter) for h in _owned_handlers())
+
+
+def test_positional_level_call_unaffected() -> None:
+    # ``format`` is keyword-only: an existing positional level call still works
+    # and selects the text default.
+    configure_logging("DEBUG")
+    assert logging.getLogger().level == logging.DEBUG
+    assert all(isinstance(h.formatter, TextFormatter) for h in _owned_handlers())
