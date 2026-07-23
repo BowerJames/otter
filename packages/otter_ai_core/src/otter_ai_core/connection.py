@@ -16,7 +16,6 @@ layers an abortable two-way facade over
 
 * :mod:`otter_ai_core.channel` — the one-way queue primitive.
 * :mod:`otter_ai_core.stream` — the abortable one-way facade over the channel.
-* :mod:`otter_ai_core.assistant_message_stream` — the typed one-way aliases.
 * :mod:`otter_ai_core.bidirectional_channel` — the two-way queue primitive.
 * :mod:`otter_ai_core.connection` — the abortable two-way facade (this module).
 * :mod:`otter_ai_core.model_connection` — the typed two-way aliases.
@@ -233,9 +232,7 @@ def create_connection[TClient, TBackend]() -> ConnectionPair[TClient, TBackend]:
     producer observes :attr:`ConnectionBackend.abort_signal`. No abort argument
     is threaded through the producer's seam.
     """
-    channel: BidirectionalChannelPair[TClient, TBackend] = (
-        create_bidirectional_channel()
-    )
+    channel: BidirectionalChannelPair[TClient, TBackend] = create_bidirectional_channel()
     abort_signal: asyncio.Event = asyncio.Event()
     return ConnectionPair(
         client=ConnectionClient(channel.client, abort_signal),

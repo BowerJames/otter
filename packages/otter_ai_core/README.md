@@ -1,14 +1,12 @@
 # otter-ai-core
 
 **Otter AI** — a Pydantic v2 data model for representing LLM conversation
-context, the streaming-event protocol used to build a single assistant message,
-and the generic async runtimes (a one-way channel, an abortable stream facade,
-a bidirectional channel, and a typed event bus) plus the seam types a
+context, and the generic async runtimes (a one-way channel, an abortable stream
+facade, a bidirectional channel, and a typed event bus) plus the seam types a
 provider/transport package will implement. No LLMs, providers, APIs,
 transports, API registry, or `stream()` dispatch live here; only the data
-structures a conversation and an
-event stream are built from, the runtimes that carry them, and the seams a
-provider package will plug into.
+structures a conversation is built from, the runtimes that carry them, and the
+seams a provider package will plug into.
 
 The data shapes are a Python port of the models from
 [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi-ai).
@@ -69,59 +67,6 @@ restored = Context.model_validate_json(context.model_dump_json())
 assert restored == context
 ```
 
-## Assistant message events
-
-[`assistant_message_events.py`](./src/otter_ai_core/assistant_message_stream/assistant_message_events.py)
-models the events emitted while an assistant message is being produced by an
-LLM provider. It is the data-only event protocol; the transport that pushes
-these events lives in a provider package.
-
-A single discriminated union over `type`:
-
-- [`AssistantMessageEvent`](./src/otter_ai_core/assistant_message_stream/assistant_message_events.py)
-  — 12 events (a port of pi-ai): `start`, `text_start/delta/end`,
-  `thinking_start/delta/end`, `tool_call_start/delta/end`, `done`, `error`. The
-  `type` values are owned by the
-  [`AssistantMessageEventType`](./src/otter_ai_core/assistant_message_stream/assistant_message_events.py)
-  `StrEnum` (the peer of `ServerContextEventType` / `ClientContextEventType` in
-  `model_connection`), and each event narrows `type` to a literal member and
-  inherits from the shared generic `Event[AssistantMessageEventType]` base.
-
-### Terminal contract
-
-A stream emits `start` first, then partial updates, and terminates with
-**exactly one** of:
-
-- `done` — the final message, with a `reason` (`"stop"` / `"length"` /
-  `"tool_use"`, mirroring `stop_reason`).
-- `error` — `reason` of `"error"` or `"aborted"`, with the final message (any
-  partial content received before the failure is preserved on it).
-
-Every non-terminal event carries a `partial` snapshot of the in-progress
-message, so a consumer can render state from the latest event alone. Deltas are
-associated with their block via `content_index`; events for different blocks
-are **not** guaranteed to be contiguous.
-
-### Quick example
-
-```python
-from pydantic import TypeAdapter
-
-from otter_ai_core import AssistantMessage, AssistantMessageEvent
-
-adapter = TypeAdapter(AssistantMessageEvent)
-
-event = adapter.validate_json(payload)
-match (event.role, event.type):
-    case ("assistant", "text_delta"):
-        print(event.delta, end="")
-    case ("assistant", "done"):
-        message: AssistantMessage = event.message  # the final message
-    case ("assistant", "error"):
-        # Aborted/errored run; event.error is the (partial) AssistantMessage.
-        ...
-```
-
 ## Runtimes
 
 The package also owns the generic async runtimes the streaming events flow
@@ -156,13 +101,9 @@ through, plus the seam types a provider/transport package will implement:
   pure-data enumerations/types (`KnownApis`, `KnownProviders`,
   `ThinkingLevel`) a dispatch layer keys on.
 
-The typed one-way stream aliases (`AssistantMessageStreamClient` /
-`AssistantMessageStreamBackend`) and the assistant-message-stream event
-protocol live in
-[`assistant_message_stream/`](./src/otter_ai_core/assistant_message_stream);
-their bidirectional peers — the model-connection event protocol
-(`ClientContextEvent` / `ServerContextEvent`) and the typed two-way connection
-aliases (`ModelConnectionClient` / `ModelConnectionBackend`) — live in
+The model-connection event protocol (`ClientContextEvent` /
+`ServerContextEvent`) and the typed two-way connection aliases
+(`ModelConnectionClient` / `ModelConnectionBackend`) live in
 [`model_connection/`](./src/otter_ai_core/model_connection). The high-level
 conversation driver layered over a `ModelConnectionClient` — `ModelController`
 and `State` — lives in
@@ -243,8 +184,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-See the [root `README.md`](../../README.md) for the full runtime documentation
-and the one-way producer-side seam type (`AssistantMessageStreamFnBuilder`).
+See the [root `README.md`](../../README.md) for the full runtime documentation.
 
 ## Tooling
 

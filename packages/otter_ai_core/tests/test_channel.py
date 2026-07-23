@@ -8,68 +8,12 @@ from dataclasses import FrozenInstanceError, fields
 import pytest
 
 from otter_ai_core import (
-    AssistantMessage,
     ChannelPair,
     ChannelReader,
     ChannelWriter,
-    StreamPair,
-    Usage,
-    UsageCost,
     create_channel,
-    create_stream_pair,
 )
-from otter_ai_core.assistant_message_stream import (
-    AssistantDoneEvent,
-    AssistantMessageEvent,
-    AssistantMessageStreamClient,
-    AssistantStartEvent,
-    AssistantTextDeltaEvent,
-    AssistantTextStartEvent,
-)
-
-
-def _usage() -> Usage:
-    return Usage(
-        input=10,
-        output=5,
-        cache_read=0,
-        cache_write=0,
-        total_tokens=15,
-        cost=UsageCost(input=0.0, output=0.0, cache_read=0.0, cache_write=0.0, total=0.0),
-    )
-
-
-def _assistant_message() -> AssistantMessage:
-    from otter_ai_core import TextContent
-
-    return AssistantMessage(
-        role="assistant",
-        content=[TextContent(type="text", text="hi")],
-        api="anthropic-messages",
-        provider="anthropic",
-        model="claude-3",
-        usage=_usage(),
-        stop_reason="stop",
-        timestamp=1,
-    )
-
-
-def _assistant_events() -> list[AssistantMessageEvent]:
-    partial = _assistant_message()
-    return [
-        AssistantStartEvent(role="assistant", type="start", partial=partial),
-        AssistantTextStartEvent(
-            role="assistant", type="text_start", content_index=0, partial=partial
-        ),
-        AssistantTextDeltaEvent(
-            role="assistant",
-            type="text_delta",
-            content_index=0,
-            delta="hi",
-            partial=partial,
-        ),
-        AssistantDoneEvent(role="assistant", type="done", reason="stop", message=partial),
-    ]
+from tests._dummy_event import DummyEvent, DummyEventType, dummy_events
 
 
 async def _collect[TEvent](reader: ChannelReader[TEvent]) -> list[TEvent]:
@@ -77,10 +21,10 @@ async def _collect[TEvent](reader: ChannelReader[TEvent]) -> list[TEvent]:
 
 
 async def test_events_yielded_in_order_then_terminate() -> None:
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
     for event in events:
         writer.push(event)
     writer.end()
@@ -88,27 +32,26 @@ async def test_events_yielded_in_order_then_terminate() -> None:
     received = await _collect(stream)
 
     assert received == events
-    assert received[-1].type == "done"
+    assert received[-1].type == DummyEventType.DONE
 
 
 async def test_terminal_event_reachable_before_iteration_stops() -> None:
-    """The ``done`` event is yielded (its message reachable) before iteration ends."""
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    """The terminal event is yielded (its payload reachable) before iteration ends."""
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
     for event in events:
         writer.push(event)
     writer.end()
 
     received = await _collect(stream)
     last = received[-1]
-    assert isinstance(last, AssistantDoneEvent)
-    assert isinstance(last.message, AssistantMessage)
+    assert last.type is DummyEventType.DONE
 
 
 async def test_end_with_no_pushes_yields_nothing() -> None:
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
     writer.end()
@@ -116,10 +59,10 @@ async def test_end_with_no_pushes_yields_nothing() -> None:
 
 
 async def test_push_after_end_is_noop() -> None:
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
     writer.end()
     for event in events:
         writer.push(event)  # all dropped
@@ -129,10 +72,10 @@ async def test_push_after_end_is_noop() -> None:
 
 async def test_end_is_idempotent() -> None:
     """Calling ``end`` twice does not enqueue an extra sentinel."""
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
     for event in events:
         writer.push(event)
     writer.end()
@@ -144,10 +87,10 @@ async def test_end_is_idempotent() -> None:
 
 async def test_concurrent_producer_consumer() -> None:
     """Producer pushes from a task while consumer drains concurrently."""
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     stream = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
 
     async def produce() -> None:
         for event in events:
@@ -164,10 +107,10 @@ async def test_concurrent_producer_consumer() -> None:
 
 async def test_reader_is_single_pass() -> None:
     """The read end may be iterated at most once; a second pass raises."""
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     reader = wiring.reader
     writer = wiring.writer
-    events = _assistant_events()
+    events = dummy_events()
     for event in events:
         writer.push(event)
     writer.end()
@@ -188,7 +131,7 @@ def test_create_channel_returns_channel_pair_with_named_fields() -> None:
     """
     from otter_ai_core import ChannelPair as TopLevelChannelWiring
 
-    wiring: ChannelPair[AssistantMessageEvent] = create_channel()
+    wiring: ChannelPair[DummyEvent] = create_channel()
     assert isinstance(wiring, ChannelPair)
     assert TopLevelChannelWiring is ChannelPair  # re-exported at top level
     # Field order: writer first, reader second.
@@ -198,34 +141,3 @@ def test_create_channel_returns_channel_pair_with_named_fields() -> None:
     # Frozen: attribute assignment is rejected.
     with pytest.raises(FrozenInstanceError):
         wiring.reader = wiring.reader  # type: ignore[misc]
-
-
-def test_assistant_message_stream_fn_builder_returns_conforming_callable() -> None:
-    """``AssistantMessageStreamFnBuilder`` is the producer-side seam type.
-
-    mypy is the real enforcer; this just checks the alias is importable and a
-    trivially-conforming builder — ``(options) -> AssistantMessageStreamFn`` —
-    binds under an annotation referencing it, and that the returned fn has the
-    options-bound ``(context) -> stream`` shape (the abort signal is intrinsic
-    to the stream, not an argument).
-    """
-    from otter_ai_core import Context
-    from otter_ai_core.assistant_message_stream import (
-        AssistantMessageStreamFn,
-        AssistantMessageStreamFnBuilder,
-    )
-
-    def make_stream_fn(options: object) -> AssistantMessageStreamFn:
-        del options
-
-        def stream_fn(context: Context) -> AssistantMessageStreamClient:
-            del context
-            pair: StreamPair[AssistantMessageEvent] = create_stream_pair()
-            return pair.client
-
-        return stream_fn
-
-    builder: AssistantMessageStreamFnBuilder[object] = make_stream_fn
-    assert callable(builder)
-    fn = builder(object())
-    assert callable(fn)
