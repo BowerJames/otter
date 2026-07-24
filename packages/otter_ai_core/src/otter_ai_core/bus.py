@@ -70,6 +70,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import cast
 
+from otter_ai_core._lifecycle import await_or_cancel
 from otter_ai_core.channel import ChannelPair, create_channel
 
 _logger = logging.getLogger(__name__)
@@ -109,29 +110,6 @@ class BusEvent[TPayload]:
 
 #: The handler signature for ``BusEvent[TPayload]``.
 type BusHandler[TPayload] = Callable[[TPayload], Awaitable[None]]
-
-
-async def _await_or_cancel(task: asyncio.Task[None], timeout: float | None) -> None:
-    """Await ``task`` for up to ``timeout`` seconds; force-cancel if it overruns.
-
-    ``timeout`` of ``None`` waits indefinitely (drain-or-hang). A timed-out or
-    otherwise-interrupted await still cancels the task (so its ``finally`` blocks
-    run) so no owned task is left pending. No-op if ``task`` is already done.
-    """
-    if task.done():
-        return
-    try:
-        await asyncio.wait_for(task, timeout)
-    except TimeoutError:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    except BaseException:
-        # The await itself was cancelled: cancel the task too, then re-raise.
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        raise
 
 
 class Bus:
@@ -224,4 +202,4 @@ class Bus:
         so no owned task is left pending. Safe to call more than once.
         """
         self.end()
-        await _await_or_cancel(self._task, timeout)
+        await await_or_cancel(self._task, timeout)

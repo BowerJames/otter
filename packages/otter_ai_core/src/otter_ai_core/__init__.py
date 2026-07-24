@@ -43,6 +43,25 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
+from otter_ai_core.faux import (
+    FauxBranchOutcome,
+    FauxCompactionOutcome,
+    FauxModel,
+    FauxModelProducer,
+    FauxModelScript,
+    FauxProvenance,
+    FauxResponse,
+    FauxResponseRepeat,
+    FauxStreamPolicy,
+    create_faux_model,
+    deterministic_clock,
+    faux_text,
+    faux_text_response,
+    faux_tool_call_response,
+    faux_usage,
+    monotonic_item_ids,
+    real_clock,
+)
 from otter_ai_core.model_controller import ModelController, State
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
@@ -194,4 +213,22 @@ __all__ = [
     "ITEM_UPDATED",
     "COMPACTED",
     "TREE_CHANGED",
+    # faux model producer (shipped, API-key-free integration-test harness)
+    "FauxModel",
+    "FauxModelProducer",
+    "FauxModelScript",
+    "FauxResponse",
+    "FauxResponseRepeat",
+    "FauxStreamPolicy",
+    "FauxProvenance",
+    "FauxCompactionOutcome",
+    "FauxBranchOutcome",
+    "create_faux_model",
+    "faux_text",
+    "faux_text_response",
+    "faux_tool_call_response",
+    "faux_usage",
+    "monotonic_item_ids",
+    "deterministic_clock",
+    "real_clock",
 ]
