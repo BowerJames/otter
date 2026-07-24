@@ -247,6 +247,72 @@ print(projection.state.model)          # ("anthropic", "claude-3")
 await controller.move_to(earlier_tree_id)
 ```
 
+### Faux model producer
+
+[`faux/`](./packages/otter_ai_core/src/otter_ai_core/faux/) ships a concrete,
+**deterministic, API-key-free** model-connection producer
+([`FauxModelProducer`](./packages/otter_ai_core/src/otter_ai_core/faux/producer.py))
+that pumps a real
+[`ModelConnectionBackend`](./packages/otter_ai_core/src/otter_ai_core/model_connection/model_connection.py)
+with scriptable, protocol-conformant `ServerContextEvent` sequences — so a
+downstream package can write true end-to-end integration tests of the
+connection → controller → agent-loop stack with **no network and no flakiness**.
+It is a test double, **not a provider**: no inference, no transport, no
+registry, no new seam. The one-call entry point
+[`create_faux_model(script)`](./packages/otter_ai_core/src/otter_ai_core/faux/producer.py)
+wires a real `ModelController` over a real `create_connection()` pair in one
+line.
+
+```
+faux/
+├── __init__.py    # subpackage facade + __all__
+├── script.py      # FauxModelScript + frozen value objects + determinism
+│                  #   factories (state-free: factories only; the producer
+│                  #   materialises its own counters per instance)
+└── producer.py    # FauxModelProducer (drain/pump + spy surface) + FauxModel
+                   #   harness + create_faux_model
+```
+
+- **Deterministic by default** — monotonic server-assigned item ids
+  (`"item-1"`, …), an injectable clock (default opaque ordered ints), zero-cost
+  `Usage`, and stable provenance — all materialised **on the producer**, so one
+  `FauxModelScript` is shareable across producers without cross-contaminating
+  counters. Realism is injectable (`clock_factory=real_clock`, custom ids/usage).
+- **Scriptable, not stubbed** — a `FauxModelScript` is an ordered list of
+  `FauxResponse`s (text / tool calls / thinking); `stop_reason` is inferred
+  (`ToolUse` if any `ToolCall`, else `Stop`) unless set. Script exhaustion is
+  **loud** (a terminal `Error` `response.done` — never a hang) or **repeating**
+  (`FauxResponseRepeat.LAST`).
+- **Abort is integration-testable** — an opt-in per-response or script-level
+  `delay` inserts a real in-flight window between `response.started` and
+  `response.done`, so a concurrent `controller.abort()` is observable and the
+  generation closes with an `Aborted` done. This needs no backend-facade
+  changes — it leans on the controller's single-flight contract.
+- **Session ops honoured** — `compaction.create` / `branch.move` resolve to
+  confirms built from the script, with client-supplied summaries echoed and
+  refusals returned (not raised).
+- **Spy surface** — `producer.requests` / `.response_count` / `.last_create`
+  record the client→server traffic so a test asserts "the loop requested two
+  generations and fed back one tool result" without instrumenting the controller.
+
+```python
+from otter_ai_core import FauxModelScript, create_faux_model, faux_text_response
+from otter_ai_core.context import Role, UserMessage
+from otter_ai_core.model_connection import AddUserMessage
+
+script = FauxModelScript(responses=[faux_text_response("hi there")])
+
+async with create_faux_model(script) as model:
+    await model.controller.add_message(
+        AddUserMessage(message=UserMessage(role=Role.User, content="hello", timestamp=0))
+    )
+    item = await model.controller.generate()
+    assert item.message.content[0].text == "hi there"
+    assert [type(e).__name__ for e in model.producer.requests] == [
+        "AddUserMessage", "CreateResponse",
+    ]
+```
+
 ## `otter-ai-logging`
 
 `otter-ai-logging` configures the stdlib [`logging`](https://docs.python.org/3/library/logging.html)
