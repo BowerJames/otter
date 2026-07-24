@@ -281,8 +281,17 @@ class FauxModelProducer:
 
         content = list(response.content)
         stop_reason = self._resolve_stop_reason(response, content)
-        provenance = response.provenance or self._script.provenance
-        usage = response.usage or self._script.usage or faux_usage()
+        # Inheritable fields resolve as ``<response> or <script default>`` with an
+        # ``is not None`` check (never a truthiness test) so an explicit value is
+        # always respected — matching the §5/§17 inheritance discipline.
+        provenance = (
+            response.provenance if response.provenance is not None else self._script.provenance
+        )
+        usage = response.usage
+        if usage is None:
+            usage = self._script.usage
+        if usage is None:
+            usage = faux_usage()
 
         item_id = self._next_id()
         final_message = AssistantMessage(
@@ -301,7 +310,7 @@ class FauxModelProducer:
         # in explicitly. The helper owns the single started→done skeleton and the
         # single response_count / _in_flight update site for every path.
         delay = response.delay if response.delay is not None else self._script.delay
-        stream_policy = response.stream or self._script.stream
+        stream_policy = response.stream if response.stream is not None else self._script.stream
         await self._emit_started_then_streamed(
             item_id, final_message, final_item, delay=delay, stream_policy=stream_policy
         )
