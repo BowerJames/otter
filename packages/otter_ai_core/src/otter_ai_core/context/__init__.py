@@ -1,17 +1,3 @@
-"""Context data-model subpackage facade.
-
-This package groups the Pydantic v2 models that represent LLM conversation
-context: the top-level :class:`Context`, the :data:`ContextItem` / message
-layers, the content blocks, tools-adjacent enums, usage accounting, and
-diagnostics.
-
-It is a supported import surface (Strategy A — two-layer facade): callers may
-import from :mod:`otter_ai_core` (the headline API) or directly from
-:mod:`otter_ai_core.context` (the full data-model surface, including
-``Role`` / ``ContentType`` / ``DiagnosticErrorInfo``). The public surface is
-declared via :data:`__all__`.
-"""
-
 from .content import (
     AssistantContent,
     ContentType,

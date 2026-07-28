@@ -1,47 +1,3 @@
-"""Bus events emitted by :class:`~otter_ai_core.model_controller.ModelController`.
-
-This module is the fan-out counterpart to :mod:`otter_ai_core.agent_loop.hooks`:
-a dedicated :class:`~enum.StrEnum` (:class:`ModelControllerEventTypes`)
-centralizes the event *name strings* so they are discoverable rather than
-magic-string literals, and the typed :class:`~otter_ai_core.bus.BusEvent`
-descriptors (built from the enum members) are what callers
-:meth:`~otter_ai_core.bus.Bus.subscribe` /
-:meth:`~otter_ai_core.bus.Bus.publish` against.
-
-Why an enum *and* descriptors
------------------------------
-A :class:`~enum.StrEnum` cannot carry per-member type parameters, so the type
-checker could not recover the payload type from an enum-keyed ``publish``.
-Instead the enum here centralizes the name strings and the typed
-:class:`~otter_ai_core.bus.BusEvent` singleton (built from the enum member)
-remains the value callers register against. Because :class:`~enum.StrEnum`
-members are :class:`str` instances that hash and compare equal to their value,
-``BusEvent(ModelControllerEventTypes.X)`` keys identically to
-``BusEvent("x")`` in the :class:`~otter_ai_core.bus.Bus` registry — exactly the
-split :mod:`otter_ai_core.agent_loop.hooks` established for hooks.
-
-Drift-proof values
-------------------
-The controller re-publishes every inbound server event under its matching bus
-event, so :class:`ModelControllerEventTypes` mirrors
-:class:`~otter_ai_core.model_connection.ServerContextEventType` 1:1. Each
-member's value *references* the corresponding wire-enum member
-(``RESPONSE_DONE = ServerContextEventType.RESPONSE_DONE``) rather than
-duplicating the literal, so the two enums cannot drift apart. StrEnum flattens
-the referenced member to its string, so ``str(...)``, ``.value``, hashing, and
-``==`` all behave as the plain wire string.
-
-Dispatch glue
--------------
-The controller's drain loop receives an inbound
-:data:`~otter_ai_core.model_connection.ServerContextEvent` and re-publishes it
-under the matching descriptor; :data:`SERVER_EVENT_BY_TYPE` maps the wire
-discriminator to that descriptor, and :data:`ALL_EVENTS` enumerates every
-descriptor (for pass-through subscribers such as
-:mod:`otter_ai_core.model_controller.stream`). These are internal glue, not part
-of the public event surface (not in :data:`__all__`).
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -62,16 +18,6 @@ from otter_ai_core.model_connection import (
 
 
 class ModelControllerEventTypes(StrEnum):
-    """The ``name`` of a bus event emitted by :class:`ModelController`.
-
-    Values reference :class:`~otter_ai_core.model_connection.ServerContextEventType`
-    members 1:1 (the controller re-publishes every inbound server event under
-    its matching bus event), so the two enums cannot drift apart. The enum
-    centralizes the name strings; the typed
-    :class:`~otter_ai_core.bus.BusEvent` descriptors below (built from its
-    members) are what callers subscribe/publish with.
-    """
-
     RESPONSE_STARTED = ServerContextEventType.RESPONSE_STARTED
     RESPONSE_UPDATED = ServerContextEventType.RESPONSE_UPDATED
     RESPONSE_DONE = ServerContextEventType.RESPONSE_DONE

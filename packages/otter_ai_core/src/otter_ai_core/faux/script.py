@@ -1,23 +1,3 @@
-"""The script model for :class:`~otter_ai_core.faux.FauxModelProducer`.
-
-A :class:`FauxModelScript` is the test's "what does the model do": plain,
-frozen, in-memory configuration (not a serialized Pydantic model). It carries
-no determinism state — only zero-arg factory callables the producer instantiates
-once at construction (see :mod:`otter_ai_core.faux.producer` §8 of the #129
-spec). Every nested value object (``FauxProvenance`` / ``FauxStreamPolicy`` /
-``FauxResponse`` / the outcomes) is frozen too.
-
-File ordering is load-bearing
------------------------------
-The determinism factories (``monotonic_item_ids`` / ``deterministic_clock`` /
-``real_clock``) are referenced as :class:`FauxModelScript` field *defaults*.
-Dataclass field defaults are evaluated at class-definition time, so those
-functions must be defined **above** :class:`FauxModelScript` or the import
-fails with ``NameError``. This file is ordered accordingly: type aliases +
-factories + builders, then the frozen value objects, then
-:class:`FauxModelScript`, then the thin response constructors.
-"""
-
 from __future__ import annotations
 
 import time
@@ -54,7 +34,6 @@ ClockFactory = Callable[[], Callable[[], int]]
 
 
 def monotonic_item_ids() -> Callable[[], str]:
-    """Factory: returns a fresh ``"item-1"``, ``"item-2"``, … generator."""
     n = 0
 
     def gen() -> str:
@@ -66,14 +45,6 @@ def monotonic_item_ids() -> Callable[[], str]:
 
 
 def deterministic_clock() -> Callable[[], int]:
-    """Factory: returns a fresh ``0``, ``1``, ``2``, … generator.
-
-    The values are **stable, strictly-increasing, opaque integers** — chosen for
-    exact, reproducible assertions on ``AssistantMessage.timestamp``, *not*
-    realistic epoch-milliseconds (they are far too small to be valid ms). Only
-    their ordering and stability matter for tests. Pass :func:`real_clock` when
-    actual epoch-ms realism is required.
-    """
     n = 0
 
     def gen() -> int:
@@ -86,12 +57,6 @@ def deterministic_clock() -> Callable[[], int]:
 
 
 def real_clock() -> Callable[[], int]:
-    """Factory: returns a real wall-clock (epoch-ms) generator for when realism matters.
-
-    Pass as ``FauxModelScript(clock_factory=real_clock)`` (the factory itself —
-    the producer invokes it). Affects only assistant-message timestamps the
-    producer assembles.
-    """
     return lambda: int(time.time() * 1000)
 
 
@@ -101,12 +66,10 @@ def real_clock() -> Callable[[], int]:
 
 
 def faux_text(text: str) -> list[AssistantContent]:
-    """``[TextContent(type="text", text=text)]`` — the common single-text-block case."""
     return [TextContent(type=ContentType.Text, text=text)]
 
 
 def faux_usage() -> Usage:
-    """A zero-cost :class:`Usage` (tests rarely care about tokens)."""
     return Usage(
         input=0,
         output=0,
@@ -124,8 +87,6 @@ def faux_usage() -> Usage:
 
 @dataclass(frozen=True, slots=True)
 class FauxProvenance:
-    """Inert assistant provenance defaults (otter never interprets these)."""
-
     api: str = "responses"
     provider: str = "faux"
     model: str = "faux-model"
@@ -133,43 +94,12 @@ class FauxProvenance:
 
 @dataclass(frozen=True, slots=True)
 class FauxStreamPolicy:
-    """Whether/how a response is streamed as response.started/updated/done.
-
-    Default ``enabled=False`` emits ``response.started`` (empty partial) then
-    the terminal ``response.done`` — fast and sufficient for non-streaming
-    consumers. ``enabled=True`` additionally emits one ``response.updated`` per
-    text chunk of size ``chunk_size`` (default 1 char), so streaming-aware
-    consumers are exercised.
-
-    Streaming chunks **text** content only: ``ThinkingContent`` and
-    ``ToolCall`` blocks are carried in full on the terminal ``response.done``,
-    not dribbled across partials.
-    """
-
     enabled: bool = False
     chunk_size: int = 1
 
 
 @dataclass(frozen=True, slots=True)
 class FauxResponse:
-    """One scripted assistant response, emitted for a single ``response.create``.
-
-    ``content`` is the assistant message's content blocks (text / thinking /
-    tool_call). ``stop_reason`` defaults to ``None`` ("infer: ``ToolUse`` if
-    ``content`` contains any :class:`~otter_ai_core.context.ToolCall`, else
-    ``Stop``"); an explicit value always wins. ``delay`` (seconds, ``None`` =
-    inherit :attr:`FauxModelScript.delay`) inserts an ``await`` between
-    ``response.started`` and the terminal ``response.done``, creating an
-    in-flight window in which a concurrent protocol ``abort()`` is observable.
-    The producer assembles the full :class:`~otter_ai_core.context.AssistantMessage`
-    from ``content`` + the script's provenance/usage/clock defaults.
-
-    Every inheritable field (``stop_reason`` / ``usage`` / ``provenance`` /
-    ``stream`` / ``delay``) defaults to ``None`` and is resolved with an
-    ``is not None`` check, so an explicit falsy value (e.g. ``delay=0.0``) is
-    respected rather than masked by the script default.
-    """
-
     content: list[AssistantContent]
     stop_reason: StopReason | None = None
     usage: Usage | None = None
@@ -230,18 +160,6 @@ class FauxResponse:
 
 @dataclass(frozen=True, slots=True)
 class FauxCompactionOutcome:
-    """The ``compaction.done`` confirm a ``compaction.create`` resolves to.
-
-    ``error_message`` set => the producer emits a *refusal* confirm (mirrors a
-    stateless connection that cannot compact in place). Otherwise the confirm's
-    ``summary`` / ``first_kept_item_id`` are resolved by the producer as
-    ``<client-supplied from the request> or <these defaults>`` — i.e. a
-    ``controller.compact(summary="X", first_kept_item_id="k")`` surfaces
-    ``X`` / ``k`` on the confirm, exactly as a real stateful server applies a
-    client-supplied summary. (``custom_instructions`` is an instruction to the
-    server, not an echoed value, so it is intentionally not mapped.)
-    """
-
     summary: str = "faux compaction summary"
     first_kept_item_id: str | None = None
     error_message: str | None = None
@@ -249,39 +167,16 @@ class FauxCompactionOutcome:
 
 @dataclass(frozen=True, slots=True)
 class FauxBranchOutcome:
-    """The ``branch.moved`` confirm a ``branch.move`` resolves to.
-
-    ``error_message`` set => refusal confirm (``at_item_id`` is always echoed,
-    as the protocol requires — it comes from the request, not the outcome).
-    """
-
     error_message: str | None = None
 
 
 class FauxResponseRepeat(StrEnum):
-    """What the producer does once the scripted response list is exhausted.
-
-    ``ERROR`` (default) — emit a terminal ``response.done`` with
-    ``stop_reason=Error`` and a clear ``error_message`` (loud, fail-fast: the
-    test under-scripted the model). ``LAST`` — keep replaying the final scripted
-    response (convenient for "the model always replies X").
-    """
-
     ERROR = "error"
     LAST = "last"
 
 
 @dataclass(frozen=True, slots=True)
 class FauxModelScript:
-    """The full configuration a :class:`FauxModelProducer` runs against.
-
-    Frozen and **state-free**: it holds no counters — only factory callables
-    the producer instantiates once at construction. A script is therefore a
-    stable, shareable value: two producers built from the *same* script each
-    materialise their own item-id / clock generators and each start at
-    ``item-1`` / timestamp ``0``.
-    """
-
     responses: list[FauxResponse] = field(default_factory=list)
     repeat: FauxResponseRepeat = FauxResponseRepeat.ERROR
     stream: FauxStreamPolicy = field(default_factory=FauxStreamPolicy)

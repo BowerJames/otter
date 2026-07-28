@@ -1,13 +1,3 @@
-"""Content blocks that make up message ``content`` lists.
-
-There are two discriminated unions:
-
-* :data:`UserContent` — blocks allowed in user messages and tool results
-  (``text`` / ``image``).
-* :data:`AssistantContent` — blocks allowed in assistant messages
-  (``text`` / ``thinking`` / ``tool_call``).
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -24,8 +14,6 @@ class ContentType(StrEnum):
 
 
 class TextContent(BaseModel):
-    """A plain text block."""
-
     model_config = ConfigDict(extra="forbid")
 
     type: Literal[ContentType.Text]
@@ -36,8 +24,6 @@ class TextContent(BaseModel):
 
 
 class ImageContent(BaseModel):
-    """An image block, carried as base64-encoded bytes."""
-
     model_config = ConfigDict(extra="forbid")
 
     type: Literal[ContentType.Image]
@@ -48,8 +34,6 @@ class ImageContent(BaseModel):
 
 
 class ThinkingContent(BaseModel):
-    """A reasoning/thinking block emitted by the model."""
-
     model_config = ConfigDict(extra="forbid")
 
     type: Literal[ContentType.Thinking]
@@ -63,8 +47,6 @@ class ThinkingContent(BaseModel):
 
 
 class ToolCall(BaseModel):
-    """A request from the model to invoke a tool."""
-
     model_config = ConfigDict(extra="forbid")
 
     type: Literal[ContentType.ToolCall]
@@ -81,6 +63,4 @@ class ToolCall(BaseModel):
 UserContent = Annotated[TextContent | ImageContent, Field(discriminator="type")]
 
 #: Blocks allowed in assistant messages.
-AssistantContent = Annotated[
-    TextContent | ThinkingContent | ToolCall, Field(discriminator="type")
-]
+AssistantContent = Annotated[TextContent | ThinkingContent | ToolCall, Field(discriminator="type")]

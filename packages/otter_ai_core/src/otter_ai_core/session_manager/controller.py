@@ -1,31 +1,3 @@
-"""The concrete public surface of a persisted session.
-
-:class:`SessionStoreController` wraps a
-:class:`~otter_ai_core.session_manager.SessionStore` (``pi``'s ``Session``):
-append / **update** / project / branch / compact. It is **pure logic over a
-store** — it owns no LLM, no intercept hooks, and no connection knowledge.
-Generating a compaction summary or a branch summary is the agent layer's job;
-this controller records *caller-supplied* results.
-
-Lifecycle
----------
-Constructed over a populated or empty
-:class:`~otter_ai_core.session_manager.SessionStore` (construction +
-``projection()`` IS restore — §14 of the issue spec). Because it owns a
-notification :class:`~otter_ai_core.bus.Bus` (which owns a worker task), the
-constructor must run inside a running :mod:`asyncio` loop; tear the bus down
-with :meth:`aclose` (or ``async with``).
-
-Concurrency
------------
-Single-writer appends/updates/moves, enforced **inside the controller** via an
-:class:`asyncio.Lock` (§13): the entry id + parent leaf are read and the entry
-appended atomically under the lock, so two racing appends cannot both parent on
-a stale leaf. Reads are **lock-free snapshots**: the tree is append-only and a
-path read returns a consistent list, so ``get_branch`` / ``build_context`` /
-``projection`` never block a writer.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -73,7 +45,6 @@ _NAME_SANITIZER = re.compile(r"[\r\n]+")
 
 
 def _now_iso() -> str:
-    """ISO-8601 UTC (the entry ``timestamp`` convention)."""
     return datetime.now(UTC).isoformat()
 
 
@@ -82,13 +53,6 @@ def _sanitize_name(name: str) -> str:
 
 
 class SessionStoreController[TMetadata: SessionMetadata]:
-    """An open persisted session: append / update / project / branch / compact.
-
-    Pure logic over a :class:`SessionStore`; observable via its :attr:`bus`;
-    concurrency-safe via its append lock. The controller has NO concept of busy
-    and NO LLM-step hooks.
-    """
-
     __slots__ = ("_store", "_bus", "_lock")
 
     def __init__(self, store: SessionStore[TMetadata]) -> None:
@@ -102,18 +66,15 @@ class SessionStoreController[TMetadata: SessionMetadata]:
 
     @property
     def store(self) -> SessionStore[TMetadata]:
-        """The backing :class:`SessionStore` (raw access for advanced consumers)."""
         return self._store
 
     @property
     def bus(self) -> Bus:
-        """The descriptor-keyed pub/sub bus every change is published to."""
         return self._bus
 
     def on[TPayload](
         self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
     ) -> Callable[[], None]:
-        """Subscribe ``handler`` to ``event``; return an idempotent unsubscribe callable."""
         return self._bus.subscribe(event, handler)
 
     # ------------------------------------------------------------------ #
@@ -124,21 +85,17 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         return await self._store.metadata()
 
     async def leaf_id(self) -> str | None:
-        """The current leaf entry id (the live branch head), or ``None`` at the root."""
         return await self._store.leaf_id()
 
     async def get_branch(self, *, from_id: str | None = None) -> list[SessionEntry]:
-        """The leaf->root path (root->leaf order), optionally from a given entry id."""
         leaf = from_id if from_id is not None else await self._store.leaf_id()
         return await self._store.path_to_root_or_compaction(leaf)
 
     async def projection(self) -> SessionProjection:
-        """The current projected :class:`SessionProjection` (items-only context + state)."""
         path = await self._store.path_to_root_or_compaction(await self._store.leaf_id())
         return project(path)
 
     async def build_context(self) -> Context:
-        """The current projected :class:`Context` (items only; system_prompt/tools=None)."""
         return (await self.projection()).context
 
     # ------------------------------------------------------------------ #
@@ -146,7 +103,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
     # ------------------------------------------------------------------ #
 
     def _publish(self, entry: SessionEntry) -> None:
-        """Publish the coarse ``ENTRY_APPENDED`` plus the matching refined event."""
         self._bus.publish(ENTRY_APPENDED, entry)
         match entry:
             case MessageEntry():
@@ -157,7 +113,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
                 self._bus.publish(COMPACTED, entry)
 
     async def _new_identity(self) -> tuple[str, str | None, str]:
-        """A fresh ``(id, parent_id, timestamp)`` triple. Caller MUST hold the lock."""
         return (
             await self._store.create_entry_id(),
             await self._store.leaf_id(),
@@ -165,17 +120,11 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         )
 
     async def _commit(self, entry: SessionEntry) -> str:
-        """Append ``entry`` (advancing the leaf), publish, and return its id.
-
-        Caller MUST hold :attr:`_lock` and have built ``entry`` with
-        :meth:`_new_identity` under that lock.
-        """
         await self._store.append_entry(entry)
         self._publish(entry)
         return entry.id
 
     async def append_message(self, item: ContextItem) -> str:
-        """Record a conversation item (initial add). Returns the new tree id."""
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
             return await self._commit(
@@ -183,13 +132,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
             )
 
     async def update_message(self, item: ContextItem) -> str:
-        """Append-only amendment of a previously-recorded item (§8).
-
-        Builds a :class:`MessageUpdateEntry` with ``target_item_id = item.id``.
-        An orphan revision (one whose target is not on the path) is harmless:
-        it stands as a standalone item at its own position. Returns the new tree
-        id.
-        """
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
             return await self._commit(
@@ -236,7 +178,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         usage: Usage | None = None,
         from_hook: bool = False,
     ) -> str:
-        """Record a caller-supplied compaction. Returns the new tree id."""
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
             return await self._commit(
@@ -255,7 +196,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
             )
 
     async def append_custom(self, custom_type: str, data: Any | None = None) -> str:
-        """Record non-projected extension state. Returns the new tree id."""
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
             return await self._commit(
@@ -272,10 +212,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         display: bool,
         details: Any | None = None,
     ) -> str:
-        """Record extension-injected content projected as a user message.
-
-        Returns the new tree id.
-        """
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
             return await self._commit(
@@ -291,11 +227,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
             )
 
     async def append_label(self, target_id: str, label: str | None) -> str:
-        """Label (or clear, with ``label=None``) an existing entry. Returns the new tree id.
-
-        Raises :class:`SessionError` (:attr:`~SessionErrorCode.INVALID_ENTRY`)
-        if ``target_id`` does not exist.
-        """
         async with self._lock:
             if await self._store.get_entry(target_id) is None:
                 raise SessionError(
@@ -309,10 +240,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
             )
 
     async def append_session_name(self, name: str) -> str:
-        """Record the session display name; sanitize first (CR/LF collapsed, trimmed).
-
-        Returns the tree id.
-        """
         sanitized = _sanitize_name(name)
         async with self._lock:
             id_, parent_id, ts = await self._new_identity()
@@ -330,16 +257,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         *,
         summary: BranchSummaryInput | None = None,
     ) -> str | None:
-        """Move the leaf to ``entry_id`` (``None`` == root), optionally recording a summary.
-
-        After the move, new appends diverge (history is never mutated). If
-        ``summary`` is given, a :class:`BranchSummaryEntry` (``from_id =
-        entry_id``) is appended at the branch point and its id is returned;
-        otherwise ``None``.
-
-        Raises :class:`SessionError` (:attr:`~SessionErrorCode.INVALID_ENTRY`)
-        if ``entry_id`` is not ``None`` and does not exist.
-        """
         async with self._lock:
             if entry_id is not None and await self._store.get_entry(entry_id) is None:
                 raise SessionError(
@@ -375,7 +292,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
     # ------------------------------------------------------------------ #
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        """Tear down the owned :class:`Bus` (reap the worker under ``timeout``)."""
         await self._bus.aclose(timeout)
 
     async def __aenter__(self) -> Self:

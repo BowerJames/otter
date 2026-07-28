@@ -1,18 +1,3 @@
-"""Hook descriptors emitted by :class:`~otter_ai_core.agent_loop.agent_loop.AgentLoop`.
-
-The hook *key* is still a typed :class:`~otter_ai_core.hook_runner.Hook`
-descriptor: a :class:`~enum.StrEnum` cannot carry per-member type parameters,
-so the type checker could not recover the return type from an enum-keyed
-``emit``. Instead the enum here centralizes the hook *name strings* so they are
-discoverable rather than magic-string literals, and the typed
-:class:`~otter_ai_core.hook_runner.Hook` singleton (built from the enum member)
-remains the value callers register against.
-
-Because :class:`~enum.StrEnum` members are :class:`str` instances that hash and
-compare equal to their value, ``Hook(AgentLoopHookTypes.X)`` keys identically to
-``Hook("x")`` in the :class:`~otter_ai_core.hook_runner.HookRunner` registry.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,8 +10,6 @@ from otter_ai_core.hook_runner import Hook
 
 
 class AgentLoopHookTypes(StrEnum):
-    """The ``name`` of a hook emitted by :class:`AgentLoop`."""
-
     BEFORE_TOOL_CALL = "before_tool_call"
     TOOL_RESULT = "tool_result"
 
@@ -46,14 +29,6 @@ BEFORE_TOOL_CALL: Hook[ToolCall, AgentToolResult[Any] | None] = Hook(
 
 @dataclass(frozen=True, slots=True)
 class ToolResultHookParams:
-    """Params for :data:`TOOL_RESULT`: the call and its executed result.
-
-    Carries the :class:`~otter_ai_core.context.ToolCall` that was executed and
-    the :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` the tool's
-    ``execute`` returned. The handler may return a replacement result (see
-    :data:`TOOL_RESULT`) or ``None`` to persist this one.
-    """
-
     tool_call: ToolCall
     result: AgentToolResult[Any]
 
