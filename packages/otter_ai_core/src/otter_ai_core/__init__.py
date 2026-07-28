@@ -62,7 +62,7 @@ from otter_ai_core.faux import (
     monotonic_item_ids,
     real_clock,
 )
-from otter_ai_core.interfaces import Stream, Writer
+from otter_ai_core.interfaces import Connection, Stream, Writer
 from otter_ai_core.model_controller import ModelController, State
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
@@ -154,7 +154,8 @@ __all__ = [
     "KnownProviders",
     "ProviderModelOption",
     "ThinkingLevel",
-    # interfaces (minimal read/write Protocol contracts)
+    # interfaces (minimal read/write/connection Protocol contracts)
+    "Connection",
     "Stream",
     "Writer",
     # channel runtime (one-way)
