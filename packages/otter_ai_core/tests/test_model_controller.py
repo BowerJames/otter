@@ -20,7 +20,7 @@ idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
 end/aclose semantics) is covered in ``tests/test_bus.py``; the controller's
 bus is the same descriptor-keyed :class:`~otter_ai_core.bus.Bus`, with its
 per-variant :class:`~otter_ai_core.bus.BusEvent` descriptors defined in
-:mod:`otter_ai_core.model_controller.events`.
+:mod:`otter_ai_core.interfaces.model_controller`.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ from otter_ai_core import (
 from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
 from otter_ai_core.interfaces import ModelController
+from otter_ai_core.interfaces.model_controller import SERVER_EVENT_BY_TYPE
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
@@ -66,7 +67,6 @@ from otter_ai_core.model_connection import (
     UserItemUpdated,
 )
 from otter_ai_core.model_controller import RESPONSE_DONE, DefaultModelController, State
-from otter_ai_core.model_controller.events import SERVER_EVENT_BY_TYPE
 
 
 def _default_controller_satisfies_protocol(
