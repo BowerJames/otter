@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Pre-commit hook: ruff (auto-fix + format, auto-staged) then mypy.
+# Pre-commit hook: ruff (auto-fix + format, auto-staged), then mypy and semgrep.
 #
 # Requires a one-time opt-in per clone:
 #     git config core.hooksPath .githooks
@@ -44,3 +44,6 @@ fi
 
 echo "pre-commit >> mypy"
 uv run mypy
+
+echo "pre-commit >> semgrep docstring rules"
+just semgrep-rules
