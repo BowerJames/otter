@@ -39,10 +39,10 @@ from otter_ai_core import (
 )
 from otter_ai_core.agent_loop import BEFORE_TOOL_CALL, TOOL_RESULT, ToolResultHookParams
 from otter_ai_core.agent_loop.agent_loop import AgentLoop, QueueMode, ToolExecMode
-from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
+from otter_ai_core.agent_loop.agent_tool import AgentToolResult, DefaultAgentTool
 from otter_ai_core.context import Role
 from otter_ai_core.hook_runner import Hook, HookRunner
-from otter_ai_core.interfaces import ModelController
+from otter_ai_core.interfaces import AgentTool, ModelController
 from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
 
 # --------------------------------------------------------------------------- #
@@ -113,7 +113,7 @@ async def _echo_execute(
 
 
 def _echo_tool() -> AgentTool[_EchoParams, Any]:
-    return AgentTool("echo", "echo the text back", _EchoParams, _echo_execute)
+    return DefaultAgentTool("echo", "echo the text back", _EchoParams, _echo_execute)
 
 
 def _tools(*tools: AgentTool[Any, Any]) -> list[AgentTool[BaseModel, Any]]:
@@ -246,7 +246,7 @@ async def test_terminate_stops_loop() -> None:
             result=[TextContent(type="text", text="done")], details=None, terminate=True
         )
 
-    tool = AgentTool("stopping", "terminate the loop", _P, execute)
+    tool = DefaultAgentTool("stopping", "terminate the loop", _P, execute)
     fake = _FakeController([_assistant_message([_tool_call("stopping")])])
 
     loop = _build(fake, tools=_tools(tool), follow_ups=[_user_message()])
@@ -265,7 +265,7 @@ async def test_is_error_propagates_to_tool_result() -> None:
             result=[TextContent(type="text", text="boom")], details=None, is_error=True
         )
 
-    tool = AgentTool("failing", "always errors", _P, execute)
+    tool = DefaultAgentTool("failing", "always errors", _P, execute)
     fake = _FakeController([_assistant_message([_tool_call("failing")]), _assistant_message()])
 
     loop = _build(fake, tools=_tools(tool), follow_ups=[_user_message()])
@@ -325,7 +325,7 @@ async def test_abort_between_turns_stops_loop() -> None:
         signal.set()
         return AgentToolResult(result=[TextContent(type="text", text="ok")], details=None)
 
-    tool = AgentTool("aborter", "sets the abort signal", _P, execute)
+    tool = DefaultAgentTool("aborter", "sets the abort signal", _P, execute)
     fake = _FakeController([_assistant_message([_tool_call("aborter")]), _assistant_message()])
 
     loop = _build(fake, tools=_tools(tool), follow_ups=[_user_message()])
@@ -368,7 +368,7 @@ def _make_overlap_tracker_tool(name: str, tracker: dict[str, int]) -> AgentTool[
         tracker["active"] -= 1
         return AgentToolResult(result=[TextContent(type="text", text="ok")], details=None)
 
-    return AgentTool(name, "records concurrency", _P, execute)
+    return DefaultAgentTool(name, "records concurrency", _P, execute)
 
 
 async def test_concurrent_mode_overlaps_executions() -> None:
@@ -588,7 +588,7 @@ async def test_before_tool_call_none_defers_to_execution() -> None:
         executed.append(params.text)
         return AgentToolResult(result=[TextContent(type="text", text=params.text)], details=None)
 
-    tool = AgentTool("echo", "echo back", _P, execute)
+    tool = DefaultAgentTool("echo", "echo back", _P, execute)
     fake = _FakeController(
         [_assistant_message([_tool_call("echo", arguments={"text": "hi"})]), _assistant_message()]
     )
@@ -618,7 +618,7 @@ async def test_before_tool_call_short_circuits_execution() -> None:
         executed.append("should-not-run")
         return AgentToolResult(result=[TextContent(type="text", text=params.text)], details=None)
 
-    tool = AgentTool("echo", "echo back", _P, execute)
+    tool = DefaultAgentTool("echo", "echo back", _P, execute)
     fake = _FakeController(
         [
             _assistant_message([_tool_call("echo", id="c1", arguments={"text": "real"})]),
@@ -663,7 +663,7 @@ async def test_before_tool_call_terminate_terminates_loop() -> None:
         executed.append("should-not-run")
         return AgentToolResult(result=[TextContent(type="text", text="x")], details=None)
 
-    tool = AgentTool("stoppable", "stoppable", _P, execute)
+    tool = DefaultAgentTool("stoppable", "stoppable", _P, execute)
     fake = _FakeController([_assistant_message([_tool_call("stoppable")])])
     loop = _build(fake, tools=_tools(tool), follow_ups=[_user_message()])
 
@@ -876,7 +876,7 @@ async def test_tool_result_not_fired_when_before_tool_call_intercepts() -> None:
         executed.append("should-not-run")
         return AgentToolResult(result=[TextContent(type="text", text=params.text)], details=None)
 
-    tool = AgentTool("echo", "echo back", _P, execute)
+    tool = DefaultAgentTool("echo", "echo back", _P, execute)
     fake = _FakeController(
         [
             _assistant_message([_tool_call("echo", id="c1", arguments={"text": "real"})]),

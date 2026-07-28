@@ -15,7 +15,7 @@ class AgentToolResult[TDetails]:
     terminate: bool = False
 
 
-class AgentTool[TParams: BaseModel, TDetails]:
+class DefaultAgentTool[TParams: BaseModel, TDetails]:
     name: str
     description: str
     parameters: type[TParams]
@@ -54,5 +54,5 @@ def create_agent_tool[TParams: BaseModel, TDetails](
     description: str,
     parameters: type[TParams],
     execute: Callable[[str, TParams, asyncio.Event], Awaitable[AgentToolResult[TDetails]]],
-) -> AgentTool[TParams, TDetails]:
-    return AgentTool(name, description, parameters, execute)
+) -> DefaultAgentTool[TParams, TDetails]:
+    return DefaultAgentTool(name, description, parameters, execute)
