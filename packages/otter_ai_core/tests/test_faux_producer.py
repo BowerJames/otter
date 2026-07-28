@@ -1,14 +1,14 @@
 """FauxModelProducer / FauxModel — the integration-test harness.
 
 These are **integration** tests: they stand up the *real* connection +
-*real* :class:`~otter_ai_core.model_controller.ModelController` (+ a real
+*real* :class:`~otter_ai_core.model_controller.DefaultModelController` (+ a real
 :class:`~otter_ai_core.agent_loop.agent_loop.AgentLoop` for the tool turn) with
 a :class:`~otter_ai_core.faux.FauxModelProducer` at the bottom, and assert on
 producer output and the controller/loop round-trip — no API keys, no network.
 
 Two cases (the synchronous-no-op abort and the latency contract-violation) drive
 a *standalone* connection rather than :func:`create_faux_model`, because they
-must push client→server events directly: ``ModelController.abort()`` rejects
+must push client→server events directly: ``DefaultModelController.abort()`` rejects
 when idle, and ``FauxModel`` deliberately does not expose the client handle. This
 is the standalone pattern documented in the #129 spec §14.5.
 """
@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from otter_ai_core import (
     AssistantContextItem,
+    DefaultModelController,
     FauxBranchOutcome,
     FauxCompactionOutcome,
     FauxModelProducer,
@@ -33,7 +34,6 @@ from otter_ai_core import (
     FauxResponse,
     FauxResponseRepeat,
     FauxStreamPolicy,
-    ModelController,
     StopReason,
     TextContent,
     ToolCall,
@@ -54,11 +54,7 @@ from otter_ai_core.model_connection import (
     ModelConnectionPair,
     ResponseUpdated,
     ServerContextEvent,
-)
-from otter_ai_core.model_controller import (
-    RESPONSE_DONE,
-    RESPONSE_STARTED,
-    RESPONSE_UPDATED,
+    ServerContextEventType,
 )
 
 # --------------------------------------------------------------------------- #
@@ -186,9 +182,9 @@ async def test_streaming_emits_growing_text_partials() -> None:
             seen.append(event)
 
         unsubs = [
-            model.controller.on(RESPONSE_STARTED, _collect),
-            model.controller.on(RESPONSE_UPDATED, _collect),
-            model.controller.on(RESPONSE_DONE, _collect),
+            model.controller.on(ServerContextEventType.RESPONSE_STARTED, _collect),
+            model.controller.on(ServerContextEventType.RESPONSE_UPDATED, _collect),
+            model.controller.on(ServerContextEventType.RESPONSE_DONE, _collect),
         ]
         try:
             item = await model.controller.generate()
@@ -593,7 +589,7 @@ async def test_standalone_producer_reaps_after_controller_aclose() -> None:
     script = FauxModelScript(responses=[faux_text_response("ok")])
 
     async with FauxModelProducer(pair.backend, script) as producer:
-        controller = ModelController(pair.client)
+        controller = DefaultModelController(pair.client)
         await controller.generate()
         await controller.aclose()
     # producer task reaped on context exit (cooperatively — the controller

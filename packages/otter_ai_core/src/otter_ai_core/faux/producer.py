@@ -40,7 +40,7 @@ from otter_ai_core.model_connection import (
     ToolResultAdded,
     UserItemAdded,
 )
-from otter_ai_core.model_controller import ModelController
+from otter_ai_core.model_controller import DefaultModelController
 
 from .script import (
     FauxModelScript,
@@ -412,7 +412,7 @@ class FauxModelProducer:
 
 @dataclass(slots=True)
 class FauxModel:
-    controller: ModelController
+    controller: DefaultModelController
     producer: FauxModelProducer
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
@@ -439,5 +439,5 @@ class FauxModel:
 def create_faux_model(script: FauxModelScript) -> FauxModel:
     pair: ModelConnectionPair = create_connection()
     producer = FauxModelProducer(pair.backend, script)
-    controller = ModelController(pair.client)
+    controller = DefaultModelController(pair.client)
     return FauxModel(controller=controller, producer=producer)

@@ -3,8 +3,8 @@
 Tests exercise the concerns of the ``model_controller`` package:
 
 * :class:`State` — the idle/busy latch (starts idle) and the closing flag;
-* :class:`ModelController` — the async, confirmation-awaiting commands
-  (:meth:`~ModelController.add_message` / :meth:`~ModelController.generate`),
+* :class:`DefaultModelController` — the async, confirmation-awaiting commands
+  (:meth:`~DefaultModelController.add_message` / :meth:`~DefaultModelController.generate`),
   the busy/closing guards, idle tracking, bus fan-through, the no-strand
   teardown guarantee for in-flight commands, and the cooperative-then-
   deterministic teardown model.
@@ -45,6 +45,7 @@ from otter_ai_core import (
 )
 from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
+from otter_ai_core.interfaces import ModelController
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
@@ -64,8 +65,18 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.model_controller import RESPONSE_DONE, ModelController, State
+from otter_ai_core.model_controller import RESPONSE_DONE, DefaultModelController, State
 from otter_ai_core.model_controller.events import SERVER_EVENT_BY_TYPE
+
+
+def _default_controller_satisfies_protocol(
+    controller: DefaultModelController,
+) -> ModelController:
+    # Structural conformance guard: mypy verifies DefaultModelController
+    # satisfies the ModelController Protocol here (this file is in the mypy
+    # ``files`` set). Never called at runtime.
+    return controller
+
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -151,12 +162,12 @@ def _branch_moved() -> BranchMoved:
 
 
 def _pair() -> tuple[
-    ModelController,
+    DefaultModelController,
     ConnectionBackend[ClientContextEvent, ServerContextEvent],
 ]:
     """A controller wired to a fresh connection pair; return (controller, backend)."""
     pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
-    return ModelController(pair.client), pair.backend
+    return DefaultModelController(pair.client), pair.backend
 
 
 async def _take(
@@ -207,7 +218,7 @@ async def test_state_wait_idle_returns_when_set() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: construction & idle tracking
+# DefaultModelController: construction & idle tracking
 # --------------------------------------------------------------------------- #
 
 
@@ -258,7 +269,7 @@ async def test_controller_bus_narrows_response_done() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: command guards
+# DefaultModelController: command guards
 # --------------------------------------------------------------------------- #
 
 
@@ -347,7 +358,7 @@ async def test_abort_when_idle_raises() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: session ops (compact / branch)
+# DefaultModelController: session ops (compact / branch)
 # --------------------------------------------------------------------------- #
 
 
@@ -538,7 +549,7 @@ async def test_branch_raises_when_torn_down_mid_flight() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: bus fan-through (every server event type)
+# DefaultModelController: bus fan-through (every server event type)
 # --------------------------------------------------------------------------- #
 
 
@@ -569,7 +580,7 @@ async def test_controller_republishes_each_server_event(event: ServerContextEven
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: no-strand teardown of in-flight commands
+# DefaultModelController: no-strand teardown of in-flight commands
 # --------------------------------------------------------------------------- #
 
 
@@ -596,7 +607,7 @@ async def test_add_message_raises_when_torn_down_mid_flight() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ModelController: lifecycle / teardown
+# DefaultModelController: lifecycle / teardown
 # --------------------------------------------------------------------------- #
 
 
@@ -673,7 +684,7 @@ async def test_aclose_cancels_wedged_backend() -> None:
 async def test_async_context_manager_closes() -> None:
     pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
     task = asyncio.create_task(_conformant(pair.backend))
-    async with ModelController(pair.client) as controller:
+    async with DefaultModelController(pair.client) as controller:
         assert controller.is_idle()
     assert controller.is_closing()
     assert controller._task.done()

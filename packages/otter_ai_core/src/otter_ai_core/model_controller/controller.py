@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core.bus import Bus, BusEvent, BusHandler
+from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.interfaces import AbortableConnection
 from otter_ai_core.model_connection import (
     AbortResponse,
-    AddToolResultMessage,
     AddUserMessage,
     BranchMove,
     BranchMoved,
@@ -19,8 +18,10 @@ from otter_ai_core.model_connection import (
     CompactionDone,
     CreateCompaction,
     CreateResponse,
+    InputEvent,
     ResponseDone,
     ServerContextEvent,
+    ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
 )
@@ -35,18 +36,15 @@ from otter_ai_core.model_controller.events import (
 )
 from otter_ai_core.model_controller.state import State
 
-#: Default graceful-drain deadline (seconds) for :meth:`ModelController.aclose`.
+#: Default graceful-drain deadline (seconds) for :meth:`DefaultModelController.aclose`.
 #: ``None`` would wait forever; a finite default keeps teardown deterministic
 #: when the backend never ends the inbound stream.
 _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
-#: A client→server event that appends conversation input before a generation.
-InputEvent = AddUserMessage | AddToolResultMessage
-
 _log = logging.getLogger(__name__)
 
 
-class ModelController:
+class DefaultModelController:
     __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
 
     def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
@@ -74,10 +72,12 @@ class ModelController:
     async def wait_for_idle(self) -> None:
         await self._state.wait_for_idle()
 
-    def on[TPayload](
-        self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
+    def on(
+        self,
+        event: ServerContextEventType,
+        handler: Callable[[ServerContextEvent], Awaitable[None]],
     ) -> Callable[[], None]:
-        return self._bus.subscribe(event, handler)
+        return self._bus.subscribe(SERVER_EVENT_BY_TYPE[event], handler)
 
     def is_closing(self) -> bool:
         return self._state.is_closing

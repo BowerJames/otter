@@ -7,6 +7,7 @@ from .client_context_events import (
     ClientContextEventType,
     CreateCompaction,
     CreateResponse,
+    InputEvent,
 )
 from .model_connection import (
     ModelConnectionBackend,
@@ -36,6 +37,7 @@ __all__ = [
     "AddToolResultMessage",
     "AddUserMessage",
     "ClientContextEvent",
+    "InputEvent",
     "CreateResponse",
     "CreateCompaction",
     "BranchMove",
