@@ -8,17 +8,19 @@ from typing import Self
 
 from otter_ai_core.bus import Bus, BusEvent, BusHandler
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
+from otter_ai_core.interfaces import AbortableConnection
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
     BranchMove,
     BranchMoved,
+    ClientContextEvent,
     CompactionDone,
     CreateCompaction,
     CreateResponse,
-    ModelConnectionClient,
     ResponseDone,
+    ServerContextEvent,
     ToolResultAdded,
     UserItemAdded,
 )
@@ -47,7 +49,7 @@ _log = logging.getLogger(__name__)
 class ModelController:
     __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
 
-    def __init__(self, client: ModelConnectionClient) -> None:
+    def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
         self._client = client
         self._bus: Bus = Bus()
         self._state = State()
