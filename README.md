@@ -363,10 +363,12 @@ with logging_context(session_id="call-123", user_id=42):
 | [ruff]      | Linting + formatting    | `[tool.ruff]` in `pyproject.toml`  |
 | [mypy]      | Static type checking    | `[tool.mypy]` in `pyproject.toml`  |
 | [pytest]    | Testing (incl. `async`) | `[tool.pytest.ini_options]`    |
+| [semgrep]   | Docstring policy        | `semgrep.yml`                  |
 
 [ruff]: https://docs.astral.sh/ruff/
 [mypy]: https://mypy-lang.org/
 [pytest]: https://docs.pytest.org/
+[semgrep]: https://semgrep.dev/
 
 ### Run checks
 
@@ -385,3 +387,13 @@ Once enabled, every `git commit` runs:
 2. `mypy` on the whole workspace.
 
 The commit is rejected if any check fails. Tool versions are pinned via `uv run` (see `uv.lock`).
+
+### Docstring policy (coding without comments)
+
+Docstrings are not used in `*/src/*.py`: documentation comments go stale when code changes, so the codebase favours self-documenting code instead. The `no-module-docstring`, `no-class-docstring`, and `no-function-docstring` rules in [`semgrep.yml`](semgrep.yml) error whenever a module-, class-, or function/method-level docstring is present under any `*/src/` directory.
+
+```bash
+uv run semgrep scan --config semgrep.yml --error .
+# or
+just semgrep-rules
+```
