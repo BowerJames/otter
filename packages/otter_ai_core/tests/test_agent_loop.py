@@ -42,8 +42,8 @@ from otter_ai_core.agent_loop.agent_loop import AgentLoop, QueueMode, ToolExecMo
 from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
 from otter_ai_core.context import Role
 from otter_ai_core.hook_runner import Hook, HookRunner
+from otter_ai_core.interfaces import ModelController
 from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
-from otter_ai_core.model_controller import ModelController
 
 # --------------------------------------------------------------------------- #
 # Builders

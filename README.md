@@ -163,13 +163,16 @@ serializable data model is unchanged.
   ignore these; see #118.)
 - [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
   — the high-level conversation driver built on a `ModelConnectionClient`:
-  `ModelController` (async, confirmation-awaiting `add_message` / `generate` /
-  `abort` / `compact` / `branch`, idle/busy tracking, no-strand teardown of
-  in-flight commands) and `State` (the idle/busy latch + closing flag). Its
-  `bus` is a generic `Bus` keyed on `ServerContextEventType`. `compact` /
-  `branch` target **stateful** connections and return the confirm verbatim
-  (`error_message` = refusal). Unlike the lower-level subpackages, it is
-  re-exported at the top level (`ModelController` / `State`).
+  `DefaultModelController` (implements the `ModelController` Protocol defined in
+  [`interfaces/`](./packages/otter_ai_core/src/otter_ai_core/interfaces/); async,
+  confirmation-awaiting `add_message` / `generate` / `abort` / `compact` /
+  `branch`, idle/busy tracking, no-strand teardown of in-flight commands) and
+  `State` (the idle/busy latch + closing flag). Its `bus` is a generic `Bus`
+  keyed on `ServerContextEventType`. `compact` / `branch` target **stateful**
+  connections and return the confirm verbatim (`error_message` = refusal).
+  `AgentLoop` depends on the `ModelController` Protocol, not the concrete class.
+  Re-exported at the top level (`ModelController` / `DefaultModelController` /
+  `State`).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
   generic `BuilderFn[TOptions, TResult]` alias a producer seam folds onto.
 - [`provider_api_model_options/`](./packages/otter_ai_core/src/otter_ai_core/provider_api_model_options/) —
@@ -240,7 +243,7 @@ session_manager/
   `append_session_name`. Pure logic over a `SessionStore`; observable via its
   `bus`; concurrency-safe via an append `Lock`. Lock-free snapshot reads
   (`projection` / `build_context` / `get_branch`). Tear down with `aclose`
-  (or `async with`), mirroring `ModelController`.
+  (or `async with`), mirroring `DefaultModelController`.
 - **Pure projection functions** *(concrete, loop-free)* — `project(path)`,
   `derive_state(path)`, `apply_compaction_transform`, `entries_to_items`,
   `apply_updates`: sync, unit-testable with a hand-built list and no store. A
@@ -279,7 +282,7 @@ connection → controller → agent-loop stack with **no network and no flakines
 It is a test double, **not a provider**: no inference, no transport, no
 registry, no new seam. The one-call entry point
 [`create_faux_model(script)`](./packages/otter_ai_core/src/otter_ai_core/faux/producer.py)
-wires a real `ModelController` over a real `create_connection()` pair in one
+wires a real `DefaultModelController` over a real `create_connection()` pair in one
 line.
 
 ```

@@ -68,6 +68,9 @@ class BranchMove(Event[ClientContextEventType]):
     summary: str | None = None
 
 
+#: A client→server event that appends conversation input before a generation.
+InputEvent = AddUserMessage | AddToolResultMessage
+
 #: Discriminated union of all client→server (outbound) model-connection events.
 ClientContextEvent = Annotated[
     AddUserMessage

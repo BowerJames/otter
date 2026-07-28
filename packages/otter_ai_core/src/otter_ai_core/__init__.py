@@ -66,10 +66,11 @@ from otter_ai_core.interfaces import (
     AbortableConnection,
     AbortableStream,
     Connection,
+    ModelController,
     Stream,
     Writer,
 )
-from otter_ai_core.model_controller import ModelController, State
+from otter_ai_core.model_controller import DefaultModelController, State
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
     KnownProviders,
@@ -160,10 +161,11 @@ __all__ = [
     "KnownProviders",
     "ProviderModelOption",
     "ThinkingLevel",
-    # interfaces (read/write/connection Protocol contracts, incl. abortable stream/connection)
+    # interfaces (Protocol contracts: streaming runtime + model-controller role)
     "AbortableConnection",
     "AbortableStream",
     "Connection",
+    "ModelController",
     "Stream",
     "Writer",
     # channel runtime (one-way)
@@ -187,7 +189,8 @@ __all__ = [
     "ConnectionPair",
     "create_connection",
     # model controller (high-level conversation driver over a connection;
-    # re-exported at the top level, unlike the subpackage-only model_connection)
+    # ``ModelController`` is the Protocol role, ``DefaultModelController`` the impl)
+    "DefaultModelController",
     "ModelController",
     "State",
     # session manager (persisted, restorable, observable per-session layer)

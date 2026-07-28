@@ -1,4 +1,5 @@
-from otter_ai_core.model_controller.controller import ModelController
+from otter_ai_core.interfaces import ModelController
+from otter_ai_core.model_controller.controller import DefaultModelController
 from otter_ai_core.model_controller.events import (
     BRANCH_MOVED,
     COMPACTION_DONE,
@@ -14,6 +15,7 @@ from otter_ai_core.model_controller.state import State
 from otter_ai_core.model_controller.stream import create_model_controller_stream
 
 __all__ = [
+    "DefaultModelController",
     "ModelController",
     "State",
     "create_model_controller_stream",

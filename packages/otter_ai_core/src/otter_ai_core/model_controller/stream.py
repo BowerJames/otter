@@ -1,9 +1,8 @@
 import asyncio
 from collections.abc import Callable
 
-from otter_ai_core.model_connection import ResponseDone, ServerContextEvent
-from otter_ai_core.model_controller import ModelController
-from otter_ai_core.model_controller.events import ALL_EVENTS
+from otter_ai_core.interfaces import ModelController
+from otter_ai_core.model_connection import ResponseDone, ServerContextEvent, ServerContextEventType
 from otter_ai_core.stream import StreamBackend, StreamClient, StreamPair, create_stream_pair
 
 
@@ -22,12 +21,12 @@ class ModelControllerStreamProducer:
         self._unsubscribers = self._subscribe()
 
     def _subscribe(self) -> list[Callable[[], None]]:
-        # Subscribe the single pass-through handler to every controller bus
-        # event (contravariance lets the wider ``ServerContextEvent`` handler
-        # satisfy each per-variant descriptor).
+        # Subscribe the single pass-through handler to every controller event
+        # type; the public ``on`` accepts the full ``ServerContextEvent`` union,
+        # which the handler narrows.
         unsubscribers = []
-        for event in ALL_EVENTS:
-            unsubscribers.append(self._controller.on(event, self._handler))
+        for event_type in ServerContextEventType:
+            unsubscribers.append(self._controller.on(event_type, self._handler))
         return unsubscribers
 
     def _unsubscribe(self) -> None:
