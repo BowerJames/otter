@@ -1,20 +1,3 @@
-"""Bus notifications emitted by :class:`SessionStoreController`.
-
-The controller owns its own change :class:`~otter_ai_core.bus.Bus` so the
-**persisted** session is directly observable by any consumer (TUI, exporter,
-metrics sink) with no LLM and no agent loop — the repo's split where an active
-driver owns a fan-out bus (:class:`~otter_ai_core.model_controller.ModelController`
-owns ``bus``), while single-handler intercepts (the future
-``before_compact`` / ``before_tree`` LLM-step hooks) belong to the agent layer
-that owns the model. **Only the fan-out notifications live here.**
-
-A :class:`~enum.StrEnum` (:class:`SessionStoreControllerEventTypes`) centralizes
-the event name strings; the typed :class:`~otter_ai_core.bus.BusEvent`
-descriptors (built from the enum members) are what callers subscribe/publish
-against — the same enum+descriptor idiom as
-:mod:`otter_ai_core.model_controller.events` and :mod:`otter_ai_core.agent_loop.hooks`.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,12 +14,6 @@ from otter_ai_core.session_manager.entries import (
 
 
 class SessionStoreControllerEventTypes(StrEnum):
-    """The ``name`` of a bus event emitted by :class:`SessionStoreController`.
-
-    Named for its emitter (there is no ``SessionManager`` — the catalog is out
-    of scope), matching the repo ``<Owner>EventTypes`` convention.
-    """
-
     ENTRY_APPENDED = "session.entry_appended"
     ITEM_ADDED = "session.item_added"
     ITEM_UPDATED = "session.item_updated"  # §8 amendment
@@ -46,8 +23,6 @@ class SessionStoreControllerEventTypes(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class TreeChangedPayload:
-    """Payload for :data:`TREE_CHANGED` (a branch / leaf move)."""
-
     new_leaf_id: str | None
     old_leaf_id: str | None
     summary_entry: BranchSummaryEntry | None

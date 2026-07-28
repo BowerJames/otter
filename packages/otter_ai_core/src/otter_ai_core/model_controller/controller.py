@@ -1,80 +1,3 @@
-"""A high-level controller that drives a model connection.
-
-A :class:`ModelController` wraps a
-:data:`~otter_ai_core.model_connection.ModelConnectionClient` and turns the
-low-level push/iterate/abort conduit into a conversation: it appends input
-(``user_message.add`` / ``tool_result.add``), asks the server to generate
-(``response.create``), asks it to stop the current generation
-(``response.abort``), and tracks idle/busy state within each command method
-(busy on push, idle when that command's confirmation event arrives). Every
-inbound server event is also re-published to a
-:class:`~otter_ai_core.bus.Bus` for fan-out to subscribers (renderers,
-persistence, metrics, …).
-
-Async, confirmation-awaiting commands
--------------------------------------
-The command surface is **async** and **awaits a backend confirmation** before
-returning:
-
-* :meth:`add_message` — pushes a ``user_message.add`` / ``tool_result.add``
-  client event and awaits the matching ``user_item.added`` /
-  ``tool_result_item.added`` server echo. Call it one or more times to stage
-  input.
-* :meth:`generate` — pushes ``response.create`` and awaits the matching
-  ``response.done``.
-* :meth:`compact` — pushes ``compaction.create`` and awaits the matching
-  ``compaction.done`` (a session op for **stateful** connections).
-* :meth:`branch` — pushes ``branch.move`` and awaits the matching
-  ``branch.moved`` (a session op for **stateful** connections).
-
-The session ops (:meth:`compact` / :meth:`branch`) return the confirm event
-*verbatim* — a refused/unsupported op surfaces as a confirm with
-``error_message`` set (the server did not perform the op); the caller checks
-``error_message`` first rather than the controller raising. Like the other
-commands they are single-flight (rejected while busy) and never hang.
-
-Both are single-flight (rejected while busy) and never hang: if the run loop
-exits before the awaited echo arrives — teardown via :meth:`close` /
-:meth:`aclose`, or a non-conformant backend that ends the inbound early — the
-awaiting command is released and raises :class:`RuntimeError` rather than
-stranding its task.
-
-Two distinct aborts
--------------------
-The controller exposes **two** concepts that are easy to confuse:
-
-* :meth:`ModelController.abort` — *protocol* abort. It pushes an
-  :class:`~otter_ai_core.model_connection.AbortResponse`, i.e. "stop the
-  current generation but keep the connection open; I want to keep talking."
-  Only valid while a generation is in progress (busy).
-* :meth:`ModelController.close` / :meth:`ModelController.aclose` — *runtime*
-  teardown. They call
-  :meth:`~otter_ai_core.connection.ConnectionClient.abort`, i.e. "I am done
-  with this connection; tear it down." This sets the cooperative abort signal
-  and closes the outbound so the backend can begin its shutdown.
-
-Lifecycle / teardown
---------------------
-Teardown is **cooperative first, deterministic second**:
-
-* :meth:`close` is synchronous and only *initiates* teardown
-  (``client.abort()``). It does **not** cancel anything — the controller keeps
-  draining inbound so the backend's shutdown sequence (which may emit final
-  items) flows through the bus. ``close`` is fire-and-forget and idempotent.
-* :meth:`aclose` awaits the drain to completion under a deadline and is the
-  recommended way to tear down. If the backend never ends the inbound (a
-  non-conformant/wedged backend), the controller's run task — and the bus's
-  worker — are force-cancelled once the deadline elapses, so no owned task is
-  left pending. (This deterministic cancel is the last resort in place of
-  relying on garbage collection, which would abandon pending tasks with a
-  ``Task was destroyed but it is pending!`` warning and run no ``finally``
-  cleanup.) ``aclose`` is also available via ``async with``.
-
-Once :meth:`close` / :meth:`aclose` has begun, the command methods
-(:meth:`add_message`, :meth:`generate`, :meth:`abort`, :meth:`compact`,
-:meth:`branch`) reject with :class:`RuntimeError`.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -122,25 +45,6 @@ _log = logging.getLogger(__name__)
 
 
 class ModelController:
-    """Drive a :data:`ModelConnectionClient` as a stateful conversation.
-
-    Construct with a client (typically the ``client`` end of a
-    :func:`~otter_ai_core.connection.create_connection` whose backend is pumped
-    by a transport task). The controller starts **idle**. Use
-    :meth:`add_message` to append input (awaiting the server's echo),
-    :meth:`generate` to request and await the next assistant response, and
-    :meth:`abort` to cancel an in-flight response. Subscribe to inbound events
-    via the :attr:`bus`.
-
-    Tear down with ``await controller.aclose()`` (or ``async with``); see the
-    module docstring for the two-abort distinction and the cooperative-then-
-    deterministic teardown model.
-
-    .. note::
-       The constructor schedules a background drain task and so must be called
-       from within a running :mod:`asyncio` event loop.
-    """
-
     __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
 
     def __init__(self, client: ModelConnectionClient) -> None:
@@ -156,16 +60,13 @@ class ModelController:
 
     @property
     def bus(self) -> Bus:
-        """The descriptor-keyed pub/sub bus every inbound server event is re-published to."""
         return self._bus
 
     @property
     def state(self) -> State:
-        """The controller's mutable :class:`State` (idle/busy latch, closing flag)."""
         return self._state
 
     def is_idle(self) -> bool:
-        """``True`` when no generation is in progress (commands are accepted)."""
         return self._state.is_idle.is_set()
 
     async def wait_for_idle(self) -> None:
@@ -177,11 +78,9 @@ class ModelController:
         return self._bus.subscribe(event, handler)
 
     def is_closing(self) -> bool:
-        """``True`` once teardown has begun (commands are then rejected)."""
         return self._state.is_closing
 
     async def wait_idle(self) -> None:
-        """Block until the controller is idle (e.g. the current generation finished)."""
         await self._state.is_idle.wait()
 
     # ------------------------------------------------------------------ #
@@ -197,22 +96,6 @@ class ModelController:
             raise RuntimeError("ModelController is busy; command rejected.")
 
     async def add_message(self, message: InputEvent) -> UserContextItem | ToolResultContextItem:
-        """Append one conversation input and await the server's item-added echo.
-
-        Pushes a ``user_message.add`` / ``tool_result.add`` client event, flips
-        the controller to busy, and blocks until the backend echoes the matching
-        ``user_item.added`` / ``tool_result_item.added`` server event, then
-        returns to idle. Call one or more times to stage input before
-        :meth:`generate`.
-
-        Returns the echoed :class:`~otter_ai_core.context.UserContextItem` /
-        :class:`~otter_ai_core.context.ToolResultContextItem` (carrying the
-        server-assigned ``id``), matching the type of ``message``.
-
-        Raises :class:`RuntimeError` if the controller is closing/closed or
-        already busy, or if the run loop exits before the echo arrives
-        (teardown / non-conformant backend) — the await never hangs.
-        """
         self._require_running()
         self._check_idle()
         self._state.set_busy()
@@ -260,19 +143,6 @@ class ModelController:
                 raise RuntimeError("Add message did not receive an item")
 
     async def generate(self) -> AssistantContextItem:
-        """Request the next assistant response and await its completion.
-
-        Pushes ``response.create``, flips the controller to busy, and blocks
-        until the backend emits the matching ``response.done``, then returns to
-        idle. Stage any input with :meth:`add_message` first.
-
-        Returns the echoed :class:`~otter_ai_core.context.AssistantContextItem`
-        (the final assistant item carrying the server-assigned ``id``).
-
-        Raises :class:`RuntimeError` if the controller is closing/closed or
-        already busy, or if the run loop exits before ``response.done`` arrives
-        (teardown / non-conformant backend) — the await never hangs.
-        """
         self._require_running()
         self._check_idle()
         self._state.set_busy()
@@ -313,23 +183,6 @@ class ModelController:
         custom_instructions: str | None = None,
         summary: str | None = None,
     ) -> CompactionDone:
-        """Ask a stateful server to compact its live conversation history in place.
-
-        Pushes a ``compaction.create`` client event (carrying the retention /
-        summary / custom-instructions params), flips the controller to busy, and
-        blocks until the backend emits the matching ``compaction.done`` confirm,
-        then returns to idle.
-
-        Returns the :class:`~otter_ai_core.model_connection.CompactionDone`
-        confirm **verbatim**. A refused / unsupported op (e.g. a connection that
-        cannot compact in place) surfaces as a confirm with ``error_message``
-        set — the server did not perform the op — and is returned, not raised;
-        the caller checks ``error_message`` first.
-
-        Raises :class:`RuntimeError` if the controller is closing/closed or
-        already busy, or if the run loop exits before ``compaction.done`` arrives
-        (teardown / non-conformant backend) — the await never hangs.
-        """
         self._require_running()
         self._check_idle()
         self._state.set_busy()
@@ -376,22 +229,6 @@ class ModelController:
         *,
         summary: str | None = None,
     ) -> BranchMoved:
-        """Ask a stateful server to truncate its live conversation to an earlier item.
-
-        Pushes a ``branch.move`` client event — ``at_item_id`` becomes the new
-        live head; an optional ``summary`` may be injected at the branch point —
-        flips the controller to busy, and blocks until the backend emits the
-        matching ``branch.moved`` confirm, then returns to idle.
-
-        Returns the :class:`~otter_ai_core.model_connection.BranchMoved` confirm
-        **verbatim**. A refused / unsupported op surfaces as a confirm with
-        ``error_message`` set — returned, not raised; the caller checks
-        ``error_message`` first.
-
-        Raises :class:`RuntimeError` if the controller is closing/closed or
-        already busy, or if the run loop exits before ``branch.moved`` arrives
-        (teardown / non-conformant backend) — the await never hangs.
-        """
         self._require_running()
         self._check_idle()
         self._state.set_busy()
@@ -427,13 +264,6 @@ class ModelController:
                 raise RuntimeError("Branch did not receive a confirm")
 
     def abort(self) -> None:
-        """Protocol-abort the in-progress generation, keeping the connection open.
-
-        Pushes an :class:`~otter_ai_core.model_connection.AbortResponse` (a
-        *protocol* event distinct from the *runtime* ``client.abort()`` used by
-        :meth:`close`). Only valid while busy; the controller returns to idle
-        when the server honours the abort with a ``response.done``.
-        """
         self._require_running()
         if self.is_idle():
             raise RuntimeError("Cannot abort a response when idle.")
@@ -444,30 +274,12 @@ class ModelController:
     # ------------------------------------------------------------------ #
 
     def close(self) -> None:
-        """Initiate cooperative teardown (synchronous, idempotent, fire-and-forget).
-
-        Calls :meth:`~otter_ai_core.connection.ConnectionClient.abort`
-        (runtime abort: sets the cooperative abort signal and closes the
-        outbound) so a conformant backend begins its shutdown — emitting any
-        final items, which the controller keeps draining through the
-        :attr:`bus`, before ending the inbound. Does **not** cancel the run
-        task; for awaited, deadline-bounded teardown use :meth:`aclose`.
-        """
         if self._state.is_closing:
             return
         self._state.begin_closing()
         self._client.abort()
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        """Initiate teardown and await the drain to completion.
-
-        Calls :meth:`close`, then awaits the controller's run task (which drains
-        the backend's final shutdown items and ends the bus) under ``timeout``
-        (``None`` waits forever — drain-or-hang). If the drain overruns — a
-        non-conformant backend that never ends the inbound — the run task and
-        the bus worker are force-cancelled so no owned task is left pending.
-        Safe to call more than once.
-        """
         self.close()
         try:
             await await_or_cancel(self._task, timeout)

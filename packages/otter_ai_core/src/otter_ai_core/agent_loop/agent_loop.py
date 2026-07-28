@@ -34,8 +34,6 @@ class QueueMode(StrEnum):
 
 
 class ToolExecMode(StrEnum):
-    """How a turn's tool calls are executed."""
-
     SEQUENTIAL = "sequential"
     CONCURRENT = "concurrent"
 
@@ -76,32 +74,11 @@ class AgentLoop:
 
     @property
     def hook_runner(self) -> HookRunner:
-        """The typed emit-and-await registry callers register hooks on.
-
-        The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
-        before each tool call is executed and
-        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` after a tool
-        actually executes; register a handler via this property (with
-        :meth:`HookRunner.register`) or :meth:`on`.
-        """
         return self._hook_runner
 
     def on[TParams, TReturn](
         self, hook: Hook[TParams, TReturn], handler: HookHandler[TParams, TReturn]
     ) -> Callable[[], None]:
-        """Register ``handler`` as the single handler for ``hook``.
-
-        Thin wrapper over :meth:`HookRunner.register` (the emit-and-await,
-        single-handler registry). Returns the idempotent unregister callable;
-        raises :class:`RuntimeError` if ``hook`` already has a handler
-        (unregister first to replace).
-
-        The loop emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL`
-        before each tool call and
-        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` after a tool
-        actually executes, so a handler registered against either takes effect
-        immediately for subsequent tool calls.
-        """
         return self._hook_runner.register(hook, handler)
 
     # ------------------------------------------------------------------ #
@@ -114,33 +91,10 @@ class AgentLoop:
             raise RuntimeError(f"AgentLoop run task has finished; cannot {action}.")
 
     def steer(self, message: UserMessage) -> None:
-        """Queue a steering :class:`UserMessage` injected before the next turn.
-
-        Steering is drained inside the inner loop before each ``generate()``
-        (see :meth:`_run_inner_loop`), so a queued steering message reaches the
-        model at the next turn boundary of the current inner loop — use it to
-        redirect an in-progress run.
-
-        Synchronous and safe to call before the first ``await`` (the run task
-        scheduled in ``__post_init__`` does not start until the caller yields to
-        the event loop) or mid-run. Raises :class:`RuntimeError` if the run task
-        has already finished (the message would otherwise be stranded).
-        """
         self._require_running("steer")
         self._steering_queue.put_nowait(message)
 
     def follow_up(self, message: UserMessage) -> None:
-        """Queue a follow-up :class:`UserMessage` that drives another inner loop.
-
-        Follow-ups are drained at the top of the outer loop, each driving a full
-        inner loop (see :meth:`_run_outer_loop`). Because the run task does not
-        start until the caller's first ``await``, you may construct the loop,
-        call :meth:`follow_up` one or more times, then ``await`` the run; you may
-        also call it mid-run to queue a follow-up for after the current inner
-        loop completes.
-
-        Raises :class:`RuntimeError` if the run task has already finished.
-        """
         self._require_running("follow_up")
         self._follow_up_queue.put_nowait(message)
 
@@ -183,11 +137,6 @@ class AgentLoop:
                 return  # cap reached
 
     async def _execute_tools(self, tool_calls: list[ToolCall]) -> bool:
-        """Execute a batch of tool calls per :attr:`_tool_exec_mode`.
-
-        Adds each result as a ``tool_result.add`` client event. Returns
-        ``True`` if any tool requested termination.
-        """
         match self._tool_exec_mode:
             case ToolExecMode.SEQUENTIAL:
                 pairs = [await self._execute_one(call) for call in tool_calls]
@@ -201,29 +150,6 @@ class AgentLoop:
         return terminate
 
     async def _execute_one(self, call: ToolCall) -> tuple[ToolResultMessage, bool]:
-        """Execute one tool call. Returns ``(result_message, terminate)``.
-
-        Emits :data:`~otter_ai_core.agent_loop.hooks.BEFORE_TOOL_CALL` first: a
-        handler may short-circuit execution by returning an
-        :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` (the tool's
-        ``execute`` is not called; the result is still wrapped and fed back as
-        a ``ToolResultMessage``, with ``terminate`` honoured); ``None`` defers
-        to normal execution. Handler exceptions propagate (the
-        :class:`~otter_ai_core.hook_runner.HookRunner` contract), matching how a
-        tool's own ``execute`` exceptions surface.
-
-        After a tool **actually executes**, emits
-        :data:`~otter_ai_core.agent_loop.hooks.TOOL_RESULT` with the call and
-        the executed result: a handler may return a replacement
-        :class:`~otter_ai_core.agent_loop.agent_tool.AgentToolResult` (its
-        ``result`` / ``details`` / ``is_error`` / ``terminate`` fully replace
-        the executed one) or ``None`` to persist it. This emit is skipped on
-        the ``BEFORE_TOOL_CALL`` short-circuit path (the tool never ran) and on
-        the unknown-tool path (no tool ran).
-
-        Unknown tool names synthesize an ``is_error`` result naming the
-        available tools so the model can self-correct.
-        """
         intercepted = await self._hook_runner.emit(BEFORE_TOOL_CALL, call)
         if intercepted is not None:
             return self._to_tool_result_message(call, intercepted), intercepted.terminate
@@ -242,13 +168,6 @@ class AgentLoop:
     def _to_tool_result_message(
         self, call: ToolCall, result: AgentToolResult[Any]
     ) -> ToolResultMessage:
-        """Wrap an ``AgentToolResult`` into the ``ToolResultMessage`` fed back.
-
-        Shared by the ``before_tool_call`` short-circuit path and normal
-        execution so both produce identical messages: ``tool_call_id`` /
-        ``tool_name`` / ``timestamp`` come from the call/loop; ``content`` /
-        ``details`` / ``is_error`` come from the result.
-        """
         return ToolResultMessage(
             role=Role.ToolResult,
             tool_call_id=call.id,

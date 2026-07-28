@@ -1,14 +1,3 @@
-"""Context items: messages tagged with an ``id`` for placement in a Context.
-
-A :data:`ContextItem` is a union of :class:`UserContextItem`,
-:class:`AssistantContextItem`, and :class:`ToolResultContextItem`. Each is a
-subclass of the generic :class:`BaseContextItem` ``[TMsg]`` that *wraps* a
-message (an ``id`` plus a nested ``message`` attribute) rather than inheriting
-the message's fields — so a context item is shaped ``{id, message}``. Build one
-with the :func:`context_item` dispatcher or the concrete subclass constructor
-(e.g. ``UserContextItem(id=..., message=...)``).
-"""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
@@ -22,8 +11,6 @@ from otter_ai_core.context.messages import (
 
 
 class BaseContextItem[TMsg: BaseModel](BaseModel):
-    """Base for all context items: an ``id`` plus the wrapped ``message``."""
-
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -31,15 +18,15 @@ class BaseContextItem[TMsg: BaseModel](BaseModel):
 
 
 class UserContextItem(BaseContextItem[UserMessage]):
-    """A user message context item."""
+    pass
 
 
 class AssistantContextItem(BaseContextItem[AssistantMessage]):
-    """An assistant message context item."""
+    pass
 
 
 class ToolResultContextItem(BaseContextItem[ToolResultMessage]):
-    """A tool result message context item."""
+    pass
 
 
 #: Union of all context item roles. The inner ``message`` is itself a
@@ -49,11 +36,6 @@ ContextItem = UserContextItem | AssistantContextItem | ToolResultContextItem
 
 
 def context_item(message: Message, id: str) -> ContextItem:
-    """Build a :data:`ContextItem` from a message, dispatching on ``role``.
-
-    Lets callers build the matching item subclass from a :data:`Message`
-    without sniffing ``role`` themselves.
-    """
     if isinstance(message, UserMessage):
         return UserContextItem(id=id, message=message)
     if isinstance(message, AssistantMessage):

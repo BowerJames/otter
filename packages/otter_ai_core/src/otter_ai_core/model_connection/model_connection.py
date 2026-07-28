@@ -1,33 +1,3 @@
-"""Typed connection aliases for a model connection.
-
-This module fixes the two type parameters of the generic abortable-connection
-runtime (:mod:`otter_ai_core.connection`) to otter's model-connection event
-protocol:
-
-* :data:`ModelConnectionClient` — the consumer handle: iterate
-  :data:`~otter_ai_core.model_connection.ServerContextEvent` s, push
-  :data:`~otter_ai_core.model_connection.ClientContextEvent` s, and abort via
-  :meth:`~otter_ai_core.connection.ConnectionClient.abort`.
-* :data:`ModelConnectionBackend` — the producer handle: push
-  :data:`~otter_ai_core.model_connection.ServerContextEvent` s, drain
-  :data:`~otter_ai_core.model_connection.ClientContextEvent` s, and observe
-  :attr:`~otter_ai_core.connection.ConnectionBackend.abort_signal`.
-* :data:`ModelConnectionPair` — the linked pair returned by an annotated
-  :func:`~otter_ai_core.connection.create_connection`.
-
-These specialize the generic abortable two-way facade
-(:mod:`otter_ai_core.connection`) with otter's model-connection event
-protocol.
-
-No producer-side seam type is defined yet (no ``ModelConnectionFn`` /
-``ModelConnectionFnBuilder``); a connection-level seam will be added in a
-future dispatch package. Obtain a live connection with an annotated
-:func:`~otter_ai_core.connection.create_connection`::
-
-    pair: ModelConnectionPair = create_connection()
-    client: ModelConnectionClient = pair.client
-"""
-
 from __future__ import annotations
 
 from otter_ai_core.connection import (

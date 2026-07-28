@@ -1,13 +1,9 @@
-"""Token usage and cost accounting recorded on assistant messages."""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
 
 class UsageCost(BaseModel):
-    """Monetary cost breakdown for a single assistant turn, in USD."""
-
     model_config = ConfigDict(extra="forbid")
 
     input: float
@@ -18,8 +14,6 @@ class UsageCost(BaseModel):
 
 
 class Usage(BaseModel):
-    """Token counts and derived cost for a single assistant turn."""
-
     model_config = ConfigDict(extra="forbid")
 
     input: int

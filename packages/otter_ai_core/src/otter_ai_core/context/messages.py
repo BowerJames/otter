@@ -1,10 +1,3 @@
-"""The three message roles of a conversation.
-
-A :data:`Message` is a discriminated union over ``role`` with members
-:class:`UserMessage`, :class:`AssistantMessage`, and
-:class:`ToolResultMessage`.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -27,12 +20,6 @@ class StopReason(StrEnum):
 
 
 class UserMessage(BaseModel):
-    """A user-authored message.
-
-    ``content`` is either a plain string (convenience) or a list of structured
-    content blocks (required for multimodal input).
-    """
-
     model_config = ConfigDict(extra="forbid")
 
     role: Literal[Role.User]
@@ -42,20 +29,6 @@ class UserMessage(BaseModel):
 
 
 class AssistantMessage(BaseModel):
-    """A model-authored message.
-
-    Provenance fields (``api``/``provider``/``model``/``response_model``/
-    ``response_id``) and accounting (``usage``/``stop_reason``/``error_message``)
-    are stored inertly — otter never interprets them, but preserves them so a
-    context can be replayed elsewhere.
-
-    ``stop_reason`` is ``None`` only while the message is in flight (e.g. the
-    ``partial`` snapshots carried by non-terminal streaming events); a
-    terminal message — one emitted by a ``done``/``error`` event, or any
-    message persisted in a :class:`~otter_ai_core.context.Context` — always
-    carries a non-``None`` stop reason.
-    """
-
     model_config = ConfigDict(extra="forbid")
 
     role: Literal[Role.Assistant]
@@ -83,12 +56,6 @@ class AssistantMessage(BaseModel):
 
 
 class ToolResultMessage(BaseModel):
-    """The result of a tool call, fed back to the model.
-
-    Unlike :class:`UserMessage`, ``content`` is always a list of structured
-    blocks (no plain-string shorthand).
-    """
-
     model_config = ConfigDict(extra="forbid")
 
     role: Literal[Role.ToolResult]
