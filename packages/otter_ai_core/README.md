@@ -125,7 +125,7 @@ want, unlike the subpackage-only `model_connection`.
   `bus` (a descriptor-keyed
   [`Bus`](./src/otter_ai_core/bus.py)). Subscribe via the per-variant
   `BusEvent` descriptors in
-  [`model_controller/events.py`](./src/otter_ai_core/model_controller/events.py)
+  [`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py)
   (`RESPONSE_DONE`, `USER_ITEM_ADDED`, …), built from the
   `ModelControllerEventTypes` `StrEnum`.
 - [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy

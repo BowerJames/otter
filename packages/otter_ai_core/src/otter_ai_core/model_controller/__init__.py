@@ -1,6 +1,5 @@
 from otter_ai_core.interfaces import ModelController
-from otter_ai_core.model_controller.controller import DefaultModelController
-from otter_ai_core.model_controller.events import (
+from otter_ai_core.interfaces.model_controller import (
     BRANCH_MOVED,
     COMPACTION_DONE,
     RESPONSE_DONE,
@@ -11,6 +10,7 @@ from otter_ai_core.model_controller.events import (
     USER_ITEM_UPDATED,
     ModelControllerEventTypes,
 )
+from otter_ai_core.model_controller.controller import DefaultModelController
 from otter_ai_core.model_controller.state import State
 from otter_ai_core.model_controller.stream import create_model_controller_stream
 

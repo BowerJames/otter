@@ -9,6 +9,14 @@ from typing import Self
 from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.interfaces import AbortableConnection
+from otter_ai_core.interfaces.model_controller import (
+    BRANCH_MOVED,
+    COMPACTION_DONE,
+    RESPONSE_DONE,
+    SERVER_EVENT_BY_TYPE,
+    TOOL_RESULT_ADDED,
+    USER_ITEM_ADDED,
+)
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddUserMessage,
@@ -26,14 +34,6 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
-from otter_ai_core.model_controller.events import (
-    BRANCH_MOVED,
-    COMPACTION_DONE,
-    RESPONSE_DONE,
-    SERVER_EVENT_BY_TYPE,
-    TOOL_RESULT_ADDED,
-    USER_ITEM_ADDED,
-)
 from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`DefaultModelController.aclose`.
