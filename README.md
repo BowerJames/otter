@@ -5,9 +5,24 @@ Otter AI — Python monorepo (a [uv](https://docs.astral.sh/uv/) workspace).
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) (package manager)
+- [just](https://just.systems/) (task runner; runs recipes in the [`justfile`](./justfile))
 - Python 3.12+ (managed by uv via `.python-version`)
 
+`uv` and `just` are not Python packages, so they can't be pinned in `uv.lock`; they are installed automatically by [`scripts/bootstrap.sh`](./scripts/bootstrap.sh) if missing (see [Setup](#setup)).
+
 ## Setup
+
+### Quick start (recommended)
+
+A single, idempotent command installs any missing prerequisites (`uv`, `just`),
+syncs the workspace against `uv.lock`, and enables the pre-commit hook. It is
+safe to re-run:
+
+```bash
+./scripts/bootstrap.sh
+```
+
+### Manual setup
 
 Install dependencies and create the virtual environment:
 
@@ -20,6 +35,10 @@ Enable the local pre-commit hook (run once per clone):
 ```bash
 git config core.hooksPath .githooks
 ```
+
+Install [just](https://github.com/casey/just#installation) if you intend to use
+the task-runner recipes (for example `brew install just`, or the upstream
+installer `scripts/bootstrap.sh` uses).
 
 ## Monorepo layout
 
