@@ -27,9 +27,7 @@ def test_parameters_accepts_pydantic_class() -> None:
 
 
 def test_parameters_dict_and_class_round_trip_identically() -> None:
-    by_dict = Tool(
-        name="get_time", description="d", parameters=_GetTimeParams.model_json_schema()
-    )
+    by_dict = Tool(name="get_time", description="d", parameters=_GetTimeParams.model_json_schema())
     by_cls = Tool(name="get_time", description="d", parameters=_GetTimeParams)
     assert by_dict.parameters == by_cls.parameters
 

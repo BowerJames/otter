@@ -12,9 +12,7 @@ from otter_ai_core import (
 )
 
 
-def _new() -> tuple[
-    BidirectionalChannelClient[str, int], BidirectionalChannelBackend[str, int]
-]:
+def _new() -> tuple[BidirectionalChannelClient[str, int], BidirectionalChannelBackend[str, int]]:
     """A typed client/backend pair for the common (str, int) event shapes.
 
     Locals are annotated so ``create_bidirectional_channel()`` is called bare
