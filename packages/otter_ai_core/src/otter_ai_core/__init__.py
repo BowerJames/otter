@@ -65,6 +65,7 @@ from otter_ai_core.faux import (
 from otter_ai_core.interfaces import (
     AbortableConnection,
     AbortableStream,
+    AgentTool,
     Connection,
     ModelController,
     Stream,
@@ -161,9 +162,11 @@ __all__ = [
     "KnownProviders",
     "ProviderModelOption",
     "ThinkingLevel",
-    # interfaces (Protocol contracts: streaming runtime + model-controller role)
+    # interfaces (Protocol contracts: streaming runtime, model-controller role,
+    #   and the agent-loop tool-execution seam)
     "AbortableConnection",
     "AbortableStream",
+    "AgentTool",
     "Connection",
     "ModelController",
     "Stream",

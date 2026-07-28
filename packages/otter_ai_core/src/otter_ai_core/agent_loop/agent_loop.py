@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
+from otter_ai_core.agent_loop.agent_tool import AgentToolResult
 from otter_ai_core.agent_loop.hooks import (
     BEFORE_TOOL_CALL,
     TOOL_RESULT,
@@ -24,7 +24,7 @@ from otter_ai_core.context import (
     UserMessage,
 )
 from otter_ai_core.hook_runner import Hook, HookHandler, HookRunner
-from otter_ai_core.interfaces import ModelController
+from otter_ai_core.interfaces import AgentTool, ModelController
 from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
 
 

@@ -44,8 +44,9 @@ from otter_ai_core import (
     faux_tool_call_response,
 )
 from otter_ai_core.agent_loop.agent_loop import AgentLoop, QueueMode
-from otter_ai_core.agent_loop.agent_tool import AgentTool, AgentToolResult
+from otter_ai_core.agent_loop.agent_tool import AgentToolResult, DefaultAgentTool
 from otter_ai_core.context import ContentType, Role
+from otter_ai_core.interfaces import AgentTool
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddUserMessage,
@@ -94,7 +95,7 @@ async def _echo_execute(
 
 
 def _echo_tool() -> AgentTool[_EchoArgs, Any]:
-    return AgentTool("echo", "echo the text back", _EchoArgs, _echo_execute)
+    return DefaultAgentTool("echo", "echo the text back", _EchoArgs, _echo_execute)
 
 
 def _tools(*tools: AgentTool[Any, Any]) -> list[AgentTool[BaseModel, Any]]:
