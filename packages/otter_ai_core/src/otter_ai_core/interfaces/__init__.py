@@ -4,6 +4,7 @@ from .agent_tool import AgentTool
 from .connection import Connection
 from .model_controller import ModelController
 from .stream import Stream
+from .subscribable import Subscribable
 from .writer import Writer
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "Connection",
     "ModelController",
     "Stream",
+    "Subscribable",
     "Writer",
 ]

@@ -269,6 +269,40 @@ async def test_controller_bus_narrows_response_done() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# DefaultModelController: on() subscription surface (Subscribable)
+# --------------------------------------------------------------------------- #
+
+
+async def test_on_rejects_unknown_type_string() -> None:
+    controller, _backend = _pair()
+
+    async def handler(_event: ServerContextEvent) -> None:
+        pass
+
+    with pytest.raises(ValueError):
+        controller.on("not.a.real.event", handler)
+    await controller.aclose(timeout=0.2)
+
+
+async def test_on_subscribes_by_type_string_and_fires() -> None:
+    controller, backend = _pair()
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(event: ServerContextEvent) -> None:
+        assert event.type == ServerContextEventType.RESPONSE_DONE
+        seen.append(event.item.id)
+        done.set()
+
+    # The type key is a plain string; the StrEnum value resolves it.
+    controller.on(ServerContextEventType.RESPONSE_DONE.value, handler)
+    backend.push(ResponseDone(item=_assistant_item()))
+    await asyncio.wait_for(done.wait(), 1)
+    assert seen == ["a1"]
+    await controller.aclose(timeout=0.2)
+
+
+# --------------------------------------------------------------------------- #
 # DefaultModelController: command guards
 # --------------------------------------------------------------------------- #
 

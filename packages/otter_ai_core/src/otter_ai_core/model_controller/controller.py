@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from types import TracebackType
-from typing import Self
+from typing import Any, Self, cast
 
 from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
@@ -72,12 +72,10 @@ class DefaultModelController:
     async def wait_for_idle(self) -> None:
         await self._state.wait_for_idle()
 
-    def on(
-        self,
-        event: ServerContextEventType,
-        handler: Callable[[ServerContextEvent], Awaitable[None]],
-    ) -> Callable[[], None]:
-        return self._bus.subscribe(SERVER_EVENT_BY_TYPE[event], handler)
+    def on(self, type: str, handler: Callable[..., object]) -> Callable[[], None]:
+        # Unknown type strings surface as ValueError from the StrEnum value-lookup.
+        descriptor = SERVER_EVENT_BY_TYPE[ServerContextEventType(type)]
+        return self._bus.subscribe(descriptor, cast(Callable[[Any], Awaitable[None]], handler))
 
     def is_closing(self) -> bool:
         return self._state.is_closing

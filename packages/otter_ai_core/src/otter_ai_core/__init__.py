@@ -69,6 +69,7 @@ from otter_ai_core.interfaces import (
     Connection,
     ModelController,
     Stream,
+    Subscribable,
     Writer,
 )
 from otter_ai_core.model_controller import DefaultModelController, State
@@ -170,6 +171,7 @@ __all__ = [
     "Connection",
     "ModelController",
     "Stream",
+    "Subscribable",
     "Writer",
     # channel runtime (one-way)
     "ChannelPair",
