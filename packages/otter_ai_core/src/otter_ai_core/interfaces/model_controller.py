@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -17,24 +16,19 @@ from otter_ai_core.model_connection import (
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
-    ServerContextEvent,
     ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
     UserItemUpdated,
 )
 
+from .subscribable import Subscribable
 
-class ModelController(Protocol):
+
+class ModelController(Subscribable, Protocol):
     def is_idle(self) -> bool: ...
 
     async def wait_for_idle(self) -> None: ...
-
-    def on(
-        self,
-        event: ServerContextEventType,
-        handler: Callable[[ServerContextEvent], Awaitable[None]],
-    ) -> Callable[[], None]: ...
 
     async def add_message(self, message: InputEvent) -> UserContextItem | ToolResultContextItem: ...
 
