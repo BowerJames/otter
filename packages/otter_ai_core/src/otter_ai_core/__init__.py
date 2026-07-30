@@ -43,6 +43,7 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
+from otter_ai_core.default_model_controller import DefaultModelController, State
 from otter_ai_core.faux import (
     FauxBranchOutcome,
     FauxCompactionOutcome,
@@ -72,7 +73,6 @@ from otter_ai_core.interfaces import (
     Subscribable,
     Writer,
 )
-from otter_ai_core.model_controller import DefaultModelController, State
 from otter_ai_core.provider_api_model_options import (
     KnownApis,
     KnownProviders,

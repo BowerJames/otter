@@ -22,6 +22,7 @@ from otter_ai_core.context import (
     ToolResultContextItem,
     UserContextItem,
 )
+from otter_ai_core.default_model_controller import DefaultModelController
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
@@ -40,7 +41,6 @@ from otter_ai_core.model_connection import (
     ToolResultAdded,
     UserItemAdded,
 )
-from otter_ai_core.model_controller import DefaultModelController
 
 from .script import (
     FauxModelScript,

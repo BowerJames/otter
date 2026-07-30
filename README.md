@@ -161,7 +161,7 @@ serializable data model is unchanged.
   whose `*.done` / `*.moved` confirms carry `error_message` so a server can
   report an unsupported op. (Stateless providers rebuild context each turn and
   ignore these; see #118.)
-- [`model_controller/`](./packages/otter_ai_core/src/otter_ai_core/model_controller/)
+- [`default_model_controller/`](./packages/otter_ai_core/src/otter_ai_core/default_model_controller/)
   — the high-level conversation driver built on a `ModelConnectionClient`:
   `DefaultModelController` (implements the `ModelController` Protocol defined in
   [`interfaces/`](./packages/otter_ai_core/src/otter_ai_core/interfaces/); async,
