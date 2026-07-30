@@ -10,7 +10,7 @@ from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.default_model_controller._lifecycle import await_or_cancel
 from otter_ai_core.default_model_controller.state import State
-from otter_ai_core.interfaces import AbortableConnection
+from otter_ai_core.interfaces import AbortableConnection, ModelController
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddUserMessage,
@@ -53,9 +53,7 @@ _SERVER_EVENT_TRIGGER_TYPES: dict[ServerContextEventType, type[object]] = {
 }
 
 
-class DefaultModelController:
-    __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
-
+class DefaultModelController(ModelController):
     def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
         self._client = client
         self._bus: Bus = Bus()
