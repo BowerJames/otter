@@ -1,7 +1,7 @@
 """AgentLoop: the turn/tool-execution cycle over a ModelController.
 
 Tests exercise ``agent_loop.AgentLoop``'s minimal port onto the async
-:class:`~otter_ai_core.model_controller.ModelController`:
+:class:`~otter_ai_core.interfaces.ModelController`:
 
 * the turn/tool cycle (generate -> execute tool calls -> add tool results ->
   repeat until the model stops);

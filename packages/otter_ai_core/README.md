@@ -105,20 +105,26 @@ The model-connection event protocol (`ClientContextEvent` /
 `ServerContextEvent`) and the typed two-way connection aliases
 (`ModelConnectionClient` / `ModelConnectionBackend`) live in
 [`model_connection/`](./src/otter_ai_core/model_connection). The high-level
-conversation driver layered over a `ModelConnectionClient` — `ModelController`
-and `State` — lives in
-[`model_controller/`](./src/otter_ai_core/model_controller) and is documented
-below.
+conversation driver layered over a `ModelConnectionClient` — the
+`ModelController` Protocol (in
+[`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py))
+and its default implementation `DefaultModelController` + `State` (in
+[`default_model_controller/`](./src/otter_ai_core/default_model_controller)) —
+is documented below.
 
-## Model controller
+## Default model controller
 
-[`model_controller/`](./src/otter_ai_core/model_controller) turns the low-level
-connection conduit into a stateful conversation. It is re-exported at the top
-level (`ModelController` / `State`) — the high-level convenience most callers
-want, unlike the subpackage-only `model_connection`.
+[`default_model_controller/`](./src/otter_ai_core/default_model_controller) turns
+the low-level connection conduit into a stateful conversation. It is the default
+implementation of the `ModelController` Protocol (defined in
+[`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py))
+and is re-exported at the top level (`DefaultModelController` / `State`) — the
+high-level convenience most callers want, unlike the subpackage-only
+`model_connection`.
 
-- [`ModelController`](./src/otter_ai_core/model_controller/controller.py) —
-  wraps a `ModelConnectionClient`, drives the conversation via **async,
+- [`DefaultModelController`](./src/otter_ai_core/default_model_controller/controller.py) —
+  implements the `ModelController` Protocol; wraps a `ModelConnectionClient`,
+  drives the conversation via **async,
   confirmation-awaiting commands** (`add_message` / `generate` / `abort`),
   tracks idle/busy state within each command method (busy on push, idle when
   its confirmation event arrives), and re-publishes every server event to its
@@ -128,7 +134,7 @@ want, unlike the subpackage-only `model_connection`.
   [`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py)
   (`RESPONSE_DONE`, `USER_ITEM_ADDED`, …), built from the
   `ModelControllerEventTypes` `StrEnum`.
-- [`State`](./src/otter_ai_core/model_controller/state.py) — the idle/busy
+- [`State`](./src/otter_ai_core/default_model_controller/state.py) — the idle/busy
   `asyncio.Event` latch plus a `is_closing` flag.
 
 A fresh controller starts **idle**. Stage input with one or more
@@ -150,7 +156,7 @@ and only *initiates* teardown (`client.abort()`); the controller keeps draining
 so a conformant backend's shutdown items still flow through the bus.
 `aclose(timeout)` awaits that drain to completion and force-cancels if a
 wedged backend never ends the inbound — so no owned task is left pending.
-Prefer `async with ModelController(client)` (or `await controller.aclose()`).
+Prefer `async with DefaultModelController(client)` (or `await controller.aclose()`).
 
 ### Quick example
 
@@ -161,14 +167,14 @@ provider task pumps `pair.backend` — pushing `ServerContextEvent`s and drainin
 ```python
 import asyncio
 
-from otter_ai_core import ModelController, UserMessage, create_connection
+from otter_ai_core import DefaultModelController, UserMessage, create_connection
 from otter_ai_core.context import Role
 from otter_ai_core.model_connection import AddUserMessage
 
 
 async def main() -> None:
     pair = create_connection()  # a transport task pumps pair.backend in practice
-    async with ModelController(pair.client) as controller:
+    async with DefaultModelController(pair.client) as controller:
         # Stage input. Each call awaits the server's item-added echo and
         # returns the echoed item (carrying the server-assigned id).
         user_item = await controller.add_message(

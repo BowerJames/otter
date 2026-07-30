@@ -1,6 +1,6 @@
 """ModelController / State: async commands, fan-out, lifecycle, teardown.
 
-Tests exercise the concerns of the ``model_controller`` package:
+Tests exercise the concerns of the ``default_model_controller`` package:
 
 * :class:`State` — the idle/busy latch (starts idle) and the closing flag;
 * :class:`DefaultModelController` — the async, confirmation-awaiting commands
@@ -44,6 +44,7 @@ from otter_ai_core import (
 )
 from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
+from otter_ai_core.default_model_controller import RESPONSE_DONE, DefaultModelController, State
 from otter_ai_core.interfaces import ModelController
 from otter_ai_core.model_connection import (
     AbortResponse,
@@ -64,7 +65,6 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.model_controller import RESPONSE_DONE, DefaultModelController, State
 
 
 def _default_controller_satisfies_protocol(

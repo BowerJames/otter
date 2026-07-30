@@ -8,6 +8,8 @@ from typing import Self
 
 from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
+from otter_ai_core.default_model_controller._lifecycle import await_or_cancel
+from otter_ai_core.default_model_controller.state import State
 from otter_ai_core.interfaces import AbortableConnection
 from otter_ai_core.model_connection import (
     AbortResponse,
@@ -28,8 +30,6 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.model_controller._lifecycle import await_or_cancel
-from otter_ai_core.model_controller.state import State
 
 #: Default graceful-drain deadline (seconds) for :meth:`DefaultModelController.aclose`.
 #: ``None`` would wait forever; a finite default keeps teardown deterministic
