@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from types import NoneType
 from typing import cast
 
 from otter_ai_core._lifecycle import await_or_cancel
@@ -14,50 +14,47 @@ _logger = logging.getLogger(__name__)
 
 _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
-
-@dataclass(frozen=True, slots=True)
-class BusEvent[TPayload]:
-    name: str
-
-
-#: The handler signature for ``BusEvent[TPayload]``.
-type BusHandler[TPayload] = Callable[[TPayload], Awaitable[None]]
+#: Erased async-handler shape stored under each registered event name.
+type _BusHandler = Callable[[object], Awaitable[None]]
 
 
 class Bus:
-    __slots__ = ("_reader", "_writer", "_handlers", "_task")
+    __slots__ = ("_reader", "_writer", "_handlers", "_trigger_types", "_task")
 
     def __init__(self) -> None:
-        channel_pair: ChannelPair[tuple[object, object]] = create_channel()
+        channel_pair: ChannelPair[tuple[str, object]] = create_channel()
         self._reader = channel_pair.reader
         self._writer = channel_pair.writer
-        # Heterogeneous registry: the per-event TPayload relationship cannot be
-        # tracked through a runtime dict, so storage is erased to ``object`` and
-        # recovered with ``cast`` at the typed API boundary — mirroring
-        # :class:`~otter_ai_core.hook_runner.HookRunner`. The public API stays
-        # fully type-safe; only the internals are erased.
-        self._handlers: dict[object, list[object]] = {}
+        # Event names registered via ``register``, mapped to the concrete type
+        # every emitted payload must be an instance of. Starts empty: the Bus
+        # knows no event types until the owner registers them.
+        self._trigger_types: dict[str, type[object]] = {}
+        # Heterogeneous subscriber registry: handlers are erased to ``object``
+        # and recovered with ``cast`` at the dispatch boundary — mirroring
+        # :class:`~otter_ai_core.hook_runner.HookRunner`.
+        self._handlers: dict[str, list[object]] = {}
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
 
-    async def _run(self) -> None:
-        async for event, payload in self._reader:
-            for handler in self._handlers.get(event, ()):
-                try:
-                    await cast(BusHandler[object], handler)(payload)
-                except Exception:
-                    # Isolate the subscriber: log and keep dispatching. Do not
-                    # catch BaseException — CancelledError must propagate so the
-                    # worker can be torn down on aclose().
-                    _logger.error(
-                        "bus handler raised for %r; continuing",
-                        event,
-                        exc_info=True,
-                    )
+    def register(
+        self,
+        hook_name: str,
+        event_trigger_type: type[object],
+        event_response_type: type[object],
+    ) -> None:
+        # The Bus is the no-response (pub/sub) variant of EventRunner, so a
+        # response type other than NoneType is a configuration error.
+        if event_response_type is not NoneType:
+            raise ValueError("Bus only supports a None event_response_type.")
+        if hook_name in self._trigger_types:
+            # Always reject re-registration — even an identical one — to keep
+            # event-type ownership explicit.
+            raise ValueError(f"Event {hook_name!r} is already registered.")
+        self._trigger_types[hook_name] = event_trigger_type
 
-    def subscribe[TPayload](
-        self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
-    ) -> Callable[[], None]:
-        self._handlers.setdefault(event, []).append(handler)
+    def on(self, type: str, handler: Callable[..., object]) -> Callable[[], None]:
+        if type not in self._trigger_types:
+            raise ValueError(f"Event {type!r} is not registered.")
+        self._handlers.setdefault(type, []).append(handler)
         removed = False
 
         def _unsubscribe() -> None:
@@ -66,12 +63,34 @@ class Bus:
                 return
             removed = True
             with contextlib.suppress(ValueError):  # already gone / never added
-                self._handlers[event].remove(handler)
+                self._handlers[type].remove(handler)
 
         return _unsubscribe
 
-    def publish[TPayload](self, event: BusEvent[TPayload], payload: TPayload) -> None:
-        self._writer.push((event, payload))
+    async def emit(self, type: str, event: object) -> None:
+        trigger_type = self._trigger_types.get(type)
+        if trigger_type is None:
+            raise ValueError(f"Event {type!r} is not registered.")
+        if not isinstance(event, trigger_type):
+            raise ValueError(
+                f"Event {type!r} expects a {trigger_type.__name__}; got {event.__class__.__name__}."
+            )
+        self._writer.push((type, event))
+
+    async def _run(self) -> None:
+        async for type_, event in self._reader:
+            for handler in self._handlers.get(type_, ()):
+                try:
+                    await cast(_BusHandler, handler)(event)
+                except Exception:
+                    # Isolate the subscriber: log and keep dispatching. Do not
+                    # catch BaseException — CancelledError must propagate so the
+                    # worker can be torn down on aclose().
+                    _logger.error(
+                        "bus handler raised for %r; continuing",
+                        type_,
+                        exc_info=True,
+                    )
 
     def end(self) -> None:
         self._writer.end()

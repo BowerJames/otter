@@ -8,7 +8,6 @@ from otter_ai_core.interfaces.model_controller import (
     TOOL_RESULT_ADDED,
     USER_ITEM_ADDED,
     USER_ITEM_UPDATED,
-    ModelControllerEventTypes,
 )
 from otter_ai_core.model_controller.controller import DefaultModelController
 from otter_ai_core.model_controller.state import State
@@ -20,7 +19,6 @@ __all__ = [
     "State",
     "create_model_controller_stream",
     # bus event surface
-    "ModelControllerEventTypes",
     "RESPONSE_STARTED",
     "RESPONSE_UPDATED",
     "RESPONSE_DONE",

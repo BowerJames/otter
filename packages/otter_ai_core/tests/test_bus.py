@@ -1,14 +1,16 @@
-"""Generic typed bus: descriptor-keyed fan-out."""
+"""Generic event bus: name-keyed fan-out conforming to the EventRunner protocol."""
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from dataclasses import dataclass
+from types import NoneType
 
 import pytest
 
-from otter_ai_core.bus import Bus, BusEvent
+from otter_ai_core.bus import Bus
 
 
 @dataclass(slots=True)
@@ -21,17 +23,21 @@ class Partial:
     value: str
 
 
-#: Two independent events with distinct payload types.
-ITEM_DONE: BusEvent[Item] = BusEvent("item.done")
-PARTIAL_UPDATED: BusEvent[Partial] = BusEvent("partial.updated")
-
-#: A second event that happens to share Item's payload type, to exercise
+#: Three independent event names; two share Item's payload type to exercise
 #: independent fan-out of two events carrying the same payload type.
-ITEM_STARTED: BusEvent[Item] = BusEvent("item.started")
+ITEM_DONE = "item.done"
+PARTIAL_UPDATED = "partial.updated"
+ITEM_STARTED = "item.started"
 
 
 def _bus() -> Bus:
-    return Bus()
+    # A Bus starts with no registered event types; every test that emits or
+    # subscribes must register the event names + their concrete payload types.
+    bus = Bus()
+    bus.register(ITEM_DONE, Item, NoneType)
+    bus.register(PARTIAL_UPDATED, Partial, NoneType)
+    bus.register(ITEM_STARTED, Item, NoneType)
+    return bus
 
 
 async def test_bus_fans_out_to_every_subscriber_of_an_event() -> None:
@@ -47,9 +53,9 @@ async def test_bus_fans_out_to_every_subscriber_of_an_event() -> None:
         seen_b.append(payload.value)
         done.set()
 
-    bus.subscribe(ITEM_DONE, handler_a)
-    bus.subscribe(ITEM_DONE, handler_b)
-    bus.publish(ITEM_DONE, Item(value="complete"))
+    bus.on(ITEM_DONE, handler_a)
+    bus.on(ITEM_DONE, handler_b)
+    await bus.emit(ITEM_DONE, Item(value="complete"))
 
     await asyncio.wait_for(done.wait(), 1)
     assert seen_a == ["complete"]
@@ -70,10 +76,10 @@ async def test_bus_dispatches_each_descriptor_to_only_its_subscribers() -> None:
         partials.append(payload.value)
         done.set()
 
-    bus.subscribe(ITEM_DONE, on_item)
-    bus.subscribe(PARTIAL_UPDATED, on_partial)
-    bus.publish(ITEM_DONE, Item(value="an item"))
-    bus.publish(PARTIAL_UPDATED, Partial(value="a partial"))
+    bus.on(ITEM_DONE, on_item)
+    bus.on(PARTIAL_UPDATED, on_partial)
+    await bus.emit(ITEM_DONE, Item(value="an item"))
+    await bus.emit(PARTIAL_UPDATED, Partial(value="a partial"))
 
     await asyncio.wait_for(done.wait(), 1)
     assert items == ["an item"]
@@ -81,7 +87,7 @@ async def test_bus_dispatches_each_descriptor_to_only_its_subscribers() -> None:
     await bus.aclose()
 
 
-async def test_bus_subscribe_returns_idempotent_unsubscribe() -> None:
+async def test_bus_on_returns_idempotent_unsubscribe() -> None:
     bus = _bus()
     seen: list[str] = []
     done = asyncio.Event()
@@ -90,9 +96,9 @@ async def test_bus_subscribe_returns_idempotent_unsubscribe() -> None:
         seen.append(payload.value)
         done.set()
 
-    unsubscribe = bus.subscribe(ITEM_DONE, handler)
+    unsubscribe = bus.on(ITEM_DONE, handler)
 
-    bus.publish(ITEM_DONE, Item(value="first"))
+    await bus.emit(ITEM_DONE, Item(value="first"))
     await asyncio.wait_for(done.wait(), 1)
     assert seen == ["first"]
 
@@ -104,22 +110,22 @@ async def test_bus_subscribe_returns_idempotent_unsubscribe() -> None:
     async def after_unsub(_payload: Item) -> None:
         published_second.set()
 
-    bus.subscribe(ITEM_DONE, after_unsub)
-    bus.publish(ITEM_DONE, Item(value="second"))
+    bus.on(ITEM_DONE, after_unsub)
+    await bus.emit(ITEM_DONE, Item(value="second"))
     # The unsubscribed handler must not fire; only the still-subscribed one.
     await asyncio.wait_for(published_second.wait(), 1)
     assert seen == ["first"]
     await bus.aclose()
 
 
-async def test_bus_publish_with_no_subscribers_is_a_noop() -> None:
+async def test_bus_emit_with_no_subscribers_is_a_noop() -> None:
     bus = _bus()
-    # No subscribers — publishing must not raise and the worker drains cleanly.
-    bus.publish(ITEM_DONE, Item(value="nobody listening"))
+    # No subscribers — emitting must not raise and the worker drains cleanly.
+    await bus.emit(ITEM_DONE, Item(value="nobody listening"))
     await bus.aclose()
 
 
-async def test_bus_drains_already_published_events_before_aclose() -> None:
+async def test_bus_drains_already_emitted_events_before_aclose() -> None:
     bus = _bus()
     seen: list[str] = []
     done = asyncio.Event()
@@ -128,8 +134,8 @@ async def test_bus_drains_already_published_events_before_aclose() -> None:
         seen.append(payload.value)
         done.set()
 
-    bus.subscribe(ITEM_DONE, handler)
-    bus.publish(ITEM_DONE, Item(value="queued"))
+    bus.on(ITEM_DONE, handler)
+    await bus.emit(ITEM_DONE, Item(value="queued"))
     await asyncio.wait_for(done.wait(), 1)
     assert seen == ["queued"]
     await bus.aclose()
@@ -152,11 +158,11 @@ async def test_bus_isolates_and_logs_a_handler_exception(
 
     # Subscribe the raising handler first, then the sibling; both must be
     # attempted and the sibling must still fire after the boom.
-    bus.subscribe(ITEM_DONE, boom)
-    bus.subscribe(ITEM_DONE, sibling)
+    bus.on(ITEM_DONE, boom)
+    bus.on(ITEM_DONE, sibling)
 
     with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
-        bus.publish(ITEM_DONE, Item(value="survives"))
+        await bus.emit(ITEM_DONE, Item(value="survives"))
 
     await asyncio.wait_for(done.wait(), 1)
     assert sibling_ran == ["survives"]
@@ -178,10 +184,10 @@ async def test_bus_two_events_sharing_a_payload_type_route_independently() -> No
     async def on_started(payload: Item) -> None:
         started_events.append(payload.value)
 
-    bus.subscribe(ITEM_DONE, on_done)
-    bus.subscribe(ITEM_STARTED, on_started)
-    bus.publish(ITEM_STARTED, Item(value="began"))
-    bus.publish(ITEM_DONE, Item(value="finished"))
+    bus.on(ITEM_DONE, on_done)
+    bus.on(ITEM_STARTED, on_started)
+    await bus.emit(ITEM_STARTED, Item(value="began"))
+    await bus.emit(ITEM_DONE, Item(value="finished"))
 
     await asyncio.wait_for(done.wait(), 1)
     assert started_events == ["began"]
@@ -196,8 +202,48 @@ async def test_bus_aclose_is_idempotent() -> None:
     assert bus._task.done()
 
 
-async def test_bus_descriptor_hashes_and_compares_by_name() -> None:
-    """Two descriptors built from the same name are the same registry key."""
-    assert BusEvent("item.done") == BusEvent("item.done")
-    assert hash(BusEvent("item.done")) == hash(BusEvent("item.done"))
-    assert BusEvent("item.done") != BusEvent("item.started")
+def test_bus_emit_is_a_coroutine_function() -> None:
+    # Emitter conformance: ``emit`` must be async to satisfy EventRunner.
+    assert inspect.iscoroutinefunction(Bus.emit)
+
+
+async def test_bus_register_rejects_a_non_none_response_type() -> None:
+    bus = Bus()
+    with pytest.raises(ValueError):
+        bus.register(ITEM_DONE, Item, object)
+    await bus.aclose()
+
+
+async def test_bus_register_rejects_a_duplicate_hook_name() -> None:
+    bus = Bus()
+    bus.register(ITEM_DONE, Item, NoneType)
+    # Even an identical re-registration is rejected, to keep ownership explicit.
+    with pytest.raises(ValueError):
+        bus.register(ITEM_DONE, Item, NoneType)
+    await bus.aclose()
+
+
+async def test_bus_on_rejects_an_unregistered_type() -> None:
+    bus = Bus()  # nothing registered
+
+    async def handler(_payload: object) -> None:
+        pass
+
+    with pytest.raises(ValueError):
+        bus.on("never.registered", handler)
+    await bus.aclose()
+
+
+async def test_bus_emit_rejects_an_unregistered_type() -> None:
+    bus = Bus()  # nothing registered
+    with pytest.raises(ValueError):
+        await bus.emit("never.registered", Item(value="x"))
+    await bus.aclose()
+
+
+async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
+    bus = _bus()
+    # ITEM_DONE is registered for Item; a Partial payload must be rejected.
+    with pytest.raises(ValueError):
+        await bus.emit(ITEM_DONE, Partial(value="wrong"))
+    await bus.aclose()

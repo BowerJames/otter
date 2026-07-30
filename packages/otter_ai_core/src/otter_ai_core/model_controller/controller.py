@@ -2,21 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
-from types import TracebackType
-from typing import Any, Self, cast
+from collections.abc import Callable
+from types import NoneType, TracebackType
+from typing import Self
 
 from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.interfaces import AbortableConnection
-from otter_ai_core.interfaces.model_controller import (
-    BRANCH_MOVED,
-    COMPACTION_DONE,
-    RESPONSE_DONE,
-    SERVER_EVENT_BY_TYPE,
-    TOOL_RESULT_ADDED,
-    USER_ITEM_ADDED,
-)
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddUserMessage,
@@ -28,10 +20,13 @@ from otter_ai_core.model_connection import (
     CreateResponse,
     InputEvent,
     ResponseDone,
+    ResponseStarted,
+    ResponseUpdated,
     ServerContextEvent,
     ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
+    UserItemUpdated,
 )
 from otter_ai_core.model_controller._lifecycle import await_or_cancel
 from otter_ai_core.model_controller.state import State
@@ -43,6 +38,20 @@ _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
 _log = logging.getLogger(__name__)
 
+#: Maps each inbound server event type to the concrete class every emitted
+#: payload must be an instance of. Registered on the controller's Bus at
+#: construction so ``emit`` can validate payloads.
+_SERVER_EVENT_TRIGGER_TYPES: dict[ServerContextEventType, type[object]] = {
+    ServerContextEventType.RESPONSE_STARTED: ResponseStarted,
+    ServerContextEventType.RESPONSE_UPDATED: ResponseUpdated,
+    ServerContextEventType.RESPONSE_DONE: ResponseDone,
+    ServerContextEventType.USER_ITEM_ADDED: UserItemAdded,
+    ServerContextEventType.USER_ITEM_UPDATED: UserItemUpdated,
+    ServerContextEventType.TOOL_RESULT_ADDED: ToolResultAdded,
+    ServerContextEventType.COMPACTION_DONE: CompactionDone,
+    ServerContextEventType.BRANCH_MOVED: BranchMoved,
+}
+
 
 class DefaultModelController:
     __slots__ = ("_client", "_bus", "_state", "_task", "_command_waiter")
@@ -50,6 +59,8 @@ class DefaultModelController:
     def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
         self._client = client
         self._bus: Bus = Bus()
+        for name, trigger_type in _SERVER_EVENT_TRIGGER_TYPES.items():
+            self._bus.register(name, trigger_type, NoneType)
         self._state = State()
         self._command_waiter: asyncio.Event | None = None
         self._task: asyncio.Task[None] = asyncio.create_task(self._run())
@@ -73,9 +84,7 @@ class DefaultModelController:
         await self._state.wait_for_idle()
 
     def on(self, type: str, handler: Callable[..., object]) -> Callable[[], None]:
-        # Unknown type strings surface as ValueError from the StrEnum value-lookup.
-        descriptor = SERVER_EVENT_BY_TYPE[ServerContextEventType(type)]
-        return self._bus.subscribe(descriptor, cast(Callable[[Any], Awaitable[None]], handler))
+        return self._bus.on(type, handler)
 
     def is_closing(self) -> bool:
         return self._state.is_closing
@@ -116,9 +125,9 @@ class DefaultModelController:
         # per-variant descriptor; subscribe in-branch so each call binds a
         # single concrete descriptor.
         if isinstance(message, AddUserMessage):
-            unsub = self._bus.subscribe(USER_ITEM_ADDED, _on_added)
+            unsub = self._bus.on(ServerContextEventType.USER_ITEM_ADDED, _on_added)
         else:
-            unsub = self._bus.subscribe(TOOL_RESULT_ADDED, _on_added)
+            unsub = self._bus.on(ServerContextEventType.TOOL_RESULT_ADDED, _on_added)
         self._client.push(message)
         try:
             await added.wait()
@@ -157,7 +166,7 @@ class DefaultModelController:
             received = True
             done.set()
 
-        unsub = self._bus.subscribe(RESPONSE_DONE, _on_done)
+        unsub = self._bus.on(ServerContextEventType.RESPONSE_DONE, _on_done)
         self._client.push(CreateResponse())
         try:
             await done.wait()
@@ -197,7 +206,7 @@ class DefaultModelController:
             received = True
             done.set()
 
-        unsub = self._bus.subscribe(COMPACTION_DONE, _on_done)
+        unsub = self._bus.on(ServerContextEventType.COMPACTION_DONE, _on_done)
         self._client.push(
             CreateCompaction(
                 first_kept_item_id=first_kept_item_id,
@@ -243,7 +252,7 @@ class DefaultModelController:
             received = True
             done.set()
 
-        unsub = self._bus.subscribe(BRANCH_MOVED, _on_done)
+        unsub = self._bus.on(ServerContextEventType.BRANCH_MOVED, _on_done)
         self._client.push(BranchMove(at_item_id=at_item_id, summary=summary))
         try:
             await done.wait()
@@ -306,7 +315,7 @@ class DefaultModelController:
     async def _run(self) -> None:
         try:
             async for event in self._client:
-                self._bus.publish(SERVER_EVENT_BY_TYPE[event.type], event)
+                await self._bus.emit(event.type, event)
         except asyncio.CancelledError:
             raise  # teardown (aclose); expected — let the finally clean up
         except Exception:

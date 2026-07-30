@@ -15,12 +15,11 @@ controller drives ``pair.client`` and the test pushes server events on
 A small ``_conformant_backend`` task honours the abort contract — on
 ``abort_signal`` it ends the inbound so the controller's drain completes.
 
-Descriptor-keyed bus behaviour (fan-out, per-descriptor dispatch,
+Name-keyed bus behaviour (fan-out, per-name dispatch,
 idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
 end/aclose semantics) is covered in ``tests/test_bus.py``; the controller's
-bus is the same descriptor-keyed :class:`~otter_ai_core.bus.Bus`, with its
-per-variant :class:`~otter_ai_core.bus.BusEvent` descriptors defined in
-:mod:`otter_ai_core.interfaces.model_controller`.
+bus is the same :class:`~otter_ai_core.bus.Bus`, with its event names keyed on
+:class:`~otter_ai_core.model_connection.ServerContextEventType`.
 """
 
 from __future__ import annotations
@@ -46,7 +45,6 @@ from otter_ai_core import (
 from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
 from otter_ai_core.interfaces import ModelController
-from otter_ai_core.interfaces.model_controller import SERVER_EVENT_BY_TYPE
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddToolResultMessage,
@@ -261,7 +259,7 @@ async def test_controller_bus_narrows_response_done() -> None:
             case _:
                 pass
 
-    controller.bus.subscribe(RESPONSE_DONE, handler)
+    controller.bus.on(RESPONSE_DONE, handler)
     backend.push(ResponseDone(item=_assistant_item()))
     await asyncio.wait_for(done.wait(), 1)
     assert seen == ["a1"]
@@ -607,7 +605,7 @@ async def test_controller_republishes_each_server_event(event: ServerContextEven
     async def handler(_event: ServerContextEvent) -> None:
         done.set()
 
-    controller.bus.subscribe(SERVER_EVENT_BY_TYPE[event.type], handler)
+    controller.bus.on(event.type, handler)
     backend.push(event)
     await asyncio.wait_for(done.wait(), 1)
     await controller.aclose(timeout=0.2)
@@ -676,7 +674,7 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
         if isinstance(event, ResponseDone):
             done.set()
 
-    controller.bus.subscribe(RESPONSE_DONE, handler)
+    controller.bus.on(RESPONSE_DONE, handler)
 
     task = asyncio.create_task(controller.generate())
     await _take(backend, 1)  # CreateResponse
