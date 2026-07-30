@@ -4,10 +4,10 @@ import asyncio
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from types import TracebackType
+from types import NoneType, TracebackType
 from typing import Any, Self
 
-from otter_ai_core.bus import Bus, BusEvent, BusHandler
+from otter_ai_core.bus import Bus
 from otter_ai_core.context import Context, ContextItem, Usage, UserContent
 from otter_ai_core.provider_api_model_options import ThinkingLevel
 from otter_ai_core.session_manager.entries import (
@@ -21,6 +21,7 @@ from otter_ai_core.session_manager.entries import (
     MessageUpdateEntry,
     ModelChangeEntry,
     SessionEntry,
+    SessionEntryBase,
     SessionInfoEntry,
     ThinkingLevelChangeEntry,
 )
@@ -52,12 +53,27 @@ def _sanitize_name(name: str) -> str:
     return _NAME_SANITIZER.sub(" ", name).strip()
 
 
+#: Maps each session-store event name to the concrete payload class every
+#: emitted event must be an instance of. Registered on the controller's Bus at
+#: construction. SessionEntryBase stands in for ENTRY_APPENDED because the
+#: SessionEntry union is an Annotated form that cannot be used with isinstance.
+_SESSION_EVENT_TRIGGER_TYPES: dict[str, type[object]] = {
+    ENTRY_APPENDED: SessionEntryBase,
+    ITEM_ADDED: MessageEntry,
+    ITEM_UPDATED: MessageUpdateEntry,
+    COMPACTED: CompactionEntry,
+    TREE_CHANGED: TreeChangedPayload,
+}
+
+
 class SessionStoreController[TMetadata: SessionMetadata]:
     __slots__ = ("_store", "_bus", "_lock")
 
     def __init__(self, store: SessionStore[TMetadata]) -> None:
         self._store = store
         self._bus: Bus = Bus()
+        for name, trigger_type in _SESSION_EVENT_TRIGGER_TYPES.items():
+            self._bus.register(name, trigger_type, NoneType)
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ #
@@ -72,10 +88,8 @@ class SessionStoreController[TMetadata: SessionMetadata]:
     def bus(self) -> Bus:
         return self._bus
 
-    def on[TPayload](
-        self, event: BusEvent[TPayload], handler: BusHandler[TPayload]
-    ) -> Callable[[], None]:
-        return self._bus.subscribe(event, handler)
+    def on(self, type: str, handler: Callable[..., object]) -> Callable[[], None]:
+        return self._bus.on(type, handler)
 
     # ------------------------------------------------------------------ #
     # Reads (lock-free snapshots)
@@ -102,15 +116,15 @@ class SessionStoreController[TMetadata: SessionMetadata]:
     # Writes (serialized; return the new TREE entry id)
     # ------------------------------------------------------------------ #
 
-    def _publish(self, entry: SessionEntry) -> None:
-        self._bus.publish(ENTRY_APPENDED, entry)
+    async def _publish(self, entry: SessionEntry) -> None:
+        await self._bus.emit(ENTRY_APPENDED, entry)
         match entry:
             case MessageEntry():
-                self._bus.publish(ITEM_ADDED, entry)
+                await self._bus.emit(ITEM_ADDED, entry)
             case MessageUpdateEntry():
-                self._bus.publish(ITEM_UPDATED, entry)
+                await self._bus.emit(ITEM_UPDATED, entry)
             case CompactionEntry():
-                self._bus.publish(COMPACTED, entry)
+                await self._bus.emit(COMPACTED, entry)
 
     async def _new_identity(self) -> tuple[str, str | None, str]:
         return (
@@ -121,7 +135,7 @@ class SessionStoreController[TMetadata: SessionMetadata]:
 
     async def _commit(self, entry: SessionEntry) -> str:
         await self._store.append_entry(entry)
-        self._publish(entry)
+        await self._publish(entry)
         return entry.id
 
     async def append_message(self, item: ContextItem) -> str:
@@ -278,8 +292,8 @@ class SessionStoreController[TMetadata: SessionMetadata]:
                     from_hook=summary.from_hook,
                 )
                 await self._store.append_entry(summary_entry)
-                self._publish(summary_entry)
-            self._bus.publish(
+                await self._publish(summary_entry)
+            await self._bus.emit(
                 TREE_CHANGED,
                 TreeChangedPayload(
                     new_leaf_id=entry_id, old_leaf_id=old, summary_entry=summary_entry

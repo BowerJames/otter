@@ -3,14 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from otter_ai_core.bus import BusEvent
-from otter_ai_core.session_manager.entries import (
-    BranchSummaryEntry,
-    CompactionEntry,
-    MessageEntry,
-    MessageUpdateEntry,
-    SessionEntry,
-)
+from otter_ai_core.session_manager.entries import BranchSummaryEntry
 
 
 class SessionStoreControllerEventTypes(StrEnum):
@@ -28,17 +21,14 @@ class TreeChangedPayload:
     summary_entry: BranchSummaryEntry | None
 
 
-#: After ANY entry is appended (coarse catch-all: one subscriber can refresh
-#: any cached view).
-ENTRY_APPENDED: BusEvent[SessionEntry] = BusEvent(SessionStoreControllerEventTypes.ENTRY_APPENDED)
-#: After a :class:`~otter_ai_core.session_manager.MessageEntry` (initial add).
-ITEM_ADDED: BusEvent[MessageEntry] = BusEvent(SessionStoreControllerEventTypes.ITEM_ADDED)
-#: After a :class:`~otter_ai_core.session_manager.MessageUpdateEntry` (append-only amendment).
-ITEM_UPDATED: BusEvent[MessageUpdateEntry] = BusEvent(SessionStoreControllerEventTypes.ITEM_UPDATED)
-#: After a :class:`~otter_ai_core.session_manager.CompactionEntry`.
-COMPACTED: BusEvent[CompactionEntry] = BusEvent(SessionStoreControllerEventTypes.COMPACTED)
-#: After a leaf move / branch (carries old/new leaf ids + any summary entry).
-TREE_CHANGED: BusEvent[TreeChangedPayload] = BusEvent(SessionStoreControllerEventTypes.TREE_CHANGED)
+# String event names the session store's Bus is keyed on. They alias the
+# canonical SessionStoreControllerEventTypes members (the single source of
+# truth) so subscribers can refer to a stable name without the enum.
+ENTRY_APPENDED: SessionStoreControllerEventTypes = SessionStoreControllerEventTypes.ENTRY_APPENDED
+ITEM_ADDED: SessionStoreControllerEventTypes = SessionStoreControllerEventTypes.ITEM_ADDED
+ITEM_UPDATED: SessionStoreControllerEventTypes = SessionStoreControllerEventTypes.ITEM_UPDATED
+COMPACTED: SessionStoreControllerEventTypes = SessionStoreControllerEventTypes.COMPACTED
+TREE_CHANGED: SessionStoreControllerEventTypes = SessionStoreControllerEventTypes.TREE_CHANGED
 
 
 __all__ = [
