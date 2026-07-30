@@ -1,7 +1,7 @@
 """FauxModelProducer / FauxModel — the integration-test harness.
 
 These are **integration** tests: they stand up the *real* connection +
-*real* :class:`~otter_ai_core.model_controller.DefaultModelController` (+ a real
+*real* :class:`~otter_ai_core.default_model_controller.DefaultModelController` (+ a real
 :class:`~otter_ai_core.agent_loop.agent_loop.AgentLoop` for the tool turn) with
 a :class:`~otter_ai_core.faux.FauxModelProducer` at the bottom, and assert on
 producer output and the controller/loop round-trip — no API keys, no network.
