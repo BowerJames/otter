@@ -9,6 +9,7 @@ from typing import cast
 
 from otter_ai_core._lifecycle import await_or_cancel
 from otter_ai_core.channel import ChannelPair, create_channel
+from otter_ai_core.interfaces import EventRunner
 
 _logger = logging.getLogger(__name__)
 
@@ -18,9 +19,7 @@ _DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 type _BusHandler = Callable[[object], Awaitable[None]]
 
 
-class Bus:
-    __slots__ = ("_reader", "_writer", "_handlers", "_trigger_types", "_task")
-
+class Bus(EventRunner):
     def __init__(self) -> None:
         channel_pair: ChannelPair[tuple[str, object]] = create_channel()
         self._reader = channel_pair.reader
