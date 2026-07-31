@@ -38,9 +38,6 @@ from otter_ai_core.session_manager.metadata import BranchSummaryInput, SessionMe
 from otter_ai_core.session_manager.projection import SessionProjection, project
 from otter_ai_core.session_manager.store import SessionStore
 
-#: Default graceful-drain deadline (seconds) for :meth:`SessionStoreController.aclose`.
-_DEFAULT_ACLOSE_TIMEOUT: float = 5.0
-
 #: Collapse any run of CR/LF to a single space, then trim (pi's appendSessionName).
 _NAME_SANITIZER = re.compile(r"[\r\n]+")
 
@@ -305,9 +302,6 @@ class SessionStoreController[TMetadata: SessionMetadata]:
     # Teardown (owned Bus worker)
     # ------------------------------------------------------------------ #
 
-    async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        await self._bus.aclose(timeout)
-
     async def __aenter__(self) -> Self:
         await self._bus.__aenter__()
         return self
@@ -318,7 +312,8 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        await self.aclose()
+        self._bus.end()
+        await self._bus.__aexit__(exc_type, exc, tb)
 
 
 __all__ = ["SessionStoreController"]

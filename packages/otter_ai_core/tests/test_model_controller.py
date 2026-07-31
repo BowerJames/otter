@@ -25,7 +25,6 @@ bus is the same :class:`~otter_ai_core.bus.Bus`, with its event names keyed on
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -177,8 +176,9 @@ async def _pair() -> AsyncIterator[
     try:
         yield controller, pair.backend
     finally:
+        controller.close()
         pair.backend.end()
-        await controller.aclose()
+        await controller.__aexit__(None, None, None)
 
 
 async def _take(
@@ -682,25 +682,28 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
         assert any(isinstance(e, ResponseDone) for e in received)
 
 
-async def test_aclose_completes_cleanly_on_conformant_backend() -> None:
+async def test_teardown_completes_cleanly_on_conformant_backend() -> None:
     async with _pair() as (controller, backend):
         task = asyncio.create_task(_conformant(backend))
-        await controller.aclose(timeout=0.2)
-        await task
-        assert controller._closed
-        assert controller.bus._closed
+    await task
+    # Teardown completed cleanly on exit; the controller lifecycle task is done.
+    assert controller._task is not None
+    assert controller._task.done()
 
 
-async def test_aclose_cancels_wedged_backend() -> None:
-    async with _pair() as (controller, _backend):
-        # Wedged backend: nothing ends the inbound, so the drain hangs and the
-        # deadline-gated teardown surfaces the force as a propagated signal
-        # (TimeoutError, or a wrapped BaseExceptionGroup) rather than swallowing it.
-        loop = asyncio.get_running_loop()
-        start = loop.time()
-        with pytest.raises((TimeoutError, BaseExceptionGroup)):
-            await controller.aclose(timeout=0.1)
-        assert loop.time() - start < 1.0  # did not hang
+async def test_teardown_force_cancels_wedged_backend() -> None:
+    # Wedged backend: nothing ever ends the inbound, so the drain hangs and
+    # __aexit__ force-cancels it within the shutdown deadline (teardown always
+    # exits cleanly; no exception propagates). ``_run``'s finally ends the
+    # bus, so the nested bus reap does not add latency.
+    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
+    controller = DefaultModelController(pair.client)
+    controller._shutdown_timeout = 0.1
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    async with controller:
+        pass  # nothing ends the inbound -> drain hangs -> __aexit__ forces
+    assert loop.time() - start < 2.0  # force-cancelled within the deadline
 
 
 async def test_async_context_manager_closes() -> None:
@@ -708,20 +711,18 @@ async def test_async_context_manager_closes() -> None:
     task = asyncio.create_task(_conformant(pair.backend))
     async with DefaultModelController(pair.client) as controller:
         assert controller.is_idle()
+        controller.close()  # abort -> _conformant ends the inbound -> drain completes
     assert controller.is_closing()
-    assert controller._closed
     await task
 
 
-async def test_close_and_aclose_are_idempotent() -> None:
+async def test_close_is_idempotent() -> None:
     async with _pair() as (controller, backend):
         task = asyncio.create_task(_conformant(backend))
         controller.close()
         controller.close()  # idempotent
-        await controller.aclose(timeout=0.2)
-        await controller.aclose(timeout=0.2)  # idempotent
-        await task
-        assert controller._closed
+    await task
+    assert controller.is_closing()
 
 
 async def test_post_close_commands_rejected_even_when_idle() -> None:
@@ -759,13 +760,10 @@ async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
     assert controller.is_idle() is True
 
 
-async def test_aclose_reaps_bus_even_when_cancelled_mid_flight() -> None:
-    """If aclose() itself is cancelled, its finally still reaps the bus worker."""
-    async with _pair() as (controller, _backend):
-        close_task = asyncio.create_task(controller.aclose(timeout=10))
-        await asyncio.sleep(0.05)  # let aclose park in the controller-group exit
-        close_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await close_task
-        # The bus worker was still reaped by aclose's finally — no owned task left.
-        assert controller.bus._closed
+async def test_teardown_leaves_controller_task_done() -> None:
+    async with _pair() as (controller, backend):
+        task = asyncio.create_task(_conformant(backend))
+    await task
+    # The controller and its bus drain tasks both completed on teardown.
+    assert controller._task is not None
+    assert controller._task.done()

@@ -89,6 +89,7 @@ async def test_bus_fans_out_to_every_subscriber_of_an_event() -> None:
         await bus.emit(ITEM_DONE, Item(value="complete"))
 
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert seen_a == ["complete"]
     assert seen_b == ["complete"]
 
@@ -112,6 +113,7 @@ async def test_bus_dispatches_each_descriptor_to_only_its_subscribers() -> None:
         await bus.emit(PARTIAL_UPDATED, Partial(value="a partial"))
 
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert items == ["an item"]
     assert partials == ["a partial"]
 
@@ -143,6 +145,7 @@ async def test_bus_on_returns_idempotent_unsubscribe() -> None:
         await bus.emit(ITEM_DONE, Item(value="second"))
         # The unsubscribed handler must not fire; only the still-subscribed one.
         await asyncio.wait_for(published_second.wait(), 1)
+        bus.end()
     assert seen == ["first"]
 
 
@@ -150,9 +153,10 @@ async def test_bus_emit_with_no_subscribers_is_a_noop() -> None:
     async with _bus() as bus:
         # No subscribers — emitting must not raise and the worker drains cleanly.
         await bus.emit(ITEM_DONE, Item(value="nobody listening"))
+        bus.end()
 
 
-async def test_bus_drains_already_emitted_events_before_aclose() -> None:
+async def test_bus_drains_already_emitted_events_before_exit() -> None:
     seen: list[str] = []
     done = asyncio.Event()
 
@@ -164,6 +168,7 @@ async def test_bus_drains_already_emitted_events_before_aclose() -> None:
         bus.on(ITEM_DONE, handler)
         await bus.emit(ITEM_DONE, Item(value="queued"))
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert seen == ["queued"]
 
 
@@ -191,6 +196,7 @@ async def test_bus_isolates_and_logs_a_handler_exception(
             await bus.emit(ITEM_DONE, Item(value="survives"))
 
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert sibling_ran == ["survives"]
     assert any("bus handler raised" in record.getMessage() for record in caplog.records)
 
@@ -215,6 +221,7 @@ async def test_bus_two_events_sharing_a_payload_type_route_independently() -> No
         await bus.emit(ITEM_DONE, Item(value="finished"))
 
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert started_events == ["began"]
     assert done_events == ["finished"]
 
@@ -236,34 +243,40 @@ async def test_bus_drain_starts_on_enter_and_drains_backlog() -> None:
     assert seen == []
     async with bus:
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
     assert seen == ["queued-before-enter"]
 
 
-async def test_bus_aclose_is_idempotent() -> None:
-    async with _bus() as bus:
-        await bus.aclose()  # explicit release inside the scope
-        await bus.aclose()  # second release is a no-op (idempotent via _closed)
-    # And a third call after __aexit__ is still a no-op.
-    await bus.aclose()
+async def test_bus_aexit_is_idempotent() -> None:
+    # A bus that was never entered has no lifecycle task; __aexit__ is a no-op.
+    bus = _bus()
+    await bus.__aexit__(None, None, None)
+    # An entered + ended bus exits cleanly, and a second __aexit__ is a no-op
+    # (the lifecycle task is already done).
+    async with bus:
+        bus.end()
+    await bus.__aexit__(None, None, None)
 
 
-async def test_bus_aclose_propagates_timeout_for_a_wedged_handler() -> None:
-    # A handler that never returns wedges the drain. aclose must surface the
-    # deadline as a propagated signal (TimeoutError, or a wrapped
-    # BaseExceptionGroup if the TaskGroup packages the forced cancellation)
-    # rather than hanging forever.
+async def test_bus_aexit_force_cancels_a_wedged_handler() -> None:
+    # A handler that never returns wedges the drain. __aexit__ must force-cancel
+    # it within the shutdown deadline rather than hanging forever. Unlike the
+    # old aclose, teardown always exits cleanly (no exception propagates).
     started = asyncio.Event()
 
     async def wedged(_payload: Item) -> None:
         started.set()
         await asyncio.Event().wait()  # never set -> hangs
 
-    async with _bus() as bus:
+    bus = _bus()
+    bus._shutdown_timeout = 0.1
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    async with bus:
         bus.on(ITEM_DONE, wedged)
         await bus.emit(ITEM_DONE, Item(value="x"))
         await asyncio.wait_for(started.wait(), 1)
-        with pytest.raises((TimeoutError, BaseExceptionGroup)):
-            await bus.aclose(timeout=0.1)
+    assert loop.time() - start < 2.0  # force-cancelled, did not hang on the 5s default
 
 
 def test_bus_emit_is_a_coroutine_function() -> None:
@@ -275,7 +288,6 @@ async def test_bus_register_rejects_a_non_none_response_type() -> None:
     bus = Bus()
     with pytest.raises(ValueError):
         bus.register(ITEM_DONE, Item, object)
-    await bus.aclose()
 
 
 async def test_bus_register_rejects_a_duplicate_hook_name() -> None:
@@ -284,7 +296,6 @@ async def test_bus_register_rejects_a_duplicate_hook_name() -> None:
     # Even an identical re-registration is rejected, to keep ownership explicit.
     with pytest.raises(ValueError):
         bus.register(ITEM_DONE, Item, NoneType)
-    await bus.aclose()
 
 
 async def test_bus_on_rejects_an_unregistered_type() -> None:
@@ -295,14 +306,12 @@ async def test_bus_on_rejects_an_unregistered_type() -> None:
 
     with pytest.raises(ValueError):
         bus.on("never.registered", handler)
-    await bus.aclose()
 
 
 async def test_bus_emit_rejects_an_unregistered_type() -> None:
     bus = Bus()  # nothing registered
     with pytest.raises(ValueError):
         await bus.emit("never.registered", Item(value="x"))
-    await bus.aclose()
 
 
 async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
@@ -310,14 +319,13 @@ async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
     bus = _bus()
     with pytest.raises(ValueError):
         await bus.emit(ITEM_DONE, Partial(value="wrong"))
-    await bus.aclose()
 
 
 async def test_bus_drives_an_injected_custom_channel() -> None:
     # The Bus is programmed to the Channel interface: it must drive ANY injected
     # Channel, not just DefaultChannel. The spy records every push and end() so
     # we can assert the Bus routes emits through the channel, dispatches from
-    # it, and tears it down via end() on aclose.
+    # it, and tears it down via end() on exit.
     spy: _SpyChannel[tuple[str, object]] = _SpyChannel()
     seen: list[str] = []
     done = asyncio.Event()
@@ -331,7 +339,27 @@ async def test_bus_drives_an_injected_custom_channel() -> None:
         bus.on(ITEM_DONE, handler)
         await bus.emit(ITEM_DONE, Item(value="routed"))
         await asyncio.wait_for(done.wait(), 1)
+        bus.end()
 
     assert spy.pushed == [("item.done", Item(value="routed"))]
     assert spy.ended is True
     assert seen == ["routed"]
+
+
+async def test_bus_is_awaitable_to_join_the_lifecycle() -> None:
+    # A TaskRunner is awaitable: ``await bus`` joins the drain lifecycle. Here
+    # the bus ends (via end()) so the await resolves promptly.
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(payload: Item) -> None:
+        seen.append(payload.value)
+        done.set()
+
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, handler)
+        await bus.emit(ITEM_DONE, Item(value="joined"))
+        await asyncio.wait_for(done.wait(), 1)
+        bus.end()
+        await bus  # join: resolves once the drain task completes
+    assert seen == ["joined"]

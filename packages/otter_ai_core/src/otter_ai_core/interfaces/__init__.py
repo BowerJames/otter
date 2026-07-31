@@ -8,7 +8,7 @@ from .event_runner import EventRunner
 from .model_controller import ModelController
 from .stream import Stream
 from .subscribable import Subscribable
-from .task_runner import TaskRunner
+from .task_runner import TaskRunner, TaskRunnerMixIn
 from .writer import Writer
 
 __all__ = [
@@ -23,5 +23,6 @@ __all__ = [
     "Stream",
     "Subscribable",
     "TaskRunner",
+    "TaskRunnerMixIn",
     "Writer",
 ]

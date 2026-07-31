@@ -4,23 +4,19 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from types import NoneType, TracebackType
-from typing import Self, cast
+from types import NoneType
+from typing import cast
 
 from otter_ai_core.default_channel import create_default_channel
-from otter_ai_core.interfaces import Channel, EventRunner
+from otter_ai_core.interfaces import Channel, EventRunner, TaskRunnerMixIn
 
 _logger = logging.getLogger(__name__)
-
-_DEFAULT_ACLOSE_TIMEOUT: float = 5.0
 
 #: Erased async-handler shape stored under each registered event name.
 type _BusHandler = Callable[[object], Awaitable[None]]
 
 
-class Bus(EventRunner):
-    tasks: asyncio.TaskGroup
-
+class Bus(TaskRunnerMixIn, EventRunner):
     def __init__(
         self,
         channel_factory: Callable[[], Channel[tuple[str, object]]] = create_default_channel,
@@ -31,11 +27,8 @@ class Bus(EventRunner):
         # knows no event types until the owner registers them.
         self._trigger_types: dict[str, type[object]] = {}
         # Heterogeneous subscriber registry: handlers are erased to ``object``
-        # and recovered with ``cast`` at the dispatch boundary — mirroring
-        # :class:`~otter_ai_core.hook_runner.HookRunner`.
+        # and recovered with ``cast`` at the dispatch boundary.
         self._handlers: dict[str, list[object]] = {}
-        self._entered: bool = False
-        self._closed: bool = False
 
     def register(
         self,
@@ -87,7 +80,7 @@ class Bus(EventRunner):
                 except Exception:
                     # Isolate the subscriber: log and keep dispatching. Do not
                     # catch BaseException — CancelledError must propagate so the
-                    # worker can be torn down on aclose().
+                    # worker can be torn down on shutdown.
                     _logger.error(
                         "bus handler raised for %r; continuing",
                         type_,
@@ -97,40 +90,9 @@ class Bus(EventRunner):
     def end(self) -> None:
         self._channel.end()
 
-    async def _teardown(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        self.end()
-        await self.tasks.__aexit__(None, None, None)
+    def _register_tasks(self, tg: asyncio.TaskGroup) -> None:
+        tg.create_task(self._run())
 
-    async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        if self._closed:
-            return
-        if not self._entered:
-            self._closed = True
-            self.end()
-            return
-        async with asyncio.timeout(timeout):
-            await self._teardown()
 
-    async def __aenter__(self) -> Self:
-        self.tasks = asyncio.TaskGroup()
-        await self.tasks.__aenter__()
-        self._entered = True
-        self.tasks.create_task(self._run())
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        if self._closed:
-            return
-        if not self._entered:
-            self._closed = True
-            self.end()
-            return
-        await self._teardown()
+def create_bus() -> Bus:
+    return Bus()

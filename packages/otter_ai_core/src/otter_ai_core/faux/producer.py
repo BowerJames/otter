@@ -424,10 +424,10 @@ class FauxModel:
     producer: FauxModelProducer
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        # 1. Controller teardown aborts the connection (sets abort_signal +
-        #    closes outbound) -> the producer's drain loop exits and its
-        #    `finally` ends the inbound -> the controller's drain completes.
-        await self.controller.aclose(timeout)
+        # 1. Abort the connection so the producer's drain loop exits and the
+        #    controller's drain completes, then reap the controller lifecycle.
+        self.controller.close()
+        await self.controller.__aexit__(None, None, None)
         # 2. Reap the producer task (already done via the cooperative path
         #    above; this is a no-op unless teardown was non-cooperative).
         await self.producer.aclose(timeout)
