@@ -58,7 +58,8 @@ class TaskRunnerMixIn(ABC):
 
     @final
     def __await__(self) -> Generator[None, None, None]:
-        assert self._task is not None
+        if self._task is None:
+            raise RuntimeError("cannot await a TaskRunner before __aenter__")
         return self._task.__await__()
 
     @abstractmethod
