@@ -11,6 +11,8 @@ from types import NoneType
 import pytest
 
 from otter_ai_core.bus import Bus
+from otter_ai_core.default_channel import create_default_channel
+from otter_ai_core.interfaces import Channel
 
 
 @dataclass(slots=True)
@@ -281,3 +283,30 @@ async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
     with pytest.raises(ValueError):
         await bus.emit(ITEM_DONE, Partial(value="wrong"))
     await bus.aclose()
+
+
+async def test_bus_constructs_its_channel_via_the_injected_factory() -> None:
+    # The Bus is programmed to the Channel interface: it builds its internal
+    # queue via the injected ``channel_factory`` (default =
+    # create_default_channel) rather than a concrete ChannelPair, so a caller
+    # can substitute a custom channel and events still route through it.
+    calls: list[int] = []
+
+    def factory() -> Channel[tuple[str, object]]:
+        calls.append(1)
+        return create_default_channel()
+
+    async with Bus(factory) as bus:
+        bus.register(ITEM_DONE, Item, NoneType)
+        seen: list[str] = []
+        done = asyncio.Event()
+
+        async def handler(payload: Item) -> None:
+            seen.append(payload.value)
+            done.set()
+
+        bus.on(ITEM_DONE, handler)
+        await bus.emit(ITEM_DONE, Item(value="routed"))
+        await asyncio.wait_for(done.wait(), 1)
+    assert calls == [1]
+    assert seen == ["routed"]

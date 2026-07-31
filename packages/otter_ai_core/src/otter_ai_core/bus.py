@@ -7,8 +7,8 @@ from collections.abc import Awaitable, Callable
 from types import NoneType, TracebackType
 from typing import Self, cast
 
-from otter_ai_core.channel import ChannelPair, create_channel
-from otter_ai_core.interfaces import EventRunner
+from otter_ai_core.default_channel import create_default_channel
+from otter_ai_core.interfaces import Channel, EventRunner
 
 _logger = logging.getLogger(__name__)
 
@@ -21,10 +21,11 @@ type _BusHandler = Callable[[object], Awaitable[None]]
 class Bus(EventRunner):
     tasks: asyncio.TaskGroup
 
-    def __init__(self) -> None:
-        channel_pair: ChannelPair[tuple[str, object]] = create_channel()
-        self._reader = channel_pair.reader
-        self._writer = channel_pair.writer
+    def __init__(
+        self,
+        channel_factory: Callable[[], Channel[tuple[str, object]]] = create_default_channel,
+    ) -> None:
+        self._channel: Channel[tuple[str, object]] = channel_factory()
         # Event names registered via ``register``, mapped to the concrete type
         # every emitted payload must be an instance of. Starts empty: the Bus
         # knows no event types until the owner registers them.
@@ -76,10 +77,10 @@ class Bus(EventRunner):
             raise ValueError(
                 f"Event {type!r} expects a {trigger_type.__name__}; got {event.__class__.__name__}."
             )
-        self._writer.push((type, event))
+        self._channel.push((type, event))
 
     async def _run(self) -> None:
-        async for type_, event in self._reader:
+        async for type_, event in self._channel:
             for handler in self._handlers.get(type_, ()):
                 try:
                     await cast(_BusHandler, handler)(event)
@@ -94,7 +95,7 @@ class Bus(EventRunner):
                     )
 
     def end(self) -> None:
-        self._writer.end()
+        self._channel.end()
 
     async def _teardown(self) -> None:
         if self._closed:
