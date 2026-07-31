@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core._lifecycle import await_or_cancel
 from otter_ai_core.connection import create_connection
 from otter_ai_core.context import (
     AssistantContent,
@@ -134,7 +133,16 @@ class FauxModelProducer:
             self._backend.end()
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        await await_or_cancel(self._task, timeout)
+        # The producer has no cooperative self-teardown: its drain reads the
+        # client->server channel owned by a client holder (the controller in
+        # the composite harness). By the time the composite harness reaps the
+        # producer the drain has already exited; standalone use has no such
+        # owner, so the drain is force-cancelled directly. ``timeout`` is kept
+        # for signature parity with the other aclose methods.
+        del timeout
+        self._task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._task
 
     async def __aenter__(self) -> Self:
         return self
@@ -425,6 +433,7 @@ class FauxModel:
         await self.producer.aclose(timeout)
 
     async def __aenter__(self) -> Self:
+        await self.controller.__aenter__()
         return self
 
     async def __aexit__(

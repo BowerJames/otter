@@ -309,6 +309,7 @@ class SessionStoreController[TMetadata: SessionMetadata]:
         await self._bus.aclose(timeout)
 
     async def __aenter__(self) -> Self:
+        await self._bus.__aenter__()
         return self
 
     async def __aexit__(

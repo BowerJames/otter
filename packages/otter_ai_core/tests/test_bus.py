@@ -33,6 +33,7 @@ ITEM_STARTED = "item.started"
 def _bus() -> Bus:
     # A Bus starts with no registered event types; every test that emits or
     # subscribes must register the event names + their concrete payload types.
+    # The drain task is NOT started here — it starts on __aenter__.
     bus = Bus()
     bus.register(ITEM_DONE, Item, NoneType)
     bus.register(PARTIAL_UPDATED, Partial, NoneType)
@@ -41,7 +42,6 @@ def _bus() -> Bus:
 
 
 async def test_bus_fans_out_to_every_subscriber_of_an_event() -> None:
-    bus = _bus()
     seen_a: list[str] = []
     seen_b: list[str] = []
     done = asyncio.Event()
@@ -53,18 +53,17 @@ async def test_bus_fans_out_to_every_subscriber_of_an_event() -> None:
         seen_b.append(payload.value)
         done.set()
 
-    bus.on(ITEM_DONE, handler_a)
-    bus.on(ITEM_DONE, handler_b)
-    await bus.emit(ITEM_DONE, Item(value="complete"))
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, handler_a)
+        bus.on(ITEM_DONE, handler_b)
+        await bus.emit(ITEM_DONE, Item(value="complete"))
 
-    await asyncio.wait_for(done.wait(), 1)
+        await asyncio.wait_for(done.wait(), 1)
     assert seen_a == ["complete"]
     assert seen_b == ["complete"]
-    await bus.aclose()
 
 
 async def test_bus_dispatches_each_descriptor_to_only_its_subscribers() -> None:
-    bus = _bus()
     items: list[str] = []
     partials: list[str] = []
     done = asyncio.Event()
@@ -76,19 +75,18 @@ async def test_bus_dispatches_each_descriptor_to_only_its_subscribers() -> None:
         partials.append(payload.value)
         done.set()
 
-    bus.on(ITEM_DONE, on_item)
-    bus.on(PARTIAL_UPDATED, on_partial)
-    await bus.emit(ITEM_DONE, Item(value="an item"))
-    await bus.emit(PARTIAL_UPDATED, Partial(value="a partial"))
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, on_item)
+        bus.on(PARTIAL_UPDATED, on_partial)
+        await bus.emit(ITEM_DONE, Item(value="an item"))
+        await bus.emit(PARTIAL_UPDATED, Partial(value="a partial"))
 
-    await asyncio.wait_for(done.wait(), 1)
+        await asyncio.wait_for(done.wait(), 1)
     assert items == ["an item"]
     assert partials == ["a partial"]
-    await bus.aclose()
 
 
 async def test_bus_on_returns_idempotent_unsubscribe() -> None:
-    bus = _bus()
     seen: list[str] = []
     done = asyncio.Event()
 
@@ -96,37 +94,35 @@ async def test_bus_on_returns_idempotent_unsubscribe() -> None:
         seen.append(payload.value)
         done.set()
 
-    unsubscribe = bus.on(ITEM_DONE, handler)
+    async with _bus() as bus:
+        unsubscribe = bus.on(ITEM_DONE, handler)
 
-    await bus.emit(ITEM_DONE, Item(value="first"))
-    await asyncio.wait_for(done.wait(), 1)
+        await bus.emit(ITEM_DONE, Item(value="first"))
+        await asyncio.wait_for(done.wait(), 1)
+        assert seen == ["first"]
+
+        unsubscribe()
+        unsubscribe()  # idempotent — no error
+
+        published_second = asyncio.Event()
+
+        async def after_unsub(_payload: Item) -> None:
+            published_second.set()
+
+        bus.on(ITEM_DONE, after_unsub)
+        await bus.emit(ITEM_DONE, Item(value="second"))
+        # The unsubscribed handler must not fire; only the still-subscribed one.
+        await asyncio.wait_for(published_second.wait(), 1)
     assert seen == ["first"]
-
-    unsubscribe()
-    unsubscribe()  # idempotent — no error
-
-    published_second = asyncio.Event()
-
-    async def after_unsub(_payload: Item) -> None:
-        published_second.set()
-
-    bus.on(ITEM_DONE, after_unsub)
-    await bus.emit(ITEM_DONE, Item(value="second"))
-    # The unsubscribed handler must not fire; only the still-subscribed one.
-    await asyncio.wait_for(published_second.wait(), 1)
-    assert seen == ["first"]
-    await bus.aclose()
 
 
 async def test_bus_emit_with_no_subscribers_is_a_noop() -> None:
-    bus = _bus()
-    # No subscribers — emitting must not raise and the worker drains cleanly.
-    await bus.emit(ITEM_DONE, Item(value="nobody listening"))
-    await bus.aclose()
+    async with _bus() as bus:
+        # No subscribers — emitting must not raise and the worker drains cleanly.
+        await bus.emit(ITEM_DONE, Item(value="nobody listening"))
 
 
 async def test_bus_drains_already_emitted_events_before_aclose() -> None:
-    bus = _bus()
     seen: list[str] = []
     done = asyncio.Event()
 
@@ -134,18 +130,17 @@ async def test_bus_drains_already_emitted_events_before_aclose() -> None:
         seen.append(payload.value)
         done.set()
 
-    bus.on(ITEM_DONE, handler)
-    await bus.emit(ITEM_DONE, Item(value="queued"))
-    await asyncio.wait_for(done.wait(), 1)
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, handler)
+        await bus.emit(ITEM_DONE, Item(value="queued"))
+        await asyncio.wait_for(done.wait(), 1)
     assert seen == ["queued"]
-    await bus.aclose()
 
 
 async def test_bus_isolates_and_logs_a_handler_exception(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A raising handler is isolated + logged; sibling handlers still run."""
-    bus = _bus()
     sibling_ran: list[str] = []
     done = asyncio.Event()
 
@@ -156,23 +151,22 @@ async def test_bus_isolates_and_logs_a_handler_exception(
         sibling_ran.append(payload.value)
         done.set()
 
-    # Subscribe the raising handler first, then the sibling; both must be
-    # attempted and the sibling must still fire after the boom.
-    bus.on(ITEM_DONE, boom)
-    bus.on(ITEM_DONE, sibling)
+    async with _bus() as bus:
+        # Subscribe the raising handler first, then the sibling; both must be
+        # attempted and the sibling must still fire after the boom.
+        bus.on(ITEM_DONE, boom)
+        bus.on(ITEM_DONE, sibling)
 
-    with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
-        await bus.emit(ITEM_DONE, Item(value="survives"))
+        with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
+            await bus.emit(ITEM_DONE, Item(value="survives"))
 
-    await asyncio.wait_for(done.wait(), 1)
+        await asyncio.wait_for(done.wait(), 1)
     assert sibling_ran == ["survives"]
     assert any("bus handler raised" in record.getMessage() for record in caplog.records)
-    await bus.aclose()
 
 
 async def test_bus_two_events_sharing_a_payload_type_route_independently() -> None:
     """Two events with the same payload type are distinct routing keys."""
-    bus = _bus()
     done_events: list[str] = []
     started_events: list[str] = []
     done = asyncio.Event()
@@ -184,22 +178,62 @@ async def test_bus_two_events_sharing_a_payload_type_route_independently() -> No
     async def on_started(payload: Item) -> None:
         started_events.append(payload.value)
 
-    bus.on(ITEM_DONE, on_done)
-    bus.on(ITEM_STARTED, on_started)
-    await bus.emit(ITEM_STARTED, Item(value="began"))
-    await bus.emit(ITEM_DONE, Item(value="finished"))
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, on_done)
+        bus.on(ITEM_STARTED, on_started)
+        await bus.emit(ITEM_STARTED, Item(value="began"))
+        await bus.emit(ITEM_DONE, Item(value="finished"))
 
-    await asyncio.wait_for(done.wait(), 1)
+        await asyncio.wait_for(done.wait(), 1)
     assert started_events == ["began"]
     assert done_events == ["finished"]
-    await bus.aclose()
+
+
+async def test_bus_drain_starts_on_enter_and_drains_backlog() -> None:
+    # Events emitted before __aenter__ are buffered on the channel and only
+    # dispatched once the drain task starts on enter (FIFO preserved).
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(payload: Item) -> None:
+        seen.append(payload.value)
+        done.set()
+
+    bus = _bus()
+    bus.on(ITEM_DONE, handler)
+    await bus.emit(ITEM_DONE, Item(value="queued-before-enter"))
+    await asyncio.sleep(0.02)  # drain is not running yet: nothing dispatched
+    assert seen == []
+    async with bus:
+        await asyncio.wait_for(done.wait(), 1)
+    assert seen == ["queued-before-enter"]
 
 
 async def test_bus_aclose_is_idempotent() -> None:
-    bus = _bus()
+    async with _bus() as bus:
+        await bus.aclose()  # explicit release inside the scope
+        await bus.aclose()  # second release is a no-op (idempotent via _closed)
+    # And a third call after __aexit__ is still a no-op.
     await bus.aclose()
-    await bus.aclose()  # no error
-    assert bus._task.done()
+
+
+async def test_bus_aclose_propagates_timeout_for_a_wedged_handler() -> None:
+    # A handler that never returns wedges the drain. aclose must surface the
+    # deadline as a propagated signal (TimeoutError, or a wrapped
+    # BaseExceptionGroup if the TaskGroup packages the forced cancellation)
+    # rather than hanging forever.
+    started = asyncio.Event()
+
+    async def wedged(_payload: Item) -> None:
+        started.set()
+        await asyncio.Event().wait()  # never set -> hangs
+
+    async with _bus() as bus:
+        bus.on(ITEM_DONE, wedged)
+        await bus.emit(ITEM_DONE, Item(value="x"))
+        await asyncio.wait_for(started.wait(), 1)
+        with pytest.raises((TimeoutError, BaseExceptionGroup)):
+            await bus.aclose(timeout=0.1)
 
 
 def test_bus_emit_is_a_coroutine_function() -> None:
@@ -242,8 +276,8 @@ async def test_bus_emit_rejects_an_unregistered_type() -> None:
 
 
 async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
-    bus = _bus()
     # ITEM_DONE is registered for Item; a Partial payload must be rejected.
+    bus = _bus()
     with pytest.raises(ValueError):
         await bus.emit(ITEM_DONE, Partial(value="wrong"))
     await bus.aclose()

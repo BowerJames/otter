@@ -4,10 +4,9 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from types import NoneType
-from typing import cast
+from types import NoneType, TracebackType
+from typing import Self, cast
 
-from otter_ai_core._lifecycle import await_or_cancel
 from otter_ai_core.channel import ChannelPair, create_channel
 from otter_ai_core.interfaces import EventRunner
 
@@ -20,6 +19,8 @@ type _BusHandler = Callable[[object], Awaitable[None]]
 
 
 class Bus(EventRunner):
+    tasks: asyncio.TaskGroup
+
     def __init__(self) -> None:
         channel_pair: ChannelPair[tuple[str, object]] = create_channel()
         self._reader = channel_pair.reader
@@ -32,7 +33,8 @@ class Bus(EventRunner):
         # and recovered with ``cast`` at the dispatch boundary — mirroring
         # :class:`~otter_ai_core.hook_runner.HookRunner`.
         self._handlers: dict[str, list[object]] = {}
-        self._task: asyncio.Task[None] = asyncio.create_task(self._run())
+        self._entered: bool = False
+        self._closed: bool = False
 
     def register(
         self,
@@ -94,6 +96,40 @@ class Bus(EventRunner):
     def end(self) -> None:
         self._writer.end()
 
-    async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
+    async def _teardown(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         self.end()
-        await await_or_cancel(self._task, timeout)
+        await self.tasks.__aexit__(None, None, None)
+
+    async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
+        if self._closed:
+            return
+        if not self._entered:
+            self._closed = True
+            self.end()
+            return
+        async with asyncio.timeout(timeout):
+            await self._teardown()
+
+    async def __aenter__(self) -> Self:
+        self.tasks = asyncio.TaskGroup()
+        await self.tasks.__aenter__()
+        self._entered = True
+        self.tasks.create_task(self._run())
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if self._closed:
+            return
+        if not self._entered:
+            self._closed = True
+            self.end()
+            return
+        await self._teardown()
