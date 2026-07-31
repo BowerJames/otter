@@ -43,6 +43,7 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
+from otter_ai_core.default_channel import DefaultChannel, create_default_channel
 from otter_ai_core.default_model_controller import DefaultModelController, State
 from otter_ai_core.faux import (
     FauxBranchOutcome,
@@ -67,6 +68,7 @@ from otter_ai_core.interfaces import (
     AbortableConnection,
     AbortableStream,
     AgentTool,
+    Channel,
     Connection,
     Emitter,
     EventRunner,
@@ -170,6 +172,7 @@ __all__ = [
     "AbortableConnection",
     "AbortableStream",
     "AgentTool",
+    "Channel",
     "Connection",
     "Emitter",
     "EventRunner",
@@ -182,6 +185,9 @@ __all__ = [
     "ChannelReader",
     "ChannelWriter",
     "create_channel",
+    # default channel (queue-based default implementation of the Channel protocol)
+    "DefaultChannel",
+    "create_default_channel",
     # stream runtime (abortable one-way facade over the channel)
     "StreamBackend",
     "StreamClient",

@@ -139,7 +139,13 @@ serializable data model is unchanged.
 - [`bus.py`](./packages/otter_ai_core/src/otter_ai_core/bus.py) — a structurally
   typed pub/sub bus keyed by a `StrEnum` discriminator. Handlers retain the
   complete event union for variant narrowing, while runtime validation ensures
-  each event belongs to the configured discriminator family.
+  each event belongs to the configured discriminator family. The bus is
+  programmed to the
+  [`Channel`](./packages/otter_ai_core/src/otter_ai_core/interfaces/channel.py)
+  interface: it stores a single `_channel: Channel[tuple[str, object]]` (a
+  one-way self-loop `Connection[T, T]`) built via an injected factory whose
+  default is
+  [`create_default_channel`](./packages/otter_ai_core/src/otter_ai_core/default_channel.py).
 - [`bidirectional_channel.py`](./packages/otter_ai_core/src/otter_ai_core/bidirectional_channel.py)
   — the bidirectional queue primitive (two cross-wired channels) for APIs that
   keep a live connection (Realtime / Responses):
@@ -149,6 +155,16 @@ serializable data model is unchanged.
   (`ConnectionClient` / `ConnectionBackend` / `create_connection`): a two-way
   consumer handle that can iterate, push, and abort — the bidirectional peer
   of `stream.py`.
+- [`default_channel.py`](./packages/otter_ai_core/src/otter_ai_core/default_channel.py)
+  — the self-contained, `asyncio.Queue`-backed default implementation of the
+  [`Channel`](./packages/otter_ai_core/src/otter_ai_core/interfaces/channel.py)
+  protocol (`DefaultChannel` / `create_default_channel`). A `Channel[TEvent]`
+  is a one-way self-loop `Connection[TEvent, TEvent]` — a single object that is
+  both the reader and the writer over one queue. Do not confuse the three
+  near-names: `Channel` is the **protocol** (in `interfaces/`), `channel.py` is
+  the underlying **queue primitive** (`ChannelReader` / `ChannelWriter` /
+  `create_channel`, still used by `stream.py` / `bidirectional_channel.py`), and
+  `DefaultChannel` is its **default implementation**.
 - [`model_connection/`](./packages/otter_ai_core/src/otter_ai_core/model_connection/)
   — the typed two-way event protocol (`ClientContextEvent` /
   `ServerContextEvent`) and typed connection aliases

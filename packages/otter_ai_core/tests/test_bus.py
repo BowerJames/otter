@@ -7,10 +7,12 @@ import inspect
 import logging
 from dataclasses import dataclass
 from types import NoneType
+from typing import Self
 
 import pytest
 
 from otter_ai_core.bus import Bus
+from otter_ai_core.interfaces import Channel
 
 
 @dataclass(slots=True)
@@ -28,6 +30,34 @@ class Partial:
 ITEM_DONE = "item.done"
 PARTIAL_UPDATED = "partial.updated"
 ITEM_STARTED = "item.started"
+
+
+class _SpyChannel[TEvent](Channel[TEvent]):
+    """A minimal Channel test double: records pushes and end() for assertions."""
+
+    def __init__(self) -> None:
+        self._queue: asyncio.Queue[TEvent | None] = asyncio.Queue()
+        self.pushed: list[TEvent] = []
+        self.ended: bool = False
+
+    def push(self, event: TEvent) -> None:
+        self.pushed.append(event)
+        self._queue.put_nowait(event)
+
+    def end(self) -> None:
+        if self.ended:
+            return
+        self.ended = True
+        self._queue.put_nowait(None)
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> TEvent:
+        item = await self._queue.get()
+        if item is None:
+            raise StopAsyncIteration
+        return item
 
 
 def _bus() -> Bus:
@@ -281,3 +311,27 @@ async def test_bus_emit_rejects_a_wrong_payload_type() -> None:
     with pytest.raises(ValueError):
         await bus.emit(ITEM_DONE, Partial(value="wrong"))
     await bus.aclose()
+
+
+async def test_bus_drives_an_injected_custom_channel() -> None:
+    # The Bus is programmed to the Channel interface: it must drive ANY injected
+    # Channel, not just DefaultChannel. The spy records every push and end() so
+    # we can assert the Bus routes emits through the channel, dispatches from
+    # it, and tears it down via end() on aclose.
+    spy: _SpyChannel[tuple[str, object]] = _SpyChannel()
+    seen: list[str] = []
+    done = asyncio.Event()
+
+    async def handler(payload: Item) -> None:
+        seen.append(payload.value)
+        done.set()
+
+    async with Bus(channel_factory=lambda: spy) as bus:
+        bus.register(ITEM_DONE, Item, NoneType)
+        bus.on(ITEM_DONE, handler)
+        await bus.emit(ITEM_DONE, Item(value="routed"))
+        await asyncio.wait_for(done.wait(), 1)
+
+    assert spy.pushed == [("item.done", Item(value="routed"))]
+    assert spy.ended is True
+    assert seen == ["routed"]

@@ -1,6 +1,7 @@
 from .abortable_connection import AbortableConnection
 from .abortable_stream import AbortableStream
 from .agent_tool import AgentTool
+from .channel import Channel
 from .connection import Connection
 from .emitter import Emitter
 from .event_runner import EventRunner
@@ -14,6 +15,7 @@ __all__ = [
     "AbortableConnection",
     "AbortableStream",
     "AgentTool",
+    "Channel",
     "Connection",
     "Emitter",
     "EventRunner",
