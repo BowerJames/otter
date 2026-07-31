@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from types import NoneType, TracebackType
@@ -8,7 +9,6 @@ from typing import Self
 
 from otter_ai_core.bus import Bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
-from otter_ai_core.default_model_controller._lifecycle import await_or_cancel
 from otter_ai_core.default_model_controller.state import State
 from otter_ai_core.interfaces import AbortableConnection, ModelController
 from otter_ai_core.model_connection import (
@@ -54,6 +54,8 @@ _SERVER_EVENT_TRIGGER_TYPES: dict[ServerContextEventType, type[object]] = {
 
 
 class DefaultModelController(ModelController):
+    tasks: asyncio.TaskGroup
+
     def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
         self._client = client
         self._bus: Bus = Bus()
@@ -61,7 +63,8 @@ class DefaultModelController(ModelController):
             self._bus.register(name, trigger_type, NoneType)
         self._state = State()
         self._command_waiter: asyncio.Event | None = None
-        self._task: asyncio.Task[None] = asyncio.create_task(self._run())
+        self._entered: bool = False
+        self._closed: bool = False
 
     # ------------------------------------------------------------------ #
     # Read-only views
@@ -288,14 +291,28 @@ class DefaultModelController(ModelController):
 
     async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
         self.close()
+        if self._closed:
+            return
+        self._closed = True
+        if not self._entered:
+            return
         try:
-            await await_or_cancel(self._task, timeout)
+            async with asyncio.timeout(timeout):
+                await self.tasks.__aexit__(None, None, None)
+                await self._bus._teardown()
         finally:
-            # Always reap the bus worker — even if the await above was cancelled
-            # mid-flight — so no owned task is left pending.
-            await self._bus.aclose(timeout)
+            # Always reap the owned bus — even if the controller-group exit was
+            # cancelled or timed out mid-flight — so no owned task is left
+            # pending. Idempotent via Bus._teardown's _closed guard.
+            with contextlib.suppress(BaseException):
+                await self._bus._teardown()
 
     async def __aenter__(self) -> Self:
+        await self._bus.__aenter__()
+        self.tasks = asyncio.TaskGroup()
+        await self.tasks.__aenter__()
+        self._entered = True
+        self.tasks.create_task(self._run())
         return self
 
     async def __aexit__(

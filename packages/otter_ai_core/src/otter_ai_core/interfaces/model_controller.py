@@ -15,9 +15,10 @@ from otter_ai_core.model_connection import (
 )
 
 from .subscribable import Subscribable
+from .task_runner import TaskRunner
 
 
-class ModelController(Subscribable, Protocol):
+class ModelController(Subscribable, TaskRunner, Protocol):
     def is_idle(self) -> bool: ...
 
     async def wait_for_idle(self) -> None: ...

@@ -553,7 +553,7 @@ async def test_aclose_leaves_no_pending_tasks() -> None:
     async with create_faux_model(script) as model:
         await model.controller.generate()
 
-    assert model.controller._task.done()  # noqa: SLF001
+    assert model.controller._closed  # noqa: SLF001
     assert model.producer._task.done()  # noqa: SLF001
     assert model.controller.is_closing()
 
@@ -581,7 +581,7 @@ async def test_aclose_races_inflight_generate_cleanly() -> None:
     with contextlib.suppress(RuntimeError):
         await gen
     assert gen.done()
-    assert model.controller._task.done()  # noqa: SLF001
+    assert model.controller._closed  # noqa: SLF001
     assert model.producer._task.done()  # noqa: SLF001
 
 
@@ -591,6 +591,7 @@ async def test_standalone_producer_reaps_after_controller_aclose() -> None:
 
     async with FauxModelProducer(pair.backend, script) as producer:
         controller = DefaultModelController(pair.client)
+        await controller.__aenter__()
         await controller.generate()
         await controller.aclose()
     # producer task reaped on context exit (cooperatively — the controller
