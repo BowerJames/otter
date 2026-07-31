@@ -39,8 +39,6 @@ class ModelController(Subscribable, TaskRunner, Protocol):
 
     def abort(self) -> None: ...
 
-    async def aclose(self, timeout: float | None = 5.0) -> None: ...
-
 
 # String event names the controller's Bus is keyed on. They alias the canonical
 # ServerContextEventType members (the single source of truth) so subscribers can

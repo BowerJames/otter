@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from collections.abc import Callable
-from types import NoneType, TracebackType
-from typing import Self
+from types import NoneType
 
-from otter_ai_core.bus import Bus
+from otter_ai_core.bus import create_bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
 from otter_ai_core.default_model_controller.state import State
-from otter_ai_core.interfaces import AbortableConnection, ModelController
+from otter_ai_core.interfaces import (
+    AbortableConnection,
+    EventRunner,
+    ModelController,
+    TaskRunnerMixIn,
+)
 from otter_ai_core.model_connection import (
     AbortResponse,
     AddUserMessage,
@@ -31,11 +34,6 @@ from otter_ai_core.model_connection import (
     UserItemUpdated,
 )
 
-#: Default graceful-drain deadline (seconds) for :meth:`DefaultModelController.aclose`.
-#: ``None`` would wait forever; a finite default keeps teardown deterministic
-#: when the backend never ends the inbound stream.
-_DEFAULT_ACLOSE_TIMEOUT: float = 5.0
-
 _log = logging.getLogger(__name__)
 
 #: Maps each inbound server event type to the concrete class every emitted
@@ -53,25 +51,25 @@ _SERVER_EVENT_TRIGGER_TYPES: dict[ServerContextEventType, type[object]] = {
 }
 
 
-class DefaultModelController(ModelController):
-    tasks: asyncio.TaskGroup
-
-    def __init__(self, client: AbortableConnection[ServerContextEvent, ClientContextEvent]) -> None:
+class DefaultModelController(TaskRunnerMixIn, ModelController):
+    def __init__(
+        self,
+        client: AbortableConnection[ServerContextEvent, ClientContextEvent],
+        event_runner_factory: Callable[[], EventRunner] = create_bus,
+    ) -> None:
         self._client = client
-        self._bus: Bus = Bus()
+        self._bus: EventRunner = event_runner_factory()
         for name, trigger_type in _SERVER_EVENT_TRIGGER_TYPES.items():
             self._bus.register(name, trigger_type, NoneType)
         self._state = State()
         self._command_waiter: asyncio.Event | None = None
-        self._entered: bool = False
-        self._closed: bool = False
 
     # ------------------------------------------------------------------ #
     # Read-only views
     # ------------------------------------------------------------------ #
 
     @property
-    def bus(self) -> Bus:
+    def bus(self) -> EventRunner:
         return self._bus
 
     @property
@@ -289,39 +287,17 @@ class DefaultModelController(ModelController):
         self._state.begin_closing()
         self._client.abort()
 
-    async def aclose(self, timeout: float | None = _DEFAULT_ACLOSE_TIMEOUT) -> None:
-        self.close()
-        if self._closed:
-            return
-        self._closed = True
-        if not self._entered:
-            return
-        try:
-            async with asyncio.timeout(timeout):
-                await self.tasks.__aexit__(None, None, None)
-                await self._bus._teardown()
-        finally:
-            # Always reap the owned bus — even if the controller-group exit was
-            # cancelled or timed out mid-flight — so no owned task is left
-            # pending. Idempotent via Bus._teardown's _closed guard.
-            with contextlib.suppress(BaseException):
-                await self._bus._teardown()
+    def _register_tasks(self, tg: asyncio.TaskGroup) -> None:
+        tg.create_task(self._run())
+        tg.create_task(self._run_bus())
 
-    async def __aenter__(self) -> Self:
-        await self._bus.__aenter__()
-        self.tasks = asyncio.TaskGroup()
-        await self.tasks.__aenter__()
-        self._entered = True
-        self.tasks.create_task(self._run())
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> None:
-        await self.aclose()
+    async def _run_bus(self) -> None:
+        # Own the bus sub-lifecycle: entering starts its drain, exiting reaps
+        # it (cancellation-safe). ``await self._bus`` parks here until the bus
+        # ends — which happens when ``_run``'s finally calls ``self._bus.end()``
+        # once the connection finishes draining.
+        async with self._bus:
+            await self._bus
 
     # ------------------------------------------------------------------ #
     # Inbound drain loop
@@ -332,7 +308,7 @@ class DefaultModelController(ModelController):
             async for event in self._client:
                 await self._bus.emit(event.type, event)
         except asyncio.CancelledError:
-            raise  # teardown (aclose); expected — let the finally clean up
+            raise  # teardown; expected — let the finally clean up
         except Exception:
             # An unexpected failure in the drain loop: log it (diagnostics) and
             # let the task end cleanly rather than dying with an unretrieved
