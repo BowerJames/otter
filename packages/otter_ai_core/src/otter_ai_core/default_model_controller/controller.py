@@ -7,14 +7,7 @@ from types import NoneType
 
 from otter_ai_core.bus import create_bus
 from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
-from otter_ai_core.default_model_controller.state import State
-from otter_ai_core.interfaces import (
-    AbortableConnection,
-    EventRunner,
-    ModelController,
-    TaskRunnerMixIn,
-)
-from otter_ai_core.model_connection import (
+from otter_ai_core.data_models import (
     AbortResponse,
     AddUserMessage,
     BranchMove,
@@ -32,6 +25,13 @@ from otter_ai_core.model_connection import (
     ToolResultAdded,
     UserItemAdded,
     UserItemUpdated,
+)
+from otter_ai_core.default_model_controller.state import State
+from otter_ai_core.interfaces import (
+    AbortableConnection,
+    EventRunner,
+    ModelController,
+    TaskRunnerMixIn,
 )
 
 _log = logging.getLogger(__name__)
