@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from otter_ai_core import AssistantContextItem, TextContent, Usage, UsageCost
-from otter_ai_core.data_models import (
+from otter_ai_core.data_models.events import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,

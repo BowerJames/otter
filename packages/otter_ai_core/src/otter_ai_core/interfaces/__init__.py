@@ -7,9 +7,10 @@ from .connection import Connection
 from .emitter import Emitter
 from .event_runner import EventRunner
 from .model_controller import ModelController
+from .store import SessionStore
 from .stream import Stream
 from .subscribable import Subscribable
-from .task_runner import TaskRunner, TaskRunnerMixIn
+from .task_runner import TaskRunner
 from .writer import Writer
 
 __all__ = [
@@ -23,8 +24,8 @@ __all__ = [
     "EventRunner",
     "ModelController",
     "Stream",
+    "SessionStore",
     "Subscribable",
     "TaskRunner",
-    "TaskRunnerMixIn",
     "Writer",
 ]

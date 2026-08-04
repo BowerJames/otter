@@ -5,9 +5,12 @@ import logging
 from collections.abc import Callable
 from types import NoneType
 
-from otter_ai_core.bus import create_bus
-from otter_ai_core.context import AssistantContextItem, ToolResultContextItem, UserContextItem
-from otter_ai_core.data_models import (
+from otter_ai_core.data_models.context import (
+    AssistantContextItem,
+    ToolResultContextItem,
+    UserContextItem,
+)
+from otter_ai_core.data_models.events import (
     AbortResponse,
     AddUserMessage,
     BranchMove,
@@ -26,13 +29,14 @@ from otter_ai_core.data_models import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.default_model_controller.state import State
 from otter_ai_core.interfaces import (
     AbortableConnection,
     EventRunner,
     ModelController,
-    TaskRunnerMixIn,
 )
+from otter_ai_core.mixins import TaskRunnerMixIn
+from otter_ai_core.runtime.bus import create_bus
+from otter_ai_core.runtime.default_model_controller.state import State
 
 _log = logging.getLogger(__name__)
 

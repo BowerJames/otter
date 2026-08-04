@@ -5,13 +5,13 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
-from otter_ai_core.context import (
+from otter_ai_core.data_models.context import (
     AssistantContextItem,
     ToolResultContextItem,
     Usage,
     UserContextItem,
 )
-from otter_ai_core.event import Event
+from otter_ai_core.data_models.events.event import Event
 
 
 class ServerContextEventType(StrEnum):

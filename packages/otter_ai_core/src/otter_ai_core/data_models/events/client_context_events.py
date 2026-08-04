@@ -5,9 +5,9 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
-from otter_ai_core.context import ToolResultMessage, UserMessage
-from otter_ai_core.event import Event
-from otter_ai_core.provider_api_model_options import ThinkingLevel
+from otter_ai_core.data_models.context import ToolResultMessage, UserMessage
+from otter_ai_core.data_models.events.event import Event
+from otter_ai_core.data_models.provider import ThinkingLevel
 
 
 class ClientContextEventType(StrEnum):

@@ -19,7 +19,7 @@ from otter_ai_core import (
     UserMessage,
     context_item,
 )
-from otter_ai_core.context import Role
+from otter_ai_core.data_models.context import Role
 
 
 def _usage() -> Usage:

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
 
-from otter_ai_core.session_manager.entries import BranchSummaryEntry
+from pydantic import BaseModel, ConfigDict
+
+from otter_ai_core.data_models.session.entries import BranchSummaryEntry
 
 
 class SessionStoreControllerEventTypes(StrEnum):
@@ -14,8 +15,9 @@ class SessionStoreControllerEventTypes(StrEnum):
     TREE_CHANGED = "session.tree_changed"  # branch / leaf move
 
 
-@dataclass(frozen=True, slots=True)
-class TreeChangedPayload:
+class TreeChangedPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     new_leaf_id: str | None
     old_leaf_id: str | None
     summary_entry: BranchSummaryEntry | None

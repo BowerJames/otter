@@ -11,11 +11,14 @@ from otter_ai_core import (
     AssistantMessage,
     Context,
     ImageContent,
+    SessionDerivedState,
+    SessionProjection,
     TextContent,
     ThinkingContent,
     Tool,
     ToolCall,
     ToolResultMessage,
+    TreeChangedPayload,
     Usage,
     UsageCost,
     UserMessage,
@@ -190,3 +193,55 @@ def test_context_defaults() -> None:
     assert ctx.system_prompt is None
     assert ctx.items == []
     assert ctx.tools is None
+
+
+# --------------------------------------------------------------------------- #
+# D6 — the three moved types are pydantic BaseModels (extra="forbid", mutable)
+# --------------------------------------------------------------------------- #
+
+
+def test_session_derived_state_constructs_and_forbids_extra() -> None:
+    state = SessionDerivedState(
+        model=("anthropic", "claude-3"),
+        thinking_level=None,
+        active_tool_names=["search"],
+    )
+    assert state.model == ("anthropic", "claude-3")
+    assert state.active_tool_names == ["search"]
+    with pytest.raises(ValidationError):
+        SessionDerivedState(  # type: ignore[call-arg]
+            model=None, thinking_level=None, active_tool_names=None, bogus=1
+        )
+
+
+def test_session_projection_constructs_and_forbids_extra() -> None:
+    proj = SessionProjection(
+        context=Context(),
+        state=SessionDerivedState(model=None, thinking_level=None, active_tool_names=None),
+    )
+    assert proj.context.items == []
+    assert proj.state.model is None
+    with pytest.raises(ValidationError):
+        SessionProjection(  # type: ignore[call-arg]
+            context=Context(),
+            state=SessionDerivedState(model=None, thinking_level=None, active_tool_names=None),
+            bogus=1,
+        )
+
+
+def test_tree_changed_payload_constructs_and_forbids_extra() -> None:
+    payload = TreeChangedPayload(new_leaf_id="a", old_leaf_id="b", summary_entry=None)
+    assert payload.new_leaf_id == "a"
+    assert payload.summary_entry is None
+    with pytest.raises(ValidationError):
+        TreeChangedPayload(  # type: ignore[call-arg]
+            new_leaf_id=None, old_leaf_id=None, summary_entry=None, bogus=1
+        )
+
+
+def test_converted_types_are_mutable_pydantic() -> None:
+    # D6: the frozen/slots dataclass contract is dropped — assignment now
+    # succeeds where the old frozen dataclass raised FrozenInstanceError.
+    state = SessionDerivedState(model=None, thinking_level=None, active_tool_names=None)
+    state.active_tool_names = ["x"]
+    assert state.active_tool_names == ["x"]

@@ -7,10 +7,17 @@ from datetime import UTC, datetime
 from types import NoneType, TracebackType
 from typing import Any, Self
 
-from otter_ai_core.bus import Bus
-from otter_ai_core.context import Context, ContextItem, Usage, UserContent
-from otter_ai_core.provider_api_model_options import ThinkingLevel
-from otter_ai_core.session_manager.entries import (
+from otter_ai_core.data_models.context import Context, ContextItem, Usage, UserContent
+from otter_ai_core.data_models.events.session_events import (
+    COMPACTED,
+    ENTRY_APPENDED,
+    ITEM_ADDED,
+    ITEM_UPDATED,
+    TREE_CHANGED,
+    TreeChangedPayload,
+)
+from otter_ai_core.data_models.provider import ThinkingLevel
+from otter_ai_core.data_models.session.entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
@@ -25,18 +32,12 @@ from otter_ai_core.session_manager.entries import (
     SessionInfoEntry,
     ThinkingLevelChangeEntry,
 )
-from otter_ai_core.session_manager.errors import SessionError, SessionErrorCode
-from otter_ai_core.session_manager.events import (
-    COMPACTED,
-    ENTRY_APPENDED,
-    ITEM_ADDED,
-    ITEM_UPDATED,
-    TREE_CHANGED,
-    TreeChangedPayload,
-)
-from otter_ai_core.session_manager.metadata import BranchSummaryInput, SessionMetadata
-from otter_ai_core.session_manager.projection import SessionProjection, project
-from otter_ai_core.session_manager.store import SessionStore
+from otter_ai_core.data_models.session.errors import SessionError, SessionErrorCode
+from otter_ai_core.data_models.session.metadata import BranchSummaryInput, SessionMetadata
+from otter_ai_core.data_models.session.projection import SessionProjection
+from otter_ai_core.interfaces.store import SessionStore
+from otter_ai_core.runtime.bus import Bus
+from otter_ai_core.runtime.session.projection import project
 
 #: Collapse any run of CR/LF to a single space, then trim (pi's appendSessionName).
 _NAME_SANITIZER = re.compile(r"[\r\n]+")

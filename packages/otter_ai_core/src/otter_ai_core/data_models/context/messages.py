@@ -5,10 +5,10 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context.content import AssistantContent, ToolCall, UserContent
-from otter_ai_core.context.diagnostics import AssistantMessageDiagnostic
-from otter_ai_core.context.role import Role
-from otter_ai_core.context.usage import Usage
+from otter_ai_core.data_models.context.content import AssistantContent, ToolCall, UserContent
+from otter_ai_core.data_models.context.diagnostics import AssistantMessageDiagnostic
+from otter_ai_core.data_models.context.role import Role
+from otter_ai_core.data_models.context.usage import Usage
 
 
 class StopReason(StrEnum):

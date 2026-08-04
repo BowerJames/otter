@@ -20,8 +20,8 @@ from otter_ai_core import (
     UserContextItem,
     UserMessage,
 )
-from otter_ai_core.context import Role
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.context import Role
+from otter_ai_core.data_models.session import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
@@ -35,6 +35,8 @@ from otter_ai_core.session_manager import (
     SessionInfoEntry,
     SessionProjection,
     ThinkingLevelChangeEntry,
+)
+from otter_ai_core.runtime.session import (
     apply_compaction_transform,
     apply_updates,
     derive_state,
