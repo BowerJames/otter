@@ -1,4 +1,3 @@
-from .abort_observable import AbortObservable
 from .abortable_connection import AbortableConnection
 from .abortable_stream import AbortableStream
 from .agent_tool import AgentTool
@@ -14,7 +13,6 @@ from .task_runner import TaskRunner
 from .writer import Writer
 
 __all__ = [
-    "AbortObservable",
     "AbortableConnection",
     "AbortableStream",
     "AgentTool",

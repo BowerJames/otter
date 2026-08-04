@@ -65,7 +65,6 @@ from otter_ai_core.data_models.session import (
 from otter_ai_core.interfaces import (
     AbortableConnection,
     AbortableStream,
-    AbortObservable,
     AgentTool,
     Channel,
     Connection,
@@ -128,7 +127,6 @@ __all__ = [
     "ThinkingLevel",
     # interfaces (Protocol contracts: streaming runtime, model-controller role,
     #   and the agent-loop tool-execution seam)
-    "AbortObservable",
     "AbortableConnection",
     "AbortableStream",
     "AgentTool",
