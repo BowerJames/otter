@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
-from otter_ai_core import (
+from tests._connection import (
     ConnectionBackend,
     ConnectionClient,
     ConnectionPair,
@@ -89,11 +89,11 @@ async def test_abort_closes_outbound_so_backend_drain_completes() -> None:
 
 
 async def test_abort_signal_can_be_awaited_by_producer() -> None:
-    """A producer task can ``await backend.abort_signal.wait()`` and resolve."""
+    """A producer task can ``await backend.wait_for_abort()`` and resolve."""
     pair: ConnectionPair[str, int] = create_connection()
 
     async def producer() -> None:
-        await pair.backend.abort_signal.wait()
+        await pair.backend.wait_for_abort()
         pair.backend.push(99)
         pair.backend.end()
 

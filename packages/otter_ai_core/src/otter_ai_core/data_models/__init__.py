@@ -9,11 +9,6 @@ from .client_context_events import (
     CreateResponse,
     InputEvent,
 )
-from .model_connection import (
-    ModelConnectionBackend,
-    ModelConnectionClient,
-    ModelConnectionPair,
-)
 from .server_context_events import (
     BranchMoved,
     CompactionDone,
@@ -28,10 +23,6 @@ from .server_context_events import (
 )
 
 __all__ = [
-    # typed aliases
-    "ModelConnectionBackend",
-    "ModelConnectionClient",
-    "ModelConnectionPair",
     # client→server events
     "ClientContextEventType",
     "AddToolResultMessage",
@@ -39,9 +30,9 @@ __all__ = [
     "ClientContextEvent",
     "InputEvent",
     "CreateResponse",
+    "AbortResponse",
     "CreateCompaction",
     "BranchMove",
-    "AbortResponse",
     # server→client events
     "ServerContextEventType",
     "ResponseUpdated",

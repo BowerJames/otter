@@ -1,24 +1,6 @@
 from __future__ import annotations
 
-from otter_ai_core.bidirectional_channel import (
-    BidirectionalChannelBackend,
-    BidirectionalChannelClient,
-    BidirectionalChannelPair,
-    create_bidirectional_channel,
-)
 from otter_ai_core.builder import BuilderFn
-from otter_ai_core.channel import (
-    ChannelPair,
-    ChannelReader,
-    ChannelWriter,
-    create_channel,
-)
-from otter_ai_core.connection import (
-    ConnectionBackend,
-    ConnectionClient,
-    ConnectionPair,
-    create_connection,
-)
 from otter_ai_core.context import (
     AssistantContent,
     AssistantContextItem,
@@ -45,28 +27,10 @@ from otter_ai_core.context import (
 )
 from otter_ai_core.default_channel import DefaultChannel, create_default_channel
 from otter_ai_core.default_model_controller import DefaultModelController, State
-from otter_ai_core.faux import (
-    FauxBranchOutcome,
-    FauxCompactionOutcome,
-    FauxModel,
-    FauxModelProducer,
-    FauxModelScript,
-    FauxProvenance,
-    FauxResponse,
-    FauxResponseRepeat,
-    FauxStreamPolicy,
-    create_faux_model,
-    deterministic_clock,
-    faux_text,
-    faux_text_response,
-    faux_tool_call_response,
-    faux_usage,
-    monotonic_item_ids,
-    real_clock,
-)
 from otter_ai_core.interfaces import (
     AbortableConnection,
     AbortableStream,
+    AbortObservable,
     AgentTool,
     Channel,
     Connection,
@@ -120,12 +84,6 @@ from otter_ai_core.session_manager import (
     entries_to_items,
     project,
 )
-from otter_ai_core.stream import (
-    StreamBackend,
-    StreamClient,
-    StreamPair,
-    create_stream_pair,
-)
 
 __version__ = "0.1.0"
 
@@ -169,6 +127,7 @@ __all__ = [
     "ThinkingLevel",
     # interfaces (Protocol contracts: streaming runtime, model-controller role,
     #   and the agent-loop tool-execution seam)
+    "AbortObservable",
     "AbortableConnection",
     "AbortableStream",
     "AgentTool",
@@ -180,29 +139,9 @@ __all__ = [
     "Stream",
     "Subscribable",
     "Writer",
-    # channel runtime (one-way)
-    "ChannelPair",
-    "ChannelReader",
-    "ChannelWriter",
-    "create_channel",
     # default channel (queue-based default implementation of the Channel protocol)
     "DefaultChannel",
     "create_default_channel",
-    # stream runtime (abortable one-way facade over the channel)
-    "StreamBackend",
-    "StreamClient",
-    "StreamPair",
-    "create_stream_pair",
-    # channel runtime (bidirectional primitive)
-    "BidirectionalChannelClient",
-    "BidirectionalChannelBackend",
-    "BidirectionalChannelPair",
-    "create_bidirectional_channel",
-    # connection runtime (abortable bidirectional facade over the channel)
-    "ConnectionClient",
-    "ConnectionBackend",
-    "ConnectionPair",
-    "create_connection",
     # model controller (high-level conversation driver over a connection;
     # ``ModelController`` is the Protocol role, ``DefaultModelController`` the impl)
     "DefaultModelController",
@@ -244,22 +183,4 @@ __all__ = [
     "ITEM_UPDATED",
     "COMPACTED",
     "TREE_CHANGED",
-    # faux model producer (shipped, API-key-free integration-test harness)
-    "FauxModel",
-    "FauxModelProducer",
-    "FauxModelScript",
-    "FauxResponse",
-    "FauxResponseRepeat",
-    "FauxStreamPolicy",
-    "FauxProvenance",
-    "FauxCompactionOutcome",
-    "FauxBranchOutcome",
-    "create_faux_model",
-    "faux_text",
-    "faux_text_response",
-    "faux_tool_call_response",
-    "faux_usage",
-    "monotonic_item_ids",
-    "deterministic_clock",
-    "real_clock",
 ]

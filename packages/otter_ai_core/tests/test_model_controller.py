@@ -19,7 +19,7 @@ Name-keyed bus behaviour (fan-out, per-name dispatch,
 idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
 end/aclose semantics) is covered in ``tests/test_bus.py``; the controller's
 bus is the same :class:`~otter_ai_core.bus.Bus`, with its event names keyed on
-:class:`~otter_ai_core.model_connection.ServerContextEventType`.
+:class:`~otter_ai_core.data_models.ServerContextEventType`.
 """
 
 from __future__ import annotations
@@ -41,13 +41,9 @@ from otter_ai_core import (
     UsageCost,
     UserContextItem,
     UserMessage,
-    create_connection,
 )
-from otter_ai_core.connection import ConnectionBackend, ConnectionPair
 from otter_ai_core.context import Role
-from otter_ai_core.default_model_controller import RESPONSE_DONE, DefaultModelController, State
-from otter_ai_core.interfaces import ModelController
-from otter_ai_core.model_connection import (
+from otter_ai_core.data_models import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
@@ -66,6 +62,9 @@ from otter_ai_core.model_connection import (
     UserItemAdded,
     UserItemUpdated,
 )
+from otter_ai_core.default_model_controller import RESPONSE_DONE, DefaultModelController, State
+from otter_ai_core.interfaces import ModelController
+from tests._connection import ConnectionBackend, ConnectionPair, create_connection
 
 
 def _default_controller_satisfies_protocol(
@@ -193,7 +192,7 @@ async def _conformant(
     backend: ConnectionBackend[ClientContextEvent, ServerContextEvent],
 ) -> None:
     """A backend that honours the abort contract: on abort, end the inbound."""
-    await backend.abort_signal.wait()
+    await backend.wait_for_abort()
     backend.end()
 
 
@@ -670,7 +669,7 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
         await _take(backend, 1)  # CreateResponse
 
         async def conformant() -> None:
-            await backend.abort_signal.wait()
+            await backend.wait_for_abort()
             backend.push(ResponseDone(item=_assistant_item()))  # final shutdown item
             backend.end()
 

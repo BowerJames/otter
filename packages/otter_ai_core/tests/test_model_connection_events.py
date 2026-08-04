@@ -8,8 +8,7 @@ import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from otter_ai_core import AssistantContextItem, TextContent, Usage, UsageCost
-from otter_ai_core.connection import ConnectionBackend, ConnectionClient
-from otter_ai_core.model_connection import (
+from otter_ai_core.data_models import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
@@ -20,8 +19,6 @@ from otter_ai_core.model_connection import (
     CompactionDone,
     CreateCompaction,
     CreateResponse,
-    ModelConnectionBackend,
-    ModelConnectionClient,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -313,14 +310,3 @@ def test_branch_moved_error_path() -> None:
     restored = _SERVER_ADAPTER.validate_json(ev.model_dump_json())
     assert isinstance(restored, BranchMoved)
     assert restored.error_message == "branch unsupported"
-
-
-# --------------------------------------------------------------------------- #
-# Typed aliases specialize the generic connection runtime
-# --------------------------------------------------------------------------- #
-
-
-def test_model_connection_aliases_specialize_connection() -> None:
-    """The model aliases fix the two type params but are the generic handles."""
-    assert ModelConnectionClient.__origin__ is ConnectionClient  # type: ignore[attr-defined]
-    assert ModelConnectionBackend.__origin__ is ConnectionBackend  # type: ignore[attr-defined]

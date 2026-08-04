@@ -1,9 +1,10 @@
-"""Shared dummy event for the generic channel/stream runtime tests.
+"""Shared dummy event for the generic runtime tests.
 
-The generic runtimes (:mod:`otter_ai_core.channel` / :mod:`otter_ai_core.stream`)
-are parameterised over an arbitrary ``TEvent``. These tests need only a small
-comparable stand-in with a ``type`` discriminator + payload — not a real
-protocol event — so they do not depend on any domain event family.
+The surviving generic runtimes (``DefaultChannel`` and the test-local
+in-memory connection pair) are parameterised over an arbitrary ``TEvent``.
+These tests need only a small comparable stand-in with a ``type``
+discriminator + payload — not a real protocol event — so they do not depend
+on any domain event family.
 """
 
 from __future__ import annotations
