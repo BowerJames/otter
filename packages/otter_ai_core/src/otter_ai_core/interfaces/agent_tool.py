@@ -5,7 +5,7 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop.agent_tool import AgentToolResult
+from otter_ai_core.data_models import AgentToolResult
 
 
 class AgentTool[TParams: BaseModel, TDetails](Protocol):

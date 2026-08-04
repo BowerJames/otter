@@ -1,3 +1,4 @@
+from .agent_tool import AgentToolResult
 from .client_context_events import (
     AbortResponse,
     AddToolResultMessage,
@@ -23,6 +24,8 @@ from .server_context_events import (
 )
 
 __all__ = [
+    # agent tool
+    "AgentToolResult",
     # client→server events
     "ClientContextEventType",
     "AddToolResultMessage",
