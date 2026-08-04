@@ -5,8 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from otter_ai_core.context import AssistantContextItem, Role, UserContextItem, UserMessage
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.context import (
+    AssistantContextItem,
+    Role,
+    UserContextItem,
+    UserMessage,
+)
+from otter_ai_core.data_models.session import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,

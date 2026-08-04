@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from otter_ai_core.context import Role, UserContextItem, UserMessage
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.context import Role, UserContextItem, UserMessage
+from otter_ai_core.data_models.session import (
     MessageEntry,
     MessageUpdateEntry,
     ModelChangeEntry,
@@ -162,7 +162,7 @@ async def test_path_to_root_stops_at_retained_tail_compaction(
     await store.append_entry(
         MessageEntry(id="2", parent_id="1", timestamp="t", item=_user_item("u2"))
     )
-    from otter_ai_core.session_manager import CompactionEntry
+    from otter_ai_core.data_models.session import CompactionEntry
 
     await store.append_entry(
         CompactionEntry(
@@ -185,7 +185,7 @@ async def test_path_to_root_stops_at_retained_tail_compaction(
 async def test_path_to_root_keeps_window_for_first_kept(
     store: _MemorySessionStore[SessionMetadata],
 ) -> None:
-    from otter_ai_core.session_manager import CompactionEntry
+    from otter_ai_core.data_models.session import CompactionEntry
 
     await store.append_entry(
         MessageEntry(id="1", parent_id=None, timestamp="t", item=_user_item("u1"))
@@ -224,7 +224,7 @@ async def test_path_to_root_none_leaf_is_empty(store: _MemorySessionStore[Sessio
 
 
 async def test_label_latest_wins(store: _MemorySessionStore[SessionMetadata]) -> None:
-    from otter_ai_core.session_manager import LabelEntry
+    from otter_ai_core.data_models.session import LabelEntry
 
     await store.append_entry(
         MessageEntry(id="1", parent_id=None, timestamp="t", item=_user_item("u1"))
@@ -245,7 +245,7 @@ async def test_label_latest_wins(store: _MemorySessionStore[SessionMetadata]) ->
 
 
 async def test_session_name_latest_wins(store: _MemorySessionStore[SessionMetadata]) -> None:
-    from otter_ai_core.session_manager import SessionInfoEntry
+    from otter_ai_core.data_models.session import SessionInfoEntry
 
     await store.append_entry(SessionInfoEntry(id="s1", parent_id=None, timestamp="t", name="first"))
     await store.append_entry(

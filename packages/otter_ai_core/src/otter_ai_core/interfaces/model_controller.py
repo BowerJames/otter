@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from otter_ai_core.context import (
+from otter_ai_core.data_models.context import (
     AssistantContextItem,
     ToolResultContextItem,
     UserContextItem,
 )
-from otter_ai_core.data_models import (
+from otter_ai_core.data_models.events import (
     BranchMoved,
     CompactionDone,
     InputEvent,

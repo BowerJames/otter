@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from otter_ai_core.context.messages import (
+from otter_ai_core.data_models.context.messages import (
     AssistantMessage,
     Message,
     ToolResultMessage,
@@ -30,7 +30,7 @@ class ToolResultContextItem(BaseContextItem[ToolResultMessage]):
 
 
 #: Union of all context item roles. The inner ``message`` is itself a
-#: ``role``-discriminated union (see :data:`otter_ai_core.context.Message`),
+#: ``role``-discriminated union (see :data:`otter_ai_core.data_models.context.Message`),
 #: so members are distinguished by their ``message``'s ``role``.
 ContextItem = UserContextItem | AssistantContextItem | ToolResultContextItem
 

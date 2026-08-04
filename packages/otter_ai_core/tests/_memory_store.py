@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from otter_ai_core.context import AssistantMessage, Usage
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.context import AssistantMessage, Usage
+from otter_ai_core.data_models.session import (
     BranchSummaryEntry,
     CompactionEntry,
     LabelEntry,
@@ -158,7 +158,7 @@ class _MemorySessionStore[TMetadata: SessionMetadata]:
 
 
 def _entry_usage(entry: SessionEntry) -> Usage | None:
-    """The :class:`~otter_ai_core.context.Usage` an entry contributes, if any.
+    """The :class:`~otter_ai_core.data_models.context.Usage` an entry contributes, if any.
 
     ``None`` when the entry carries no usage. A :class:`MessageUpdateEntry` is
     excluded (an amendment is not a new generation).

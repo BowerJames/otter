@@ -11,8 +11,8 @@ from typing import Self
 
 import pytest
 
-from otter_ai_core.bus import Bus
 from otter_ai_core.interfaces import Channel
+from otter_ai_core.runtime.bus import Bus
 
 
 @dataclass(slots=True)
@@ -192,7 +192,7 @@ async def test_bus_isolates_and_logs_a_handler_exception(
         bus.on(ITEM_DONE, boom)
         bus.on(ITEM_DONE, sibling)
 
-        with caplog.at_level(logging.ERROR, logger="otter_ai_core.bus"):
+        with caplog.at_level(logging.ERROR, logger="otter_ai_core.runtime.bus"):
             await bus.emit(ITEM_DONE, Item(value="survives"))
 
         await asyncio.wait_for(done.wait(), 1)

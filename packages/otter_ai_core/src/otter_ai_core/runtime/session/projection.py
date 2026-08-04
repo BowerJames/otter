@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 
-from otter_ai_core.context import (
+from otter_ai_core.data_models.context import (
     AssistantMessage,
     Context,
     ContextItem,
+    Role,
     UserContextItem,
     UserMessage,
 )
-from otter_ai_core.context.role import Role
-from otter_ai_core.provider_api_model_options import ThinkingLevel
-from otter_ai_core.session_manager.entries import (
+from otter_ai_core.data_models.provider import ThinkingLevel
+from otter_ai_core.data_models.session.entries import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     CompactionEntry,
@@ -26,20 +25,10 @@ from otter_ai_core.session_manager.entries import (
     SessionInfoEntry,
     ThinkingLevelChangeEntry,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class SessionDerivedState:
-    model: tuple[str, str] | None
-    thinking_level: ThinkingLevel | None
-    active_tool_names: list[str] | None
-
-
-@dataclass(frozen=True, slots=True)
-class SessionProjection:
-    context: Context
-    state: SessionDerivedState
-
+from otter_ai_core.data_models.session.projection import (
+    SessionDerivedState,
+    SessionProjection,
+)
 
 #: Prefix of the synthesized compaction-summary user message.
 _COMPACTION_SUMMARY_PREFIX = "[compaction-summary]\n\n"
@@ -204,8 +193,6 @@ def project(path: Sequence[SessionEntry]) -> SessionProjection:
 
 
 __all__ = [
-    "SessionDerivedState",
-    "SessionProjection",
     "apply_compaction_transform",
     "entries_to_items",
     "apply_updates",

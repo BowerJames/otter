@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from otter_ai_core.session_manager.entries import (
+from otter_ai_core.data_models.session.entries import (
     SessionEntry,
     SessionEntryType,
 )
-from otter_ai_core.session_manager.metadata import SessionMetadata, SessionStats
+from otter_ai_core.data_models.session.metadata import SessionMetadata, SessionStats
 
 
 class SessionStore[TMetadata: SessionMetadata](Protocol):
