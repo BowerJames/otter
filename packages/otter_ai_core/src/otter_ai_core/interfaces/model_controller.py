@@ -11,7 +11,6 @@ from otter_ai_core.data_models.events import (
     BranchMoved,
     CompactionDone,
     InputEvent,
-    ServerContextEventType,
 )
 
 from .subscribable import Subscribable
@@ -40,27 +39,6 @@ class ModelController(Subscribable, TaskRunner, Protocol):
     def abort(self) -> None: ...
 
 
-# String event names the controller's Bus is keyed on. They alias the canonical
-# ServerContextEventType members (the single source of truth) so subscribers can
-# refer to a stable name without importing the model-connection enum.
-RESPONSE_STARTED: str = ServerContextEventType.RESPONSE_STARTED
-RESPONSE_UPDATED: str = ServerContextEventType.RESPONSE_UPDATED
-RESPONSE_DONE: str = ServerContextEventType.RESPONSE_DONE
-USER_ITEM_ADDED: str = ServerContextEventType.USER_ITEM_ADDED
-USER_ITEM_UPDATED: str = ServerContextEventType.USER_ITEM_UPDATED
-TOOL_RESULT_ADDED: str = ServerContextEventType.TOOL_RESULT_ADDED
-COMPACTION_DONE: str = ServerContextEventType.COMPACTION_DONE
-BRANCH_MOVED: str = ServerContextEventType.BRANCH_MOVED
-
-
 __all__ = [
     "ModelController",
-    "RESPONSE_STARTED",
-    "RESPONSE_UPDATED",
-    "RESPONSE_DONE",
-    "USER_ITEM_ADDED",
-    "USER_ITEM_UPDATED",
-    "TOOL_RESULT_ADDED",
-    "COMPACTION_DONE",
-    "BRANCH_MOVED",
 ]
