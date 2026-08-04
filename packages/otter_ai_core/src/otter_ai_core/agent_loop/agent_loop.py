@@ -23,9 +23,9 @@ from otter_ai_core.context import (
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.data_models import AddToolResultMessage, AddUserMessage
 from otter_ai_core.hook_runner import Hook, HookHandler, HookRunner
 from otter_ai_core.interfaces import AgentTool, ModelController
-from otter_ai_core.model_connection import AddToolResultMessage, AddUserMessage
 
 
 class QueueMode(StrEnum):

@@ -7,7 +7,7 @@ from otter_ai_core.context import (
     ToolResultContextItem,
     UserContextItem,
 )
-from otter_ai_core.model_connection import (
+from otter_ai_core.data_models import (
     BranchMoved,
     CompactionDone,
     InputEvent,
