@@ -6,10 +6,10 @@ from otter_ai_core.data_models.context import (
     AssistantMessage,
     Context,
     ContextItem,
+    Role,
     UserContextItem,
     UserMessage,
 )
-from otter_ai_core.data_models.context.role import Role
 from otter_ai_core.data_models.provider import ThinkingLevel
 from otter_ai_core.data_models.session.entries import (
     ActiveToolsChangeEntry,
