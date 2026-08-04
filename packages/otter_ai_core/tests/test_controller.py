@@ -21,21 +21,23 @@ from otter_ai_core import (
     Usage,
     UsageCost,
 )
-from otter_ai_core.context import Role, UserContextItem, UserMessage
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.context import Role, UserContextItem, UserMessage
+from otter_ai_core.data_models.events import (
     COMPACTED,
     ENTRY_APPENDED,
     ITEM_ADDED,
     ITEM_UPDATED,
     TREE_CHANGED,
+    SessionStoreControllerEventTypes,
+)
+from otter_ai_core.data_models.session import (
     BranchSummaryInput,
     SessionError,
     SessionErrorCode,
     SessionMetadata,
     SessionProjection,
-    SessionStoreController,
-    SessionStoreControllerEventTypes,
 )
+from otter_ai_core.runtime.session import SessionStoreController
 from tests._memory_store import _MemorySessionStore
 
 

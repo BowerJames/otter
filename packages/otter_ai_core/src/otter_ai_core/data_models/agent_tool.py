@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
-from otter_ai_core.context import UserContent
+from otter_ai_core.data_models.context import UserContent
 
 
 class AgentToolResult[TDetails](BaseModel):

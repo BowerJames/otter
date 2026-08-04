@@ -18,7 +18,7 @@ A small ``_conformant_backend`` task honours the abort contract — on
 Name-keyed bus behaviour (fan-out, per-name dispatch,
 idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
 end/aclose semantics) is covered in ``tests/test_bus.py``; the controller's
-bus is the same :class:`~otter_ai_core.bus.Bus`, with its event names keyed on
+bus is the same :class:`~otter_ai_core.runtime.bus.Bus`, with its event names keyed on
 :class:`~otter_ai_core.data_models.ServerContextEventType`.
 """
 
@@ -42,8 +42,8 @@ from otter_ai_core import (
     UserContextItem,
     UserMessage,
 )
-from otter_ai_core.context import Role
-from otter_ai_core.data_models import (
+from otter_ai_core.data_models.context import Role
+from otter_ai_core.data_models.events import (
     AbortResponse,
     AddToolResultMessage,
     AddUserMessage,
@@ -62,8 +62,12 @@ from otter_ai_core.data_models import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.default_model_controller import RESPONSE_DONE, DefaultModelController, State
 from otter_ai_core.interfaces import ModelController
+from otter_ai_core.runtime.default_model_controller import (
+    RESPONSE_DONE,
+    DefaultModelController,
+    State,
+)
 from tests._connection import ConnectionBackend, ConnectionPair, create_connection
 
 

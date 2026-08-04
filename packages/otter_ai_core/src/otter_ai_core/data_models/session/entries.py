@@ -5,8 +5,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from otter_ai_core.context import ContextItem, Usage, UserContent
-from otter_ai_core.provider_api_model_options import ThinkingLevel
+from otter_ai_core.data_models.context import ContextItem, Usage, UserContent
+from otter_ai_core.data_models.provider import ThinkingLevel
 
 
 class SessionEntryType(StrEnum):

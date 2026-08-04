@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from otter_ai_core.builder import BuilderFn
-from otter_ai_core.context import (
+from otter_ai_core.data_models.context import (
     AssistantContent,
     AssistantContextItem,
     AssistantMessage,
@@ -25,34 +24,22 @@ from otter_ai_core.context import (
     UserMessage,
     context_item,
 )
-from otter_ai_core.default_channel import DefaultChannel, create_default_channel
-from otter_ai_core.default_model_controller import DefaultModelController, State
-from otter_ai_core.interfaces import (
-    AbortableConnection,
-    AbortableStream,
-    AbortObservable,
-    AgentTool,
-    Channel,
-    Connection,
-    Emitter,
-    EventRunner,
-    ModelController,
-    Stream,
-    Subscribable,
-    Writer,
-)
-from otter_ai_core.provider_api_model_options import (
-    KnownApis,
-    KnownProviders,
-    ProviderModelOption,
-    ThinkingLevel,
-)
-from otter_ai_core.session_manager import (
+from otter_ai_core.data_models.events import (
     COMPACTED,
     ENTRY_APPENDED,
     ITEM_ADDED,
     ITEM_UPDATED,
     TREE_CHANGED,
+    SessionStoreControllerEventTypes,
+    TreeChangedPayload,
+)
+from otter_ai_core.data_models.provider import (
+    KnownApis,
+    KnownProviders,
+    ProviderModelOption,
+    ThinkingLevel,
+)
+from otter_ai_core.data_models.session import (
     ActiveToolsChangeEntry,
     BranchSummaryEntry,
     BranchSummaryInput,
@@ -73,11 +60,27 @@ from otter_ai_core.session_manager import (
     SessionMetadata,
     SessionProjection,
     SessionStats,
-    SessionStore,
-    SessionStoreController,
-    SessionStoreControllerEventTypes,
     ThinkingLevelChangeEntry,
-    TreeChangedPayload,
+)
+from otter_ai_core.interfaces import (
+    AbortableConnection,
+    AbortableStream,
+    AbortObservable,
+    AgentTool,
+    Channel,
+    Connection,
+    Emitter,
+    EventRunner,
+    ModelController,
+    SessionStore,
+    Stream,
+    Subscribable,
+    Writer,
+)
+from otter_ai_core.runtime.default_channel import DefaultChannel, create_default_channel
+from otter_ai_core.runtime.default_model_controller import DefaultModelController, State
+from otter_ai_core.runtime.session import (
+    SessionStoreController,
     apply_compaction_transform,
     apply_updates,
     derive_state,
@@ -90,8 +93,6 @@ __version__ = "0.1.0"
 __all__ = [
     # version
     "__version__",
-    # builder
-    "BuilderFn",
     # usage
     "Usage",
     "UsageCost",

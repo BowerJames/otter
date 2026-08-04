@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from otter_ai_core.context import Usage
+from otter_ai_core.data_models.context import Usage
 
 
 class SessionMetadata(BaseModel):
