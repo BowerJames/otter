@@ -186,7 +186,6 @@ serializable data model is unchanged.
   `State` (the idle/busy latch + closing flag). Its `bus` is a generic `Bus`
   keyed on `ServerContextEventType`. `compact` / `branch` target **stateful**
   connections and return the confirm verbatim (`error_message` = refusal).
-  `AgentLoop` depends on the `ModelController` Protocol, not the concrete class.
   Re-exported at the top level (`ModelController` / `DefaultModelController` /
   `State`).
 - [`builder.py`](./packages/otter_ai_core/src/otter_ai_core/builder.py) — the
