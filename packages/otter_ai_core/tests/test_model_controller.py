@@ -64,7 +64,6 @@ from otter_ai_core.data_models.events import (
 )
 from otter_ai_core.interfaces import ModelController
 from otter_ai_core.runtime.default_model_controller import (
-    RESPONSE_DONE,
     DefaultModelController,
     State,
 )
@@ -273,7 +272,7 @@ async def test_controller_bus_narrows_response_done() -> None:
                 case _:
                     pass
 
-        controller.bus.on(RESPONSE_DONE, handler)
+        controller.bus.on(ServerContextEventType.RESPONSE_DONE, handler)
         backend.push(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(done.wait(), 1)
         assert seen == ["a1"]
@@ -667,7 +666,7 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
             if isinstance(event, ResponseDone):
                 done.set()
 
-        controller.bus.on(RESPONSE_DONE, handler)
+        controller.bus.on(ServerContextEventType.RESPONSE_DONE, handler)
 
         task = asyncio.create_task(controller.generate())
         await _take(backend, 1)  # CreateResponse

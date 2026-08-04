@@ -140,8 +140,8 @@ high-level convenience most callers want.
   (`add_message` / `generate` / `compact` / `branch` / `abort`), tracks idle/busy
   state within each command method (busy on push, idle when its confirmation
   event arrives), and re-publishes every server event to its `Bus`. Subscribe
-  via the string event-name aliases in
-  [`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py)
+  via the `ServerContextEventType` members in
+  [`data_models/events/server_context_events.py`](./src/otter_ai_core/data_models/events/server_context_events.py)
   (`RESPONSE_DONE`, `USER_ITEM_ADDED`, …).
 - [`State`](./src/otter_ai_core/runtime/default_model_controller/state.py) — the
   idle/busy `asyncio.Event` latch plus an `is_closing` flag.
