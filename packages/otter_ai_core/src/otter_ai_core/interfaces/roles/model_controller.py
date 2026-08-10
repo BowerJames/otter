@@ -13,15 +13,12 @@ from otter_ai_core.data_models.events import (
     InputEvent,
 )
 
+from ..capabilities.binary_state_machine import BinaryStateMachine
 from ..capabilities.subscribable import Subscribable
 from ..capabilities.task_runner import TaskRunner
 
 
-class ModelController(Subscribable, TaskRunner, Protocol):
-    def is_idle(self) -> bool: ...
-
-    async def wait_for_idle(self) -> None: ...
-
+class ModelController(Subscribable, TaskRunner, BinaryStateMachine, Protocol):
     async def add_message(self, message: InputEvent) -> UserContextItem | ToolResultContextItem: ...
 
     async def generate(self) -> AssistantContextItem: ...
@@ -35,8 +32,6 @@ class ModelController(Subscribable, TaskRunner, Protocol):
     ) -> CompactionDone: ...
 
     async def branch(self, at_item_id: str, *, summary: str | None = None) -> BranchMoved: ...
-
-    def abort(self) -> None: ...
 
 
 __all__ = [

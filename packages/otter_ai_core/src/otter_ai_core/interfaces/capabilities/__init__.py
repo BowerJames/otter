@@ -1,5 +1,4 @@
-from .abortable_connection import AbortableConnection
-from .abortable_stream import AbortableStream
+from .binary_state_machine import BinaryStateMachine
 from .channel import Channel
 from .connection import Connection
 from .emitter import Emitter
@@ -9,8 +8,7 @@ from .task_runner import TaskRunner
 from .writer import Writer
 
 __all__ = [
-    "AbortableConnection",
-    "AbortableStream",
+    "BinaryStateMachine",
     "Channel",
     "Connection",
     "Emitter",

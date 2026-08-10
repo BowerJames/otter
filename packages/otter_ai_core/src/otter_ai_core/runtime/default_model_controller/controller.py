@@ -15,7 +15,6 @@ from otter_ai_core.data_models.events import (
     AddUserMessage,
     BranchMove,
     BranchMoved,
-    ClientContextEvent,
     CompactionDone,
     CreateCompaction,
     CreateResponse,
@@ -23,14 +22,12 @@ from otter_ai_core.data_models.events import (
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
-    ServerContextEvent,
     ServerContextEventType,
     ToolResultAdded,
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.interfaces.capabilities import AbortableConnection
-from otter_ai_core.interfaces.roles import EventRunner, ModelController
+from otter_ai_core.interfaces.roles import EventRunner, ModelConnection, ModelController
 from otter_ai_core.mixins import TaskRunnerMixIn
 from otter_ai_core.runtime.bus import create_bus
 from otter_ai_core.runtime.default_model_controller.state import State
@@ -55,7 +52,7 @@ _SERVER_EVENT_TRIGGER_TYPES: dict[ServerContextEventType, type[object]] = {
 class DefaultModelController(TaskRunnerMixIn, ModelController):
     def __init__(
         self,
-        client: AbortableConnection[ServerContextEvent, ClientContextEvent],
+        client: ModelConnection,
         event_runner_factory: Callable[[], EventRunner] = create_bus,
     ) -> None:
         self._client = client
@@ -282,11 +279,11 @@ class DefaultModelController(TaskRunnerMixIn, ModelController):
     # Lifecycle / teardown
     # ------------------------------------------------------------------ #
 
-    def close(self) -> None:
+    def end(self) -> None:
         if self._state.is_closing:
             return
         self._state.begin_closing()
-        self._client.abort()
+        self._client.end()
 
     def _register_tasks(self, tg: asyncio.TaskGroup) -> None:
         tg.create_task(self._run())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Self
 
@@ -128,25 +129,42 @@ def create_bidirectional_channel[TClient, TBackend]() -> BidirectionalChannelPai
     )
 
 
+def _noop_classify(_event: object) -> bool | None:
+    return None
+
+
 class ConnectionClient[TClient, TBackend]:
-    __slots__ = ("_client", "_abort_signal")
+    __slots__ = ("_client", "_abort_signal", "_idle", "_classify")
 
     def __init__(
         self,
         client: BidirectionalChannelClient[TClient, TBackend],
         abort_signal: asyncio.Event,
+        classify: Callable[[TBackend], bool | None] | None = None,
     ) -> None:
         self._client = client
         self._abort_signal = abort_signal
+        self._idle = asyncio.Event()
+        self._idle.set()
+        self._classify: Callable[[TBackend], bool | None] = (
+            classify if classify is not None else _noop_classify
+        )
+
+    def is_idle(self) -> bool:
+        return self._idle.is_set()
+
+    async def wait_for_idle(self) -> None:
+        await self._idle.wait()
 
     def abort(self) -> None:
+        # Graceful: signal in-flight work to wrap to idle. ``end()`` terminates.
         self._abort_signal.set()
-        self.end()
 
     def push(self, event: TClient) -> None:
         self._client.push(event)
 
     def end(self) -> None:
+        self._abort_signal.set()
         self._client.end()
 
     def __aiter__(self) -> Self:
@@ -156,7 +174,13 @@ class ConnectionClient[TClient, TBackend]:
         return self
 
     async def __anext__(self) -> TBackend:
-        return await anext(self._client)
+        event = await anext(self._client)
+        state = self._classify(event)
+        if state is True:
+            self._idle.clear()
+        elif state is False:
+            self._idle.set()
+        return event
 
 
 class ConnectionBackend[TClient, TBackend]:
@@ -199,10 +223,12 @@ class ConnectionPair[TClient, TBackend]:
     backend: ConnectionBackend[TClient, TBackend]
 
 
-def create_connection[TClient, TBackend]() -> ConnectionPair[TClient, TBackend]:
+def create_connection[TClient, TBackend](
+    classify: Callable[[TBackend], bool | None] | None = None,
+) -> ConnectionPair[TClient, TBackend]:
     channel: BidirectionalChannelPair[TClient, TBackend] = create_bidirectional_channel()
     abort_signal: asyncio.Event = asyncio.Event()
     return ConnectionPair(
-        client=ConnectionClient(channel.client, abort_signal),
+        client=ConnectionClient(channel.client, abort_signal, classify),
         backend=ConnectionBackend(channel.backend, abort_signal),
     )

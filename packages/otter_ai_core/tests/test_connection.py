@@ -7,6 +7,7 @@ from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
+from otter_ai_core.interfaces.capabilities import BinaryStateMachine
 from tests._connection import (
     ConnectionBackend,
     ConnectionClient,
@@ -67,25 +68,100 @@ def test_distinct_pairs_have_distinct_signals() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# abort() also closes the outbound (the deliberate divergence from StreamClient)
+# end() terminates (closes the outbound); abort() is graceful (signal only)
 # --------------------------------------------------------------------------- #
 
 
-async def test_abort_closes_outbound_so_backend_drain_completes() -> None:
-    """``client.abort()`` sets the signal **and** ends the outbound writer.
+async def test_end_closes_outbound_so_backend_drain_completes() -> None:
+    """``client.end()`` sets the signal **and** ends the outbound writer.
 
     So a backend draining the outbound over ``async for`` terminates (it does
-    not hang waiting for events the aborted client will never send) — this is
-    the bidirectional divergence from ``StreamClient.abort()`` (which only sets
-    the signal).
+    not hang waiting for events the ended client will never send).
     """
     pair: ConnectionPair[str, int] = create_connection()
     pair.client.push("x")
-    pair.client.abort()
+    pair.client.end()
 
     drained = [event async for event in pair.backend]  # drains outbound, then stops
     assert drained == ["x"]
     assert pair.backend.abort_signal.is_set()
+
+
+async def test_abort_does_not_close_outbound() -> None:
+    """``client.abort()`` is graceful: it sets the signal but leaves the outbound
+    open, so a backend draining the outbound does not terminate on its own."""
+    pair: ConnectionPair[str, int] = create_connection()
+    pair.client.push("x")
+    pair.client.abort()
+
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.05):
+            async for _event in pair.backend:
+                pass
+    assert pair.backend.abort_signal.is_set()
+
+
+# --------------------------------------------------------------------------- #
+# BinaryStateMachine: is_idle / wait_for_idle (wire-driven via a classifier)
+# --------------------------------------------------------------------------- #
+
+
+def _connection_client_satisfies_binary_state_machine(
+    client: ConnectionClient[str, int],
+) -> BinaryStateMachine:
+    return client
+
+
+async def test_connection_starts_idle() -> None:
+    pair: ConnectionPair[str, int] = create_connection()
+    assert pair.client.is_idle() is True
+    await asyncio.wait_for(pair.client.wait_for_idle(), 1)  # already idle -> returns
+
+
+async def test_wire_latch_flips_busy_then_idle() -> None:
+    def classify(event: int) -> bool | None:
+        if event == 1:
+            return True
+        if event == 2:
+            return False
+        return None
+
+    pair: ConnectionPair[str, int] = create_connection(classify=classify)
+    assert pair.client.is_idle() is True
+    pair.backend.push(1)
+    pair.backend.push(2)
+    pair.backend.end()
+
+    iterator = aiter(pair.client)
+    first = await anext(iterator)
+    assert first == 1
+    assert pair.client.is_idle() is False  # busy after the start event
+    second = await anext(iterator)
+    assert second == 2
+    assert pair.client.is_idle() is True  # idle after the done event
+
+
+async def test_wait_for_idle_blocks_until_done_event() -> None:
+    def classify(event: int) -> bool | None:
+        if event == 1:
+            return True
+        if event == 2:
+            return False
+        return None
+
+    pair: ConnectionPair[str, int] = create_connection(classify=classify)
+    pair.backend.push(1)
+    pair.backend.push(2)
+
+    iterator = aiter(pair.client)
+    await anext(iterator)  # 1 -> busy
+    assert pair.client.is_idle() is False
+
+    waiter = asyncio.create_task(pair.client.wait_for_idle())
+    await asyncio.sleep(0)  # let the waiter park on the idle event
+    assert waiter.done() is False
+    await anext(iterator)  # 2 -> idle
+    await asyncio.wait_for(waiter, 1)
 
 
 async def test_abort_signal_can_be_awaited_by_producer() -> None:
