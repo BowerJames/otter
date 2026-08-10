@@ -35,7 +35,7 @@ from otter_ai_core.data_models.session.entries import (
 from otter_ai_core.data_models.session.errors import SessionError, SessionErrorCode
 from otter_ai_core.data_models.session.metadata import BranchSummaryInput, SessionMetadata
 from otter_ai_core.data_models.session.projection import SessionProjection
-from otter_ai_core.interfaces.store import SessionStore
+from otter_ai_core.interfaces.roles.store import SessionStore
 from otter_ai_core.runtime.bus import Bus
 from otter_ai_core.runtime.session.projection import project
 

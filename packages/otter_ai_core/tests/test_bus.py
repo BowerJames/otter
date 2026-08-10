@@ -11,7 +11,7 @@ from typing import Self
 
 import pytest
 
-from otter_ai_core.interfaces import Channel
+from otter_ai_core.interfaces.capabilities import Channel
 from otter_ai_core.runtime.bus import Bus
 
 

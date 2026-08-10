@@ -7,7 +7,8 @@ from collections.abc import Awaitable, Callable
 from types import NoneType
 from typing import cast
 
-from otter_ai_core.interfaces import Channel, EventRunner
+from otter_ai_core.interfaces.capabilities import Channel
+from otter_ai_core.interfaces.roles import EventRunner
 from otter_ai_core.mixins import TaskRunnerMixIn
 from otter_ai_core.runtime.default_channel import create_default_channel
 

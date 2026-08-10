@@ -62,7 +62,7 @@ from otter_ai_core.data_models.events import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.interfaces import ModelController
+from otter_ai_core.interfaces.roles import ModelController
 from otter_ai_core.runtime.default_model_controller import (
     DefaultModelController,
     State,
