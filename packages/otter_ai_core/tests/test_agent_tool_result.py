@@ -34,6 +34,6 @@ def test_result_accepts_user_content_union() -> None:
 
 def test_interfaces_does_not_import_agent_loop() -> None:
     sys.modules.pop("otter_ai_core.agent_loop", None)
-    import otter_ai_core.interfaces.agent_tool  # noqa: F401
+    import otter_ai_core.interfaces.roles.agent_tool  # noqa: F401
 
     assert "otter_ai_core.agent_loop" not in sys.modules

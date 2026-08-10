@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from otter_ai_core import DefaultChannel, create_default_channel
-from otter_ai_core.interfaces import Channel
+from otter_ai_core.interfaces.capabilities import Channel
 from tests._dummy_event import DummyEvent, DummyEventType, dummy_events
 
 

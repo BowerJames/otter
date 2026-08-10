@@ -1,8 +1,8 @@
 from typing import Protocol
 
-from .emitter import Emitter
-from .subscribable import Subscribable
-from .task_runner import TaskRunner
+from ..capabilities.emitter import Emitter
+from ..capabilities.subscribable import Subscribable
+from ..capabilities.task_runner import TaskRunner
 
 
 class EventRunner(Subscribable, Emitter, TaskRunner, Protocol):

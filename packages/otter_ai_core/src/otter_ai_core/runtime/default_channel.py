@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Self
 
-from otter_ai_core.interfaces import Channel
+from otter_ai_core.interfaces.capabilities import Channel
 
 
 class _End:

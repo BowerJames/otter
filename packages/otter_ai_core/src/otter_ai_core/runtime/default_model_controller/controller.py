@@ -29,11 +29,8 @@ from otter_ai_core.data_models.events import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.interfaces import (
-    AbortableConnection,
-    EventRunner,
-    ModelController,
-)
+from otter_ai_core.interfaces.capabilities import AbortableConnection
+from otter_ai_core.interfaces.roles import EventRunner, ModelController
 from otter_ai_core.mixins import TaskRunnerMixIn
 from otter_ai_core.runtime.bus import create_bus
 from otter_ai_core.runtime.default_model_controller.state import State

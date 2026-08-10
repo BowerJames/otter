@@ -13,8 +13,8 @@ from otter_ai_core.data_models.events import (
     InputEvent,
 )
 
-from .subscribable import Subscribable
-from .task_runner import TaskRunner
+from ..capabilities.subscribable import Subscribable
+from ..capabilities.task_runner import TaskRunner
 
 
 class ModelController(Subscribable, TaskRunner, Protocol):

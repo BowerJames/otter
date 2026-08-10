@@ -62,19 +62,21 @@ from otter_ai_core.data_models.session import (
     SessionStats,
     ThinkingLevelChangeEntry,
 )
-from otter_ai_core.interfaces import (
+from otter_ai_core.interfaces.capabilities import (
     AbortableConnection,
     AbortableStream,
-    AgentTool,
     Channel,
     Connection,
     Emitter,
-    EventRunner,
-    ModelController,
-    SessionStore,
     Stream,
     Subscribable,
     Writer,
+)
+from otter_ai_core.interfaces.roles import (
+    AgentTool,
+    EventRunner,
+    ModelController,
+    SessionStore,
 )
 from otter_ai_core.runtime.default_channel import DefaultChannel, create_default_channel
 from otter_ai_core.runtime.default_model_controller import DefaultModelController, State
