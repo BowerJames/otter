@@ -33,6 +33,7 @@ import pytest
 from otter_ai_core import (
     AssistantContextItem,
     AssistantMessage,
+    BinaryStateMachine,
     StopReason,
     TextContent,
     ToolResultContextItem,
@@ -62,12 +63,12 @@ from otter_ai_core.data_models.events import (
     UserItemAdded,
     UserItemUpdated,
 )
-from otter_ai_core.interfaces.roles import ModelController
+from otter_ai_core.interfaces.roles import ModelConnection, ModelController
 from otter_ai_core.runtime.default_model_controller import (
     DefaultModelController,
     State,
 )
-from tests._connection import ConnectionBackend, ConnectionPair, create_connection
+from tests._connection import ConnectionBackend, ConnectionClient, ConnectionPair, create_connection
 
 
 def _default_controller_satisfies_protocol(
@@ -77,6 +78,19 @@ def _default_controller_satisfies_protocol(
     # satisfies the ModelController Protocol here (this file is in the mypy
     # ``files`` set). Never called at runtime.
     return controller
+
+
+def _connection_client_satisfies_model_connection(
+    client: ConnectionClient[ClientContextEvent, ServerContextEvent],
+) -> ModelConnection:
+    # Structural conformance guard: the controller's dependency (a specialized
+    # ConnectionClient) satisfies the ModelConnection Protocol.
+    return client
+
+
+def _model_controller_is_a_binary_state_machine(ctrl: ModelController) -> BinaryStateMachine:
+    # Structural conformance guard: ModelController is a BinaryStateMachine.
+    return ctrl
 
 
 # --------------------------------------------------------------------------- #
@@ -162,6 +176,14 @@ def _branch_moved() -> BranchMoved:
     )
 
 
+def _classify_response_lifecycle(event: ServerContextEvent) -> bool | None:
+    if event.type == ServerContextEventType.RESPONSE_STARTED:
+        return True
+    if event.type == ServerContextEventType.RESPONSE_DONE:
+        return False
+    return None
+
+
 @asynccontextmanager
 async def _pair() -> AsyncIterator[
     tuple[DefaultModelController, ConnectionBackend[ClientContextEvent, ServerContextEvent]]
@@ -170,15 +192,17 @@ async def _pair() -> AsyncIterator[
 
     The controller is entered on entry. On exit the backend's inbound is ended
     cooperatively (so the controller drain finishes) and the controller is
-    closed — no force-cancel under normal teardown.
+    ended — no force-cancel under normal teardown.
     """
-    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
+    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection(
+        classify=_classify_response_lifecycle
+    )
     controller = DefaultModelController(pair.client)
     await controller.__aenter__()
     try:
         yield controller, pair.backend
     finally:
-        controller.close()
+        controller.end()
         pair.backend.end()
         await controller.__aexit__(None, None, None)
 
@@ -637,12 +661,12 @@ async def test_add_message_raises_when_torn_down_mid_flight() -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def test_close_initiates_abort_and_guards_commands() -> None:
+async def test_end_initiates_terminate_and_guards_commands() -> None:
     async with _pair() as (controller, backend):
         assert backend.abort_signal.is_set() is False
-        controller.close()
+        controller.end()
         assert controller.is_closing() is True
-        assert backend.abort_signal.is_set() is True  # client.abort() fired
+        assert backend.abort_signal.is_set() is True  # client.end() fired
 
         with pytest.raises(RuntimeError, match="closing"):
             await controller.generate()
@@ -656,7 +680,7 @@ async def test_close_initiates_abort_and_guards_commands() -> None:
             await controller.branch("i1")
 
 
-async def test_close_drains_final_items_via_conformant_backend() -> None:
+async def test_end_drains_final_items_via_conformant_backend() -> None:
     async with _pair() as (controller, backend):
         received: list[ServerContextEvent] = []
         done = asyncio.Event()
@@ -677,7 +701,7 @@ async def test_close_drains_final_items_via_conformant_backend() -> None:
             backend.end()
 
         conf = asyncio.create_task(conformant())
-        controller.close()
+        controller.end()
         await asyncio.wait_for(done.wait(), 1)  # final item reached the handler
         await asyncio.wait_for(task, 1)  # generate completed from the response.done
         await conf
@@ -708,29 +732,29 @@ async def test_teardown_force_cancels_wedged_backend() -> None:
     assert loop.time() - start < 2.0  # force-cancelled within the deadline
 
 
-async def test_async_context_manager_closes() -> None:
+async def test_async_context_manager_ends() -> None:
     pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
     task = asyncio.create_task(_conformant(pair.backend))
     async with DefaultModelController(pair.client) as controller:
         assert controller.is_idle()
-        controller.close()  # abort -> _conformant ends the inbound -> drain completes
+        controller.end()  # end -> _conformant ends the inbound -> drain completes
     assert controller.is_closing()
     await task
 
 
-async def test_close_is_idempotent() -> None:
+async def test_end_is_idempotent() -> None:
     async with _pair() as (controller, backend):
         task = asyncio.create_task(_conformant(backend))
-        controller.close()
-        controller.close()  # idempotent
+        controller.end()
+        controller.end()  # idempotent
     await task
     assert controller.is_closing()
 
 
-async def test_post_close_commands_rejected_even_when_idle() -> None:
+async def test_post_end_commands_rejected_even_when_idle() -> None:
     async with _pair() as (controller, backend):
         task = asyncio.create_task(_conformant(backend))
-        controller.close()
+        controller.end()
         assert controller.is_idle()  # no generation was ever started
         with pytest.raises(RuntimeError, match="closing"):
             await controller.generate()

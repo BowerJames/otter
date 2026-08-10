@@ -130,12 +130,13 @@ plus the seam types a provider/transport package will implement:
 [`default_model_controller/`](./src/otter_ai_core/runtime/default_model_controller)
 turns a low-level connection conduit into a stateful conversation. It is the
 default implementation of the `ModelController` Protocol (defined in
-[`interfaces/model_controller.py`](./src/otter_ai_core/interfaces/model_controller.py))
+[`interfaces/roles/model_controller.py`](./src/otter_ai_core/interfaces/roles/model_controller.py))
 and is re-exported at the top level (`DefaultModelController` / `State`) — the
 high-level convenience most callers want.
 
 - [`DefaultModelController`](./src/otter_ai_core/runtime/default_model_controller/controller.py)
-  — wraps an `AbortableConnection[ServerContextEvent, ClientContextEvent]`,
+  — wraps a `ModelConnection` (a `Connection[ServerContextEvent,
+  ClientContextEvent]` that is also a `BinaryStateMachine`),
   drives the conversation via **async, confirmation-awaiting commands**
   (`add_message` / `generate` / `compact` / `branch` / `abort`), tracks idle/busy
   state within each command method (busy on push, idle when its confirmation
@@ -153,12 +154,12 @@ next assistant response (it returns the echoed assistant item on
 `response.done`). Commands are single-flight (rejected while busy) and never
 hang: if the run loop exits before the awaited confirmation arrives — teardown,
 or a non-conformant backend — the command raises rather than stranding its task.
-Two distinct aborts:
+Two unified lifecycle verbs (both `ModelController` and its `ModelConnection`
+dependency are `BinaryStateMachine`s):
 
-- `abort()` — **protocol** abort: stop the in-flight generation but keep the
-  connection open (pushes an `AbortResponse`).
-- `close()` / `aclose()` — **runtime** teardown: tear the connection down via
-  `client.abort()`.
+- `abort()` — **graceful**: stop the in-flight generation and drive to IDLE as
+  fast as possible, keeping the connection open (pushes an `AbortResponse`).
+- `end()` — **terminate**: tear the connection down via `client.end()`.
 
 Prefer `async with DefaultModelController(client)`.
 

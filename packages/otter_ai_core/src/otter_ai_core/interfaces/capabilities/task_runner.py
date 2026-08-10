@@ -17,5 +17,7 @@ class TaskRunner(Protocol):
 
     def __await__(self) -> Generator[None, None, None]: ...
 
+    def end(self) -> None: ...
+
 
 __all__ = ["TaskRunner"]

@@ -63,8 +63,7 @@ from otter_ai_core.data_models.session import (
     ThinkingLevelChangeEntry,
 )
 from otter_ai_core.interfaces.capabilities import (
-    AbortableConnection,
-    AbortableStream,
+    BinaryStateMachine,
     Channel,
     Connection,
     Emitter,
@@ -75,6 +74,7 @@ from otter_ai_core.interfaces.capabilities import (
 from otter_ai_core.interfaces.roles import (
     AgentTool,
     EventRunner,
+    ModelConnection,
     ModelController,
     SessionStore,
 )
@@ -129,13 +129,13 @@ __all__ = [
     "ThinkingLevel",
     # interfaces (Protocol contracts: streaming runtime, model-controller role,
     #   and the agent-loop tool-execution seam)
-    "AbortableConnection",
-    "AbortableStream",
     "AgentTool",
+    "BinaryStateMachine",
     "Channel",
     "Connection",
     "Emitter",
     "EventRunner",
+    "ModelConnection",
     "ModelController",
     "Stream",
     "Subscribable",
