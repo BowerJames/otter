@@ -8,17 +8,21 @@ from otter_ai_core.interfaces.roles.model_connection import ModelConnection
 
 
 class FakeModelConnection(ModelConnection):
-    def __init__(self) -> None:
+    def __init__(self, idle: bool = True) -> None:
         self._queue: asyncio.Queue[ServerContextEvent | None] = asyncio.Queue()
+        self._idle: bool = idle
 
     def push(self, event: ClientContextEvent) -> None:
         raise NotImplementedError
 
     def end(self) -> None:
+        pass
+
+    def trigger_end(self) -> None:
         self._queue.put_nowait(None)
 
     def is_idle(self) -> bool:
-        raise NotImplementedError
+        return self._idle
 
     async def wait_for_idle(self) -> None:
         raise NotImplementedError
