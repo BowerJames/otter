@@ -4,16 +4,19 @@ Tests exercise the concerns of the ``default_model_controller`` package:
 
 * :class:`State` — the idle/busy latch (starts idle) and the closing flag;
 * :class:`DefaultModelController` — the async, confirmation-awaiting commands
-  (:meth:`~DefaultModelController.add_message` / :meth:`~DefaultModelController.generate`),
+  (:meth:`~DefaultModelController.add_message` /
+  :meth:`~DefaultModelController.add_tool_result` /
+  :meth:`~DefaultModelController.generate`),
   the busy/closing guards, idle tracking, bus fan-through, the no-strand
   teardown guarantee for in-flight commands, and the cooperative-then-
   deterministic teardown model.
 
-The controller tests stand up a real ``create_connection()`` pair: the
-controller drives ``pair.client`` and the test pushes server events on
-``pair.backend`` (and drains the client→server events the controller pushes).
-A small ``_conformant_backend`` task honours the abort contract — on
-``abort_signal`` it ends the inbound so the controller's drain completes.
+The controller drives a :class:`tests._fake_model_connection._RecordingModelConnection`
+— a method-contract double that records the commands the controller issues
+(``add_user_message`` / ``add_tool_result`` / ``generate`` / ``abort``) and lets
+the test inject server events via ``feed()`` and terminate the stream via
+``end()`` (``auto_end=True`` ends the stream on ``end()``; ``auto_end=False``
+wedges the drain so teardown must force-cancel).
 
 Name-keyed bus behaviour (fan-out, per-name dispatch,
 idempotent unsubscribe, no-subscriber no-op, per-handler isolation,
@@ -45,15 +48,8 @@ from otter_ai_core import (
 )
 from otter_ai_core.data_models.context import Role
 from otter_ai_core.data_models.events import (
-    AbortResponse,
-    AddToolResultMessage,
-    AddUserMessage,
-    BranchMove,
     BranchMoved,
-    ClientContextEvent,
-    ClientContextEventType,
     CompactionDone,
-    CreateCompaction,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -68,7 +64,7 @@ from otter_ai_core.runtime.default_model_controller import (
     DefaultModelController,
     State,
 )
-from tests._connection import ConnectionBackend, ConnectionClient, ConnectionPair, create_connection
+from tests._fake_model_connection import _RecordingModelConnection
 
 
 def _default_controller_satisfies_protocol(
@@ -80,12 +76,12 @@ def _default_controller_satisfies_protocol(
     return controller
 
 
-def _connection_client_satisfies_model_connection(
-    client: ConnectionClient[ClientContextEvent, ServerContextEvent],
+def _recording_connection_satisfies_model_connection(
+    connection: _RecordingModelConnection,
 ) -> ModelConnection:
-    # Structural conformance guard: the controller's dependency (a specialized
-    # ConnectionClient) satisfies the ModelConnection Protocol.
-    return client
+    # Structural conformance guard: the controller's dependency (a recording
+    # test double) satisfies the ModelConnection Protocol.
+    return connection
 
 
 def _model_controller_is_a_binary_state_machine(ctrl: ModelController) -> BinaryStateMachine:
@@ -153,74 +149,23 @@ def _tool_result_item() -> ToolResultContextItem:
     return ToolResultContextItem(id="tr1", message=_tool_result_message())
 
 
-def _input() -> AddUserMessage:
-    return AddUserMessage(message=_user_message())
-
-
-def _compaction_done() -> CompactionDone:
-    return CompactionDone(
-        summary="compacted history",
-        summary_item_id="cs1",
-        first_kept_item_id="k1",
-        removed_item_ids=["r1", "r2"],
-        tokens_before=100,
-        usage=_usage(),
-    )
-
-
-def _branch_moved() -> BranchMoved:
-    return BranchMoved(
-        at_item_id="u1",
-        removed_item_ids=["a1"],
-        summary_item_id="bs1",
-    )
-
-
-def _classify_response_lifecycle(event: ServerContextEvent) -> bool | None:
-    if event.type == ServerContextEventType.RESPONSE_STARTED:
-        return True
-    if event.type == ServerContextEventType.RESPONSE_DONE:
-        return False
-    return None
-
-
 @asynccontextmanager
-async def _pair() -> AsyncIterator[
-    tuple[DefaultModelController, ConnectionBackend[ClientContextEvent, ServerContextEvent]]
-]:
-    """A controller wired to a fresh connection pair; yields (controller, backend).
+async def _pair() -> AsyncIterator[tuple[DefaultModelController, _RecordingModelConnection]]:
+    """A controller wired to a recording connection; yields (controller, connection).
 
-    The controller is entered on entry. On exit the backend's inbound is ended
-    cooperatively (so the controller drain finishes) and the controller is
-    ended — no force-cancel under normal teardown.
+    The controller is entered on entry. On exit ``controller.end()`` is called,
+    which (with ``auto_end=True``) ends the connection's stream so the drain
+    finishes; the controller is then reaped via ``__aexit__`` — no force-cancel
+    under normal teardown.
     """
-    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection(
-        classify=_classify_response_lifecycle
-    )
-    controller = DefaultModelController(pair.client)
+    connection = _RecordingModelConnection(auto_end=True)
+    controller = DefaultModelController(connection)
     await controller.__aenter__()
     try:
-        yield controller, pair.backend
+        yield controller, connection
     finally:
         controller.end()
-        pair.backend.end()
         await controller.__aexit__(None, None, None)
-
-
-async def _take(
-    backend: ConnectionBackend[ClientContextEvent, ServerContextEvent],
-    n: int,
-) -> list[ClientContextEvent]:
-    """Read ``n`` client→server events the controller pushed (none blocking)."""
-    return [await asyncio.wait_for(anext(backend), 1) for _ in range(n)]
-
-
-async def _conformant(
-    backend: ConnectionBackend[ClientContextEvent, ServerContextEvent],
-) -> None:
-    """A backend that honours the abort contract: on abort, end the inbound."""
-    await backend.wait_for_abort()
-    backend.end()
 
 
 # --------------------------------------------------------------------------- #
@@ -260,22 +205,22 @@ async def test_state_wait_idle_returns_when_set() -> None:
 
 
 async def test_controller_starts_idle() -> None:
-    async with _pair() as (controller, _backend):
+    async with _pair() as (controller, _connection):
         assert controller.is_idle() is True
         assert controller.is_closing() is False
 
 
 async def test_generate_flips_busy_then_idle_on_done() -> None:
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         assert controller.is_idle()
 
         task = asyncio.create_task(controller.generate())
-        pushed = await _take(backend, 1)
-        assert pushed[0].type == ClientContextEventType.CREATE_RESPONSE
+        await asyncio.sleep(0)  # let generate call connection.generate()
+        assert connection.generate_calls == 1
         assert controller.is_idle() is False  # busy
 
-        backend.push(ResponseStarted(partial=_assistant_item()))
-        backend.push(ResponseDone(item=_assistant_item()))
+        connection.feed(ResponseStarted(partial=_assistant_item()))
+        connection.feed(ResponseDone(item=_assistant_item()))
         result = await asyncio.wait_for(task, 1)  # generate returned to idle
         assert result == _assistant_item()
 
@@ -284,7 +229,7 @@ async def test_generate_flips_busy_then_idle_on_done() -> None:
 
 async def test_controller_bus_narrows_response_done() -> None:
     """A handler on the controller's bus narrows ``ResponseDone`` to ``.item``."""
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         seen: list[str] = []
         done = asyncio.Event()
 
@@ -297,7 +242,7 @@ async def test_controller_bus_narrows_response_done() -> None:
                     pass
 
         controller.bus.on(ServerContextEventType.RESPONSE_DONE, handler)
-        backend.push(ResponseDone(item=_assistant_item()))
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(done.wait(), 1)
         assert seen == ["a1"]
 
@@ -308,7 +253,7 @@ async def test_controller_bus_narrows_response_done() -> None:
 
 
 async def test_on_rejects_unknown_type_string() -> None:
-    async with _pair() as (controller, _backend):
+    async with _pair() as (controller, _connection):
 
         async def handler(_event: ServerContextEvent) -> None:
             pass
@@ -318,7 +263,7 @@ async def test_on_rejects_unknown_type_string() -> None:
 
 
 async def test_on_subscribes_by_type_string_and_fires() -> None:
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         seen: list[str] = []
         done = asyncio.Event()
 
@@ -329,7 +274,7 @@ async def test_on_subscribes_by_type_string_and_fires() -> None:
 
         # The type key is a plain string; the StrEnum value resolves it.
         controller.on(ServerContextEventType.RESPONSE_DONE.value, handler)
-        backend.push(ResponseDone(item=_assistant_item()))
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(done.wait(), 1)
         assert seen == ["a1"]
 
@@ -340,261 +285,101 @@ async def test_on_subscribes_by_type_string_and_fires() -> None:
 
 
 async def test_generate_while_busy_raises() -> None:
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # CreateResponse pushed; controller busy + parked
+        await asyncio.sleep(0)  # generate() called; controller busy + parked
         with pytest.raises(RuntimeError, match="busy"):
             await controller.generate()
         # Release the in-flight generation so it doesn't leak.
-        backend.push(ResponseDone(item=_assistant_item()))
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(task, 1)
 
 
-async def test_add_message_pushes_when_idle() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.add_message(_input()))
-        pushed = await _take(backend, 1)
-        assert isinstance(pushed[0], AddUserMessage)
-        backend.push(UserItemAdded(item=_user_item()))
+async def test_add_message_calls_connection_when_idle() -> None:
+    async with _pair() as (controller, connection):
+        task = asyncio.create_task(controller.add_message("hi"))
+        await asyncio.sleep(0)
+        assert connection.user_messages == ["hi"]
+        connection.feed(UserItemAdded(item=_user_item()))
         result = await asyncio.wait_for(task, 1)
         assert result == _user_item()
         assert controller.is_idle()
 
 
 async def test_add_message_rejected_while_busy() -> None:
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # busy
+        await asyncio.sleep(0)  # busy
         with pytest.raises(RuntimeError, match="busy"):
-            await controller.add_message(_input())
-        backend.push(ResponseDone(item=_assistant_item()))
+            await controller.add_message("hi")
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(task, 1)
 
 
-async def test_add_message_with_tool_result_awaits_tool_result_echo() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(
-            controller.add_message(AddToolResultMessage(message=_tool_result_message()))
-        )
-        pushed = await _take(backend, 1)
-        assert pushed[0].type == ClientContextEventType.ADD_TOOL_RESULT_MESSAGE
-        backend.push(ToolResultAdded(item=_tool_result_item()))
+async def test_add_tool_result_calls_connection_when_idle() -> None:
+    async with _pair() as (controller, connection):
+        task = asyncio.create_task(controller.add_tool_result("t1", "get_time", "noon"))
+        await asyncio.sleep(0)
+        assert connection.tool_results == [("t1", "get_time", "noon")]
+        connection.feed(ToolResultAdded(item=_tool_result_item()))
         result = await asyncio.wait_for(task, 1)
         assert result == _tool_result_item()
         assert controller.is_idle()
 
 
-async def test_add_message_ignores_mismatched_echo_type() -> None:
-    """An ``AddUserMessage`` await must not complete on a ``ToolResultAdded`` echo."""
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.add_message(_input()))
-        await _take(backend, 1)  # AddUserMessage pushed; awaiting USER_ITEM_ADDED
-
-        backend.push(ToolResultAdded(item=_tool_result_item()))  # mismatched — ignored
-        await asyncio.sleep(0.02)  # let the bus worker dispatch it
-        assert task.done() is False  # still awaiting the matching echo
-
-        backend.push(UserItemAdded(item=_user_item()))  # matching — completes
+async def test_add_tool_result_rejected_while_busy() -> None:
+    async with _pair() as (controller, connection):
+        task = asyncio.create_task(controller.generate())
+        await asyncio.sleep(0)  # busy
+        with pytest.raises(RuntimeError, match="busy"):
+            await controller.add_tool_result("t1", "get_time", "noon")
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(task, 1)
 
 
-async def test_abort_pushes_abortresponse_when_busy() -> None:
-    async with _pair() as (controller, backend):
+async def test_add_message_ignores_mismatched_echo_type() -> None:
+    """An ``add_message`` await must not complete on a ``ToolResultAdded`` echo."""
+    async with _pair() as (controller, connection):
+        task = asyncio.create_task(controller.add_message("hi"))
+        await asyncio.sleep(0)  # add_user_message called; awaiting USER_ITEM_ADDED
+
+        connection.feed(ToolResultAdded(item=_tool_result_item()))  # mismatched — ignored
+        await asyncio.sleep(0.02)  # let the bus worker dispatch it
+        assert task.done() is False  # still awaiting the matching echo
+
+        connection.feed(UserItemAdded(item=_user_item()))  # matching — completes
+        await asyncio.wait_for(task, 1)
+
+
+async def test_add_tool_result_ignores_mismatched_echo_type() -> None:
+    """An ``add_tool_result`` await must not complete on a ``UserItemAdded`` echo."""
+    async with _pair() as (controller, connection):
+        task = asyncio.create_task(controller.add_tool_result("t1", "get_time", "noon"))
+        await asyncio.sleep(0)  # add_tool_result called; awaiting TOOL_RESULT_ADDED
+
+        connection.feed(UserItemAdded(item=_user_item()))  # mismatched — ignored
+        await asyncio.sleep(0.02)  # let the bus worker dispatch it
+        assert task.done() is False  # still awaiting the matching echo
+
+        connection.feed(ToolResultAdded(item=_tool_result_item()))  # matching — completes
+        await asyncio.wait_for(task, 1)
+
+
+async def test_abort_calls_connection_abort_when_busy() -> None:
+    async with _pair() as (controller, connection):
         task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # CreateResponse; busy
+        await asyncio.sleep(0)  # generate() called; busy
         controller.abort()
-        pushed = await _take(backend, 1)
-        assert isinstance(pushed[0], AbortResponse)
+        assert connection.abort_calls == 1
         # The server still ends the aborted generation with response.done.
-        backend.push(ResponseDone(item=_assistant_item()))
+        connection.feed(ResponseDone(item=_assistant_item()))
         await asyncio.wait_for(task, 1)
 
 
 async def test_abort_when_idle_raises() -> None:
-    async with _pair() as (controller, _backend):
+    async with _pair() as (controller, _connection):
         with pytest.raises(RuntimeError, match="idle"):
             controller.abort()
-
-
-# --------------------------------------------------------------------------- #
-# DefaultModelController: session ops (compact / branch)
-# --------------------------------------------------------------------------- #
-
-
-async def test_compact_pushes_createcompaction_when_idle() -> None:
-    async with _pair() as (controller, backend):
-        confirm = _compaction_done()
-        task = asyncio.create_task(controller.compact())
-        pushed = await _take(backend, 1)
-        assert isinstance(pushed[0], CreateCompaction)
-        backend.push(confirm)
-        result = await asyncio.wait_for(task, 1)
-        assert result == confirm
-        assert controller.is_idle()
-
-
-async def test_compact_considered_busy() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.compact())
-        await _take(backend, 1)  # CreateCompaction pushed
-        assert controller.is_idle() is False  # busy
-        backend.push(_compaction_done())
-        await asyncio.wait_for(task, 1)
-        assert controller.is_idle()
-
-
-async def test_compact_forwards_params() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(
-            controller.compact(
-                first_kept_item_id="k1",
-                custom_instructions="be terse",
-                summary="client summary",
-            )
-        )
-        pushed = await _take(backend, 1)
-        event = pushed[0]
-        assert isinstance(event, CreateCompaction)
-        assert event.first_kept_item_id == "k1"
-        assert event.custom_instructions == "be terse"
-        assert event.summary == "client summary"
-        backend.push(_compaction_done())
-        await asyncio.wait_for(task, 1)
-
-
-async def test_compact_rejected_while_busy() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # busy
-        with pytest.raises(RuntimeError, match="busy"):
-            await controller.compact()
-        backend.push(ResponseDone(item=_assistant_item()))
-        await asyncio.wait_for(task, 1)
-
-
-async def test_compact_ignores_mismatched_echo_type() -> None:
-    """A compact await must not complete on a ``BranchMoved`` confirm."""
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.compact())
-        await _take(backend, 1)  # CreateCompaction pushed; awaiting COMPACTION_DONE
-
-        backend.push(_branch_moved())  # mismatched — ignored
-        await asyncio.sleep(0.02)  # let the bus worker dispatch it
-        assert task.done() is False  # still awaiting the matching confirm
-
-        backend.push(_compaction_done())  # matching — completes
-        await asyncio.wait_for(task, 1)
-
-
-async def test_compact_returns_confirm_verbatim_with_error_message() -> None:
-    """A refused compaction surfaces as a confirm with ``error_message`` (not raised)."""
-    async with _pair() as (controller, backend):
-        refused = CompactionDone(error_message="unsupported")
-        task = asyncio.create_task(controller.compact())
-        await _take(backend, 1)
-        backend.push(refused)
-        result = await asyncio.wait_for(task, 1)
-        assert result is refused
-        assert result.error_message == "unsupported"
-        assert controller.is_idle()
-
-
-async def test_compact_raises_when_torn_down_mid_flight() -> None:
-    """A wedged backend + teardown must release ``compact``; it must not hang."""
-    async with _pair() as (controller, _backend):
-        task = asyncio.create_task(controller.compact())
-        await _take(_backend, 1)  # CreateCompaction pushed; awaiting compaction.done
-        assert controller.is_idle() is False
-        # Exiting ends the backend cooperatively + closes the controller, which
-        # releases the in-flight command (run loop exits).
-    with pytest.raises(RuntimeError, match="run loop exited"):
-        await task
-
-
-async def test_branch_pushes_branchmove_when_idle() -> None:
-    async with _pair() as (controller, backend):
-        confirm = _branch_moved()
-        task = asyncio.create_task(controller.branch("u1"))
-        pushed = await _take(backend, 1)
-        assert isinstance(pushed[0], BranchMove)
-        backend.push(confirm)
-        result = await asyncio.wait_for(task, 1)
-        assert result == confirm
-        assert controller.is_idle()
-
-
-async def test_branch_considered_busy() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.branch("u1"))
-        await _take(backend, 1)  # BranchMove pushed
-        assert controller.is_idle() is False  # busy
-        backend.push(_branch_moved())
-        await asyncio.wait_for(task, 1)
-        assert controller.is_idle()
-
-
-async def test_branch_forwards_at_item_id_and_summary() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.branch("u1", summary="fork note"))
-        pushed = await _take(backend, 1)
-        event = pushed[0]
-        assert isinstance(event, BranchMove)
-        assert event.at_item_id == "u1"
-        assert event.summary == "fork note"
-        backend.push(_branch_moved())
-        await asyncio.wait_for(task, 1)
-
-
-async def test_branch_rejected_while_busy() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # busy
-        with pytest.raises(RuntimeError, match="busy"):
-            await controller.branch("u1")
-        backend.push(ResponseDone(item=_assistant_item()))
-        await asyncio.wait_for(task, 1)
-
-
-async def test_branch_ignores_mismatched_echo_type() -> None:
-    """A branch await must not complete on a ``CompactionDone`` confirm."""
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(controller.branch("u1"))
-        await _take(backend, 1)  # BranchMove pushed; awaiting BRANCH_MOVED
-
-        backend.push(_compaction_done())  # mismatched — ignored
-        await asyncio.sleep(0.02)  # let the bus worker dispatch it
-        assert task.done() is False  # still awaiting the matching confirm
-
-        backend.push(_branch_moved())  # matching — completes
-        await asyncio.wait_for(task, 1)
-
-
-async def test_branch_returns_confirm_verbatim_with_error_message() -> None:
-    """A refused branch surfaces as a confirm with ``error_message`` (not raised).
-
-    ``at_item_id`` is required even on refusal (echo of the request target).
-    """
-    async with _pair() as (controller, backend):
-        refused = BranchMoved(at_item_id="u1", error_message="unsupported")
-        task = asyncio.create_task(controller.branch("u1"))
-        await _take(backend, 1)
-        backend.push(refused)
-        result = await asyncio.wait_for(task, 1)
-        assert result is refused
-        assert result.error_message == "unsupported"
-        assert controller.is_idle()
-
-
-async def test_branch_raises_when_torn_down_mid_flight() -> None:
-    """A wedged backend + teardown must release ``branch``; it must not hang."""
-    async with _pair() as (controller, _backend):
-        task = asyncio.create_task(controller.branch("u1"))
-        await _take(_backend, 1)  # BranchMove pushed; awaiting branch.moved
-        assert controller.is_idle() is False
-        # Exiting ends the backend cooperatively + closes the controller, which
-        # releases the in-flight command (run loop exits).
-    with pytest.raises(RuntimeError, match="run loop exited"):
-        await task
 
 
 # --------------------------------------------------------------------------- #
@@ -616,14 +401,14 @@ async def test_branch_raises_when_torn_down_mid_flight() -> None:
     ],
 )
 async def test_controller_republishes_each_server_event(event: ServerContextEvent) -> None:
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, connection):
         done = asyncio.Event()
 
         async def handler(_event: ServerContextEvent) -> None:
             done.set()
 
         controller.bus.on(event.type, handler)
-        backend.push(event)
+        connection.feed(event)
         await asyncio.wait_for(done.wait(), 1)
 
 
@@ -633,25 +418,33 @@ async def test_controller_republishes_each_server_event(event: ServerContextEven
 
 
 async def test_generate_raises_when_torn_down_mid_flight() -> None:
-    """A wedged backend + teardown must release ``generate``; it must not hang."""
-    async with _pair() as (controller, _backend):
+    """A wedged connection + teardown must release ``generate``; it must not hang."""
+    async with _pair() as (controller, _connection):
         task = asyncio.create_task(controller.generate())
-        await _take(_backend, 1)  # CreateResponse pushed; generate parked awaiting done
+        await asyncio.sleep(0)  # generate() called; generate parked awaiting done
         assert controller.is_idle() is False
-        # Exiting ends the backend cooperatively + closes the controller, which
+        # Exiting ends the connection cooperatively + closes the controller, which
         # releases the in-flight command (run loop exits).
     with pytest.raises(RuntimeError, match="run loop exited"):
         await task
 
 
 async def test_add_message_raises_when_torn_down_mid_flight() -> None:
-    """A wedged backend + teardown must release ``add_message``; it must not hang."""
-    async with _pair() as (controller, _backend):
-        task = asyncio.create_task(controller.add_message(_input()))
-        await _take(_backend, 1)  # AddUserMessage pushed; awaiting item-added echo
+    """A wedged connection + teardown must release ``add_message``; it must not hang."""
+    async with _pair() as (controller, _connection):
+        task = asyncio.create_task(controller.add_message("hi"))
+        await asyncio.sleep(0)  # add_user_message called; awaiting item-added echo
         assert controller.is_idle() is False
-        # Exiting ends the backend cooperatively + closes the controller, which
-        # releases the in-flight command (run loop exits).
+    with pytest.raises(RuntimeError, match="run loop exited"):
+        await task
+
+
+async def test_add_tool_result_raises_when_torn_down_mid_flight() -> None:
+    """A wedged connection + teardown must release ``add_tool_result``; it must not hang."""
+    async with _pair() as (controller, _connection):
+        task = asyncio.create_task(controller.add_tool_result("t1", "get_time", "noon"))
+        await asyncio.sleep(0)  # add_tool_result called; awaiting item-added echo
+        assert controller.is_idle() is False
     with pytest.raises(RuntimeError, match="run loop exited"):
         await task
 
@@ -662,26 +455,25 @@ async def test_add_message_raises_when_torn_down_mid_flight() -> None:
 
 
 async def test_end_initiates_terminate_and_guards_commands() -> None:
-    async with _pair() as (controller, backend):
-        assert backend.abort_signal.is_set() is False
+    async with _pair() as (controller, connection):
         controller.end()
         assert controller.is_closing() is True
-        assert backend.abort_signal.is_set() is True  # client.end() fired
+        assert connection._ended is True  # connection.end() fired
 
         with pytest.raises(RuntimeError, match="closing"):
             await controller.generate()
         with pytest.raises(RuntimeError, match="closing"):
-            await controller.add_message(_input())
+            await controller.add_message("hi")
+        with pytest.raises(RuntimeError, match="closing"):
+            await controller.add_tool_result("t1", "get_time", "noon")
         with pytest.raises(RuntimeError, match="closing"):
             controller.abort()
-        with pytest.raises(RuntimeError, match="closing"):
-            await controller.compact()
-        with pytest.raises(RuntimeError, match="closing"):
-            await controller.branch("i1")
 
 
-async def test_end_drains_final_items_via_conformant_backend() -> None:
-    async with _pair() as (controller, backend):
+async def test_end_drains_final_items_before_teardown() -> None:
+    """A fed ``ResponseDone`` completes an in-flight ``generate`` and reaches its
+    bus handler before the connection is torn down."""
+    async with _pair() as (controller, connection):
         received: list[ServerContextEvent] = []
         done = asyncio.Event()
 
@@ -693,91 +485,77 @@ async def test_end_drains_final_items_via_conformant_backend() -> None:
         controller.bus.on(ServerContextEventType.RESPONSE_DONE, handler)
 
         task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)  # CreateResponse
+        await asyncio.sleep(0)  # generate parked
 
-        async def conformant() -> None:
-            await backend.wait_for_abort()
-            backend.push(ResponseDone(item=_assistant_item()))  # final shutdown item
-            backend.end()
-
-        conf = asyncio.create_task(conformant())
-        controller.end()
+        connection.feed(ResponseDone(item=_assistant_item()))  # final item
         await asyncio.wait_for(done.wait(), 1)  # final item reached the handler
         await asyncio.wait_for(task, 1)  # generate completed from the response.done
-        await conf
         assert any(isinstance(e, ResponseDone) for e in received)
 
 
-async def test_teardown_completes_cleanly_on_conformant_backend() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(_conformant(backend))
-    await task
+async def test_teardown_completes_cleanly() -> None:
+    async with _pair() as (_controller, _connection):
+        pass  # nothing in flight
     # Teardown completed cleanly on exit; the controller lifecycle task is done.
-    assert controller._task is not None
-    assert controller._task.done()
+    assert _controller._task is not None
+    assert _controller._task.done()
 
 
-async def test_teardown_force_cancels_wedged_backend() -> None:
-    # Wedged backend: nothing ever ends the inbound, so the drain hangs and
+async def test_teardown_force_cancels_wedged_connection() -> None:
+    # Wedged connection: nothing ever ends the stream, so the drain hangs and
     # __aexit__ force-cancels it within the shutdown deadline (teardown always
     # exits cleanly; no exception propagates). ``_run``'s finally ends the
     # bus, so the nested bus reap does not add latency.
-    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
-    controller = DefaultModelController(pair.client)
+    connection = _RecordingModelConnection(auto_end=False)
+    controller = DefaultModelController(connection)
     controller._shutdown_timeout = 0.1
     loop = asyncio.get_running_loop()
     start = loop.time()
     async with controller:
-        pass  # nothing ends the inbound -> drain hangs -> __aexit__ forces
+        pass  # nothing ends the stream -> drain hangs -> __aexit__ forces
     assert loop.time() - start < 2.0  # force-cancelled within the deadline
 
 
 async def test_async_context_manager_ends() -> None:
-    pair: ConnectionPair[ClientContextEvent, ServerContextEvent] = create_connection()
-    task = asyncio.create_task(_conformant(pair.backend))
-    async with DefaultModelController(pair.client) as controller:
+    connection = _RecordingModelConnection(auto_end=True)
+    async with DefaultModelController(connection) as controller:
         assert controller.is_idle()
-        controller.end()  # end -> _conformant ends the inbound -> drain completes
+        controller.end()  # end -> connection.end() (auto_end) -> drain completes
     assert controller.is_closing()
-    await task
 
 
 async def test_end_is_idempotent() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(_conformant(backend))
+    async with _pair() as (controller, _connection):
         controller.end()
         controller.end()  # idempotent
-    await task
     assert controller.is_closing()
 
 
 async def test_post_end_commands_rejected_even_when_idle() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(_conformant(backend))
+    async with _pair() as (controller, _connection):
         controller.end()
         assert controller.is_idle()  # no generation was ever started
         with pytest.raises(RuntimeError, match="closing"):
             await controller.generate()
         with pytest.raises(RuntimeError, match="closing"):
-            await controller.compact()
+            await controller.add_message("hi")
         with pytest.raises(RuntimeError, match="closing"):
-            await controller.branch("i1")
-        await task
+            await controller.add_tool_result("t1", "get_time", "noon")
 
 
 async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
     """Teardown mid-generation must not strand wait_idle.
 
-    Ending the backend + closing the controller winds the drain down; the
+    Ending the connection + closing the controller winds the drain down; the
     ``_run`` ``finally`` defensively sets idle so a caller parked on
     ``wait_idle()`` is released rather than hung, and the in-flight
     ``generate()`` task raises rather than hanging.
     """
-    async with _pair() as (controller, backend):
+    async with _pair() as (controller, _connection):
         task = asyncio.create_task(controller.generate())
-        await _take(backend, 1)
+        await asyncio.sleep(0)
         assert controller.is_idle() is False  # busy
-        # Exiting ends the backend + closes the controller, winding the drain
+        # Exiting ends the connection + closes the controller, winding the drain
         # down and releasing the in-flight generate (run loop exits).
     with pytest.raises(RuntimeError, match="run loop exited"):
         await task
@@ -787,9 +565,8 @@ async def test_wait_idle_unblocks_when_torn_down_while_busy() -> None:
 
 
 async def test_teardown_leaves_controller_task_done() -> None:
-    async with _pair() as (controller, backend):
-        task = asyncio.create_task(_conformant(backend))
-    await task
+    async with _pair() as (_controller, _connection):
+        pass
     # The controller and its bus drain tasks both completed on teardown.
-    assert controller._task is not None
-    assert controller._task.done()
+    assert _controller._task is not None
+    assert _controller._task.done()

@@ -11,14 +11,8 @@ from otter_ai_core.data_models.context import (
     UserContextItem,
 )
 from otter_ai_core.data_models.events import (
-    AbortResponse,
-    AddUserMessage,
-    BranchMove,
     BranchMoved,
     CompactionDone,
-    CreateCompaction,
-    CreateResponse,
-    InputEvent,
     ResponseDone,
     ResponseStarted,
     ResponseUpdated,
@@ -101,31 +95,23 @@ class DefaultModelController(TaskRunnerMixIn, ModelController):
         if not self.is_idle():
             raise RuntimeError("ModelController is busy; command rejected.")
 
-    async def add_message(self, message: InputEvent) -> UserContextItem | ToolResultContextItem:
+    async def add_message(self, text: str) -> UserContextItem:
         self._require_running()
         self._check_idle()
         self._state.set_busy()
         added = asyncio.Event()
         self._command_waiter = added
         received = False
-        item: UserContextItem | ToolResultContextItem | None
+        item: UserContextItem | None
 
-        async def _on_added(event: UserItemAdded | ToolResultAdded) -> None:
+        async def _on_added(event: UserItemAdded) -> None:
             nonlocal received, item
             item = event.item
             received = True
             added.set()
 
-        # Subscribe only to the echo that matches this input type, so a stray
-        # mismatched item-added event cannot release the command early. The
-        # wider ``_on_added`` handler (contravariance) satisfies either
-        # per-variant descriptor; subscribe in-branch so each call binds a
-        # single concrete descriptor.
-        if isinstance(message, AddUserMessage):
-            unsub = self._bus.on(ServerContextEventType.USER_ITEM_ADDED, _on_added)
-        else:
-            unsub = self._bus.on(ServerContextEventType.TOOL_RESULT_ADDED, _on_added)
-        self._client.push(message)
+        unsub = self._bus.on(ServerContextEventType.USER_ITEM_ADDED, _on_added)
+        self._client.add_user_message(text)
         try:
             await added.wait()
         finally:
@@ -143,10 +129,47 @@ class DefaultModelController(TaskRunnerMixIn, ModelController):
             )
         self._state.set_idle()
         match item:
-            case UserContextItem() | ToolResultContextItem():
+            case UserContextItem():
                 return item
             case _:
                 raise RuntimeError("Add message did not receive an item")
+
+    async def add_tool_result(
+        self, tool_call_id: str, tool_name: str, result: object
+    ) -> ToolResultContextItem:
+        self._require_running()
+        self._check_idle()
+        self._state.set_busy()
+        added = asyncio.Event()
+        self._command_waiter = added
+        received = False
+        item: ToolResultContextItem | None
+
+        async def _on_added(event: ToolResultAdded) -> None:
+            nonlocal received, item
+            item = event.item
+            received = True
+            added.set()
+
+        unsub = self._bus.on(ServerContextEventType.TOOL_RESULT_ADDED, _on_added)
+        self._client.add_tool_result(tool_call_id, tool_name, result)
+        try:
+            await added.wait()
+        finally:
+            self._command_waiter = None
+            unsub()
+        if not received:
+            # See :meth:`add_message` for the FIFO reasoning that makes this
+            # teardown-release check sound.
+            raise RuntimeError(
+                "ModelController run loop exited before the item-added echo arrived."
+            )
+        self._state.set_idle()
+        match item:
+            case ToolResultContextItem():
+                return item
+            case _:
+                raise RuntimeError("Add tool result did not receive an item")
 
     async def generate(self) -> AssistantContextItem:
         self._require_running()
@@ -164,7 +187,7 @@ class DefaultModelController(TaskRunnerMixIn, ModelController):
             done.set()
 
         unsub = self._bus.on(ServerContextEventType.RESPONSE_DONE, _on_done)
-        self._client.push(CreateResponse())
+        self._client.generate()
         try:
             await done.wait()
         finally:
@@ -182,98 +205,11 @@ class DefaultModelController(TaskRunnerMixIn, ModelController):
             case _:
                 raise RuntimeError("Generate did not receive an item")
 
-    async def compact(
-        self,
-        *,
-        first_kept_item_id: str | None = None,
-        custom_instructions: str | None = None,
-        summary: str | None = None,
-    ) -> CompactionDone:
-        self._require_running()
-        self._check_idle()
-        self._state.set_busy()
-        done = asyncio.Event()
-        self._command_waiter = done
-        received = False
-        result: CompactionDone | None
-
-        async def _on_done(event: CompactionDone) -> None:
-            nonlocal received, result
-            result = event
-            received = True
-            done.set()
-
-        unsub = self._bus.on(ServerContextEventType.COMPACTION_DONE, _on_done)
-        self._client.push(
-            CreateCompaction(
-                first_kept_item_id=first_kept_item_id,
-                custom_instructions=custom_instructions,
-                summary=summary,
-            )
-        )
-        try:
-            await done.wait()
-        finally:
-            self._command_waiter = None
-            unsub()
-        if not received:
-            # Released by teardown (the run-loop exit path in ``_run``'s
-            # finally) rather than by the confirm handler — see
-            # :meth:`add_message` for the FIFO reasoning that makes this check
-            # sound.
-            raise RuntimeError("ModelController run loop exited before compaction.done arrived.")
-        self._state.set_idle()
-        match result:
-            case CompactionDone():
-                return result
-            case _:
-                raise RuntimeError("Compact did not receive a confirm")
-
-    async def branch(
-        self,
-        at_item_id: str,
-        *,
-        summary: str | None = None,
-    ) -> BranchMoved:
-        self._require_running()
-        self._check_idle()
-        self._state.set_busy()
-        done = asyncio.Event()
-        self._command_waiter = done
-        received = False
-        result: BranchMoved | None
-
-        async def _on_done(event: BranchMoved) -> None:
-            nonlocal received, result
-            result = event
-            received = True
-            done.set()
-
-        unsub = self._bus.on(ServerContextEventType.BRANCH_MOVED, _on_done)
-        self._client.push(BranchMove(at_item_id=at_item_id, summary=summary))
-        try:
-            await done.wait()
-        finally:
-            self._command_waiter = None
-            unsub()
-        if not received:
-            # Released by teardown (the run-loop exit path in ``_run``'s
-            # finally) rather than by the confirm handler — see
-            # :meth:`add_message` for the FIFO reasoning that makes this check
-            # sound.
-            raise RuntimeError("ModelController run loop exited before branch.moved arrived.")
-        self._state.set_idle()
-        match result:
-            case BranchMoved():
-                return result
-            case _:
-                raise RuntimeError("Branch did not receive a confirm")
-
     def abort(self) -> None:
         self._require_running()
         if self.is_idle():
             raise RuntimeError("Cannot abort a response when idle.")
-        self._client.push(AbortResponse())
+        self._client.abort()
 
     # ------------------------------------------------------------------ #
     # Lifecycle / teardown

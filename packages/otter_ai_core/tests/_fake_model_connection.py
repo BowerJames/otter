@@ -7,29 +7,36 @@ from otter_ai_core.data_models.events import ServerContextEvent
 from otter_ai_core.interfaces.roles.model_connection import ModelConnection
 
 
-class FakeModelConnection(ModelConnection):
+class _RecordingModelConnection(ModelConnection):
     def __init__(self, idle: bool = True, auto_end: bool = False) -> None:
         self._queue: asyncio.Queue[ServerContextEvent | None] = asyncio.Queue()
         self._idle: bool = idle
         self._auto_end: bool = auto_end
         self._ended: bool = False
+        self.user_messages: list[str] = []
+        self.tool_results: list[tuple[str, str, object]] = []
+        self.generate_calls: int = 0
+        self.abort_calls: int = 0
 
     def add_user_message(self, text: str) -> None:
-        raise NotImplementedError
+        self.user_messages.append(text)
 
     def add_tool_result(self, tool_call_id: str, tool_name: str, result: object) -> None:
-        raise NotImplementedError
+        self.tool_results.append((tool_call_id, tool_name, result))
 
     def generate(self) -> None:
-        raise NotImplementedError
+        self.generate_calls += 1
 
     def abort(self) -> None:
-        raise NotImplementedError
+        self.abort_calls += 1
 
     def end(self) -> None:
         if self._auto_end and not self._ended:
             self._queue.put_nowait(None)
         self._ended = True
+
+    def feed(self, event: ServerContextEvent) -> None:
+        self._queue.put_nowait(event)
 
     def trigger_end(self) -> None:
         if self._auto_end:
@@ -42,7 +49,7 @@ class FakeModelConnection(ModelConnection):
         return self._idle
 
     async def wait_for_idle(self) -> None:
-        raise NotImplementedError
+        return
 
     def __aiter__(self) -> Self:
         return self
