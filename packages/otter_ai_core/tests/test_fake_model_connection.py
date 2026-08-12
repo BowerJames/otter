@@ -14,11 +14,6 @@ def connection() -> FakeModelConnection:
     return FakeModelConnection()
 
 
-@pytest.fixture
-def inbound_queue() -> asyncio.Queue[ServerContextEvent]:
-    return asyncio.Queue()
-
-
 async def _stream(connection: FakeModelConnection) -> None:
     async for _ in connection:
         pass
@@ -86,6 +81,11 @@ class TestAutoEnd:
 
 
 class TestAutoAddUserItem:
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def inbound_queue() -> asyncio.Queue[ServerContextEvent]:
+        return asyncio.Queue()
+
     async def _stream(
         self, connection: FakeModelConnection, queue: asyncio.Queue[ServerContextEvent]
     ) -> None:
