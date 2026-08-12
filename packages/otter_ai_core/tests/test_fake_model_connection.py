@@ -4,6 +4,8 @@ import asyncio
 
 import pytest
 
+from otter_ai_core.data_models.context import TextContent
+from otter_ai_core.data_models.events.server_context_events import ServerContextEvent, UserItemAdded
 from otter_ai_core.mock.model_connection import FakeModelConnection
 
 
@@ -76,3 +78,35 @@ class TestAutoEnd:
         await asyncio.sleep(0)
         assert task.done()
         await task
+
+
+class TestAutoAddUserItem:
+    @pytest.fixture(scope="class")
+    def inbound_queue(self) -> asyncio.Queue[ServerContextEvent]:
+        return asyncio.Queue()
+
+    async def _stream(
+        self, connection: FakeModelConnection, queue: asyncio.Queue[ServerContextEvent]
+    ) -> None:
+        async for event in connection:
+            queue.put_nowait(event)
+
+    async def test_auto_add_automatically_responds(
+        self, inbound_queue: asyncio.Queue[ServerContextEvent]
+    ) -> None:
+        connection = FakeModelConnection(auto_add_user_item=True)
+        task = asyncio.create_task(self._stream(connection, inbound_queue))
+        message = "lorem ipsum"
+        connection.add_user_message(message)
+        await asyncio.sleep(0)
+        event = inbound_queue.get_nowait()
+        assert isinstance(event, UserItemAdded)
+        with pytest.raises(asyncio.QueueEmpty):
+            inbound_queue.get_nowait()
+        assert not task.done()
+        text_content = event.item.message.content[0]
+        assert isinstance(text_content, TextContent)
+        assert text_content.text == message
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
