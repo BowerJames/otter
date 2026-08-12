@@ -29,10 +29,9 @@ class FakeModelConnection(ModelConnection):
         self._auto_add_user_item: bool = auto_add_user_item
         self._ended: bool = False
 
-    def add_user_message(self, text: str) -> None:
-        if not self._auto_add_user_item:
-            raise NotImplementedError
-        event = UserItemAdded(
+    @staticmethod
+    def _user_item_added(text: str) -> UserItemAdded:
+        return UserItemAdded(
             item=UserContextItem(
                 id=uuid.uuid4().hex,
                 message=UserMessage(
@@ -42,7 +41,18 @@ class FakeModelConnection(ModelConnection):
                 ),
             )
         )
-        self._queue.put_nowait(event)
+
+    def add_user_message(self, text: str) -> None:
+        if not self._auto_add_user_item:
+            raise NotImplementedError
+        self._queue.put_nowait(self._user_item_added(text))
+
+    def confirm_added_user_message(self, text: str) -> None:
+        if self._auto_add_user_item:
+            raise RuntimeError(
+                "confirm_added_user_message() cannot be used when auto_add_user_item=True"
+            )
+        self._queue.put_nowait(self._user_item_added(text))
 
     def add_tool_result(self, tool_call_id: str, tool_name: str, result: object) -> None:
         raise NotImplementedError

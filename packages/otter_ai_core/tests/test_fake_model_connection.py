@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from otter_ai_core.data_models.context import TextContent
+from otter_ai_core.data_models.context import Role, TextContent
 from otter_ai_core.data_models.events.server_context_events import ServerContextEvent, UserItemAdded
 from otter_ai_core.mock.model_connection import FakeModelConnection
 
@@ -108,6 +108,53 @@ class TestAutoAddUserItem:
         text_content = event.item.message.content[0]
         assert isinstance(text_content, TextContent)
         assert text_content.text == message
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
+class TestConfirmAddedUserMessage:
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def inbound_queue() -> asyncio.Queue[ServerContextEvent]:
+        return asyncio.Queue()
+
+    async def _stream(
+        self, connection: FakeModelConnection, queue: asyncio.Queue[ServerContextEvent]
+    ) -> None:
+        async for event in connection:
+            queue.put_nowait(event)
+
+    async def test_raises_if_auto_add_user_message(
+        self, inbound_queue: asyncio.Queue[ServerContextEvent]
+    ) -> None:
+        connection = FakeModelConnection(auto_add_user_item=True)
+        task = asyncio.create_task(self._stream(connection, inbound_queue))
+        with pytest.raises(RuntimeError):
+            connection.confirm_added_user_message("lorem ipsum")
+        await asyncio.sleep(0)
+        with pytest.raises(asyncio.QueueEmpty):
+            inbound_queue.get_nowait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    async def test_adds_event_to_stream(
+        self, inbound_queue: asyncio.Queue[ServerContextEvent]
+    ) -> None:
+        connection = FakeModelConnection(auto_add_user_item=False)
+        task = asyncio.create_task(self._stream(connection, inbound_queue))
+        message = "lorem ipsum"
+        connection.confirm_added_user_message(message)
+        await asyncio.sleep(0)
+        while not inbound_queue.empty():
+            event = inbound_queue.get_nowait()
+        assert isinstance(event, UserItemAdded)
+        assert event.item.message.role == Role.User
+        first = event.item.message.content[0]
+        assert isinstance(first, TextContent)
+        assert first.text == message
+        assert not task.done()
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
