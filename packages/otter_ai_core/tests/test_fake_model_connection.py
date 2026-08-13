@@ -9,14 +9,12 @@ from otter_ai_core.data_models.events.server_context_events import ServerContext
 from otter_ai_core.mock.model_connection import FakeModelConnection
 
 
-@pytest.fixture(scope="module")
-def connection() -> FakeModelConnection:
-    return FakeModelConnection()
-
-
-async def _stream(connection: FakeModelConnection) -> None:
-    async for _ in connection:
-        pass
+async def _drain(
+    connection: FakeModelConnection, into: asyncio.Queue[ServerContextEvent] | None = None
+) -> None:
+    async for event in connection:
+        if into is not None:
+            into.put_nowait(event)
 
 
 class TestConstruction:
@@ -41,7 +39,7 @@ class TestIsIdle:
 class TestTriggerEnd:
     async def test_raises_if_auto_end_is_true(self) -> None:
         connection = FakeModelConnection(auto_end=True)
-        task = asyncio.create_task(_stream(connection))
+        task = asyncio.create_task(_drain(connection))
         connection.end()
         with pytest.raises(RuntimeError):
             connection.trigger_end()
@@ -51,7 +49,7 @@ class TestTriggerEnd:
 
     async def test_raises_if_end_not_called(self) -> None:
         connection = FakeModelConnection(auto_end=False)
-        task = asyncio.create_task(_stream(connection))
+        task = asyncio.create_task(_drain(connection))
         with pytest.raises(RuntimeError):
             connection.trigger_end()
         await asyncio.sleep(0)
@@ -62,7 +60,7 @@ class TestTriggerEnd:
 
     async def test_ends_stream(self) -> None:
         connection = FakeModelConnection(auto_end=False)
-        task = asyncio.create_task(_stream(connection))
+        task = asyncio.create_task(_drain(connection))
         connection.end()
         connection.trigger_end()
         await asyncio.sleep(0)
@@ -73,7 +71,7 @@ class TestTriggerEnd:
 class TestAutoEnd:
     async def test_auto_end_ends_stream(self) -> None:
         connection = FakeModelConnection(auto_end=True)
-        task = asyncio.create_task(_stream(connection))
+        task = asyncio.create_task(_drain(connection))
         connection.end()
         await asyncio.sleep(0)
         assert task.done()
@@ -86,17 +84,11 @@ class TestAutoAddUserItem:
     def inbound_queue() -> asyncio.Queue[ServerContextEvent]:
         return asyncio.Queue()
 
-    async def _stream(
-        self, connection: FakeModelConnection, queue: asyncio.Queue[ServerContextEvent]
-    ) -> None:
-        async for event in connection:
-            queue.put_nowait(event)
-
     async def test_auto_add_automatically_responds(
         self, inbound_queue: asyncio.Queue[ServerContextEvent]
     ) -> None:
         connection = FakeModelConnection(auto_add_user_item=True)
-        task = asyncio.create_task(self._stream(connection, inbound_queue))
+        task = asyncio.create_task(_drain(connection, inbound_queue))
         message = "lorem ipsum"
         connection.add_user_message(message)
         await asyncio.sleep(0)
