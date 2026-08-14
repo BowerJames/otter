@@ -6,13 +6,19 @@ import uuid
 from typing import Self
 
 from otter_ai_core.data_models.context import (
+    AssistantContextItem,
+    AssistantMessage,
     ContentType,
     Role,
+    StopReason,
     TextContent,
+    Usage,
+    UsageCost,
     UserContextItem,
     UserMessage,
 )
 from otter_ai_core.data_models.events import ServerContextEvent, UserItemAdded
+from otter_ai_core.data_models.events.server_context_events import ResponseDone
 from otter_ai_core.interfaces.roles.model_connection import ModelConnection
 
 
@@ -43,7 +49,7 @@ class FakeModelConnection(ModelConnection):
         raise NotImplementedError
 
     def generate(self) -> None:
-        raise NotImplementedError
+        self._idle = False
 
     def abort(self) -> None:
         raise NotImplementedError
@@ -62,6 +68,38 @@ class FakeModelConnection(ModelConnection):
 
     def is_idle(self) -> bool:
         return self._idle
+
+    def submit_generated_response(self, text: str) -> None:
+        self._queue.put_nowait(
+            ResponseDone(
+                item=AssistantContextItem(
+                    id=uuid.uuid4().hex,
+                    message=AssistantMessage(
+                        role=Role.Assistant,
+                        content=[TextContent(type=ContentType.Text, text=text)],
+                        api="fake",
+                        provider="fake",
+                        model="fake-model",
+                        usage=Usage(
+                            input=0,
+                            output=0,
+                            cache_read=0,
+                            cache_write=0,
+                            total_tokens=0,
+                            cost=UsageCost(
+                                input=0.0,
+                                output=0.0,
+                                cache_read=0.0,
+                                cache_write=0.0,
+                                total=0.0,
+                            ),
+                        ),
+                        stop_reason=StopReason.Stop,
+                        timestamp=int(time.time() * 1000),
+                    ),
+                )
+            )
+        )
 
     @staticmethod
     def _user_item_added(text: str) -> UserItemAdded:

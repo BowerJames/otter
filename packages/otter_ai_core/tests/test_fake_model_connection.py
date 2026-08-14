@@ -6,8 +6,12 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from otter_ai_core.data_models.context import TextContent
-from otter_ai_core.data_models.events.server_context_events import ServerContextEvent, UserItemAdded
+from otter_ai_core.data_models.context import StopReason, TextContent
+from otter_ai_core.data_models.events.server_context_events import (
+    ResponseDone,
+    ServerContextEvent,
+    UserItemAdded,
+)
 from otter_ai_core.mock.model_connection import FakeModelConnection
 
 
@@ -141,3 +145,30 @@ class TestConfirmUserMessage:
             with pytest.raises(asyncio.QueueEmpty):
                 inbound_queue.get_nowait()
             assert not task.done()
+
+
+class TestSubmuitGeneratedResponse:
+    async def test_submits_generated_response(self) -> None:
+        connection = FakeModelConnection()
+        inbound_queue: asyncio.Queue[ServerContextEvent] = asyncio.Queue()
+        async with streaming(connection, inbound_queue) as task:
+            message = "lorem ipsum"
+            connection.submit_generated_response(message)
+            await asyncio.sleep(0)
+            event = inbound_queue.get_nowait()
+            assert isinstance(event, ResponseDone)
+            content_part = event.item.message.content[0]
+            assert isinstance(content_part, TextContent)
+            assert content_part.text == message
+            assert event.item.message.stop_reason == StopReason.Stop
+            with pytest.raises(asyncio.QueueEmpty):
+                inbound_queue.get_nowait()
+            assert not task.done()
+
+
+class TestGenerate:
+    async def test_generate_sets_busy(self) -> None:
+        connection = FakeModelConnection(idle=True)
+        assert connection.is_idle()
+        connection.generate()
+        assert not connection.is_idle()
