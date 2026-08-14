@@ -138,4 +138,6 @@ class TestConfirmUserMessage:
             text_content = event.item.message.content[0]
             assert isinstance(text_content, TextContent)
             assert text_content.text == message
+            with pytest.raises(asyncio.QueueEmpty):
+                inbound_queue.get_nowait()
             assert not task.done()
