@@ -28,7 +28,7 @@ bus is the same :class:`~otter_ai_core.runtime.bus.Bus`, with its event names ke
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import pytest
@@ -150,7 +150,7 @@ def _tool_result_item() -> ToolResultContextItem:
 
 
 @asynccontextmanager
-async def _pair() -> AsyncIterator[tuple[DefaultModelController, _RecordingModelConnection]]:
+async def _pair() -> AsyncGenerator[tuple[DefaultModelController, _RecordingModelConnection], None]:
     """A controller wired to a recording connection; yields (controller, connection).
 
     The controller is entered on entry. On exit ``controller.end()`` is called,
