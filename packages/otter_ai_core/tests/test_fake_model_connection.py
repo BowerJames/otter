@@ -106,3 +106,36 @@ class TestAutoAddUserItem:
             text_content = event.item.message.content[0]
             assert isinstance(text_content, TextContent)
             assert text_content.text == message
+
+    async def test_auto_add_disabled_does_not_respond(self) -> None:
+        connection = FakeModelConnection(auto_add_user_item=False)
+        inbound_queue: asyncio.Queue[ServerContextEvent] = asyncio.Queue()
+        async with streaming(connection, inbound_queue) as task:
+            message = "lorem ipsum"
+            connection.add_user_message(message)
+            await asyncio.sleep(0)
+            with pytest.raises(asyncio.QueueEmpty):
+                inbound_queue.get_nowait()
+            assert not task.done()
+
+
+class TestConfirmUserMessage:
+    def test_confirm_user_message_raises_with_auto_add_enabled(self) -> None:
+        connection = FakeModelConnection(auto_add_user_item=True)
+        with pytest.raises(RuntimeError):
+            connection.confirm_user_message("test")
+
+    async def test_confirm_user_message_adds_user_item(self) -> None:
+        connection = FakeModelConnection(auto_add_user_item=False)
+        inbound_queue: asyncio.Queue[ServerContextEvent] = asyncio.Queue()
+        async with streaming(connection, inbound_queue) as task:
+            message = "lorem ipsum"
+            connection.add_user_message(message)
+            connection.confirm_user_message(message)
+            await asyncio.sleep(0)
+            event = inbound_queue.get_nowait()
+            assert isinstance(event, UserItemAdded)
+            text_content = event.item.message.content[0]
+            assert isinstance(text_content, TextContent)
+            assert text_content.text == message
+            assert not task.done()

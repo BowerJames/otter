@@ -31,18 +31,13 @@ class FakeModelConnection(ModelConnection):
 
     def add_user_message(self, text: str) -> None:
         if not self._auto_add_user_item:
-            raise NotImplementedError
-        event = UserItemAdded(
-            item=UserContextItem(
-                id=uuid.uuid4().hex,
-                message=UserMessage(
-                    role=Role.User,
-                    content=[TextContent(type=ContentType.Text, text=text)],
-                    timestamp=int(time.time() * 1000),
-                ),
-            )
-        )
-        self._queue.put_nowait(event)
+            return
+        self._queue.put_nowait(self._user_item_added(text))
+
+    def confirm_user_message(self, text: str) -> None:
+        if self._auto_add_user_item:
+            raise RuntimeError("confirm_user_message() cannot be used when auto_add_user_item=True")
+        self._queue.put_nowait(self._user_item_added(text))
 
     def add_tool_result(self, tool_call_id: str, tool_name: str, result: object) -> None:
         raise NotImplementedError
@@ -67,6 +62,19 @@ class FakeModelConnection(ModelConnection):
 
     def is_idle(self) -> bool:
         return self._idle
+
+    @staticmethod
+    def _user_item_added(text: str) -> UserItemAdded:
+        return UserItemAdded(
+            item=UserContextItem(
+                id=uuid.uuid4().hex,
+                message=UserMessage(
+                    role=Role.User,
+                    content=[TextContent(type=ContentType.Text, text=text)],
+                    timestamp=int(time.time() * 1000),
+                ),
+            )
+        )
 
     async def wait_for_idle(self) -> None:
         raise NotImplementedError
