@@ -1,9 +1,10 @@
+import asyncio
 from collections.abc import Callable
 
 import pytest
 
 from ..model.interface import Model
-from ..model.types import TextContent, ThinkingContent
+from ..model.types import AssistantMessage, TextContent, ThinkingContent
 
 
 class ModelConformanceMixin:
@@ -17,6 +18,10 @@ class ModelConformanceMixin:
 
     @pytest.fixture
     def make_failing_model(self) -> Callable[[], Model] | None:
+        return None
+
+    @pytest.fixture
+    def make_gated_model(self) -> Callable[[], tuple[Model, asyncio.Event]] | None:
         return None
 
     async def test_methods_rejected_before_enter(self, make_model: Callable[[], Model]) -> None:
@@ -147,3 +152,19 @@ class ModelConformanceMixin:
                 pass
             else:
                 pytest.fail("generate() must propagate failures as exceptions")
+
+    async def test_overlapping_generate_rejected(
+        self, make_gated_model: Callable[[], tuple[Model, asyncio.Event]] | None
+    ) -> None:
+        if make_gated_model is None:
+            pytest.skip("adapter does not provide a gated model factory")
+        model, release = make_gated_model()
+        async with model:
+            first: asyncio.Future[AssistantMessage] = asyncio.ensure_future(model.generate())
+            await asyncio.sleep(0)
+            try:
+                with pytest.raises(RuntimeError):
+                    await model.generate()
+            finally:
+                release.set()
+                await first

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 
 import pytest
@@ -45,3 +46,12 @@ class TestFakeModelConformance(ModelConformanceMixin):
     @pytest.fixture
     def make_failing_model(self) -> Callable[[], Model]:
         return lambda: FakeModel([])
+
+    @pytest.fixture
+    def make_gated_model(self) -> Callable[[], tuple[Model, asyncio.Event]]:
+        def factory() -> tuple[Model, asyncio.Event]:
+            gate = asyncio.Event()
+            model = FakeModel([_final("gated")], generation_gate=gate)
+            return model, gate
+
+        return factory

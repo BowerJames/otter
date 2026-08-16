@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Iterable, Sequence
 from enum import Enum, auto
 from itertools import count
@@ -24,12 +25,18 @@ class _SessionState(Enum):
 
 
 class FakeModel:
-    def __init__(self, responses: Iterable[AssistantMessage]) -> None:
+    def __init__(
+        self,
+        responses: Iterable[AssistantMessage],
+        generation_gate: asyncio.Event | None = None,
+    ) -> None:
         self._responses = list(responses)
+        self._generation_gate = generation_gate
         self._cursor = 0
         self._messages: list[_Message] = []
         self._ids = count(1)
         self._state = _SessionState.NEW
+        self._generating = False
 
     async def __aenter__(self) -> Self:
         if self._state is not _SessionState.NEW:
@@ -68,15 +75,23 @@ class FakeModel:
 
     async def generate(self) -> AssistantMessage:
         self._require_open("generate")
-        if self._cursor >= len(self._responses):
-            raise FakeModelExhausted(
-                f"script exhausted: generate() call {self._cursor + 1} "
-                f"but only {len(self._responses)} scripted response(s)"
-            )
-        message = self._responses[self._cursor]
-        self._cursor += 1
-        self._messages.append(message)
-        return message
+        if self._generating:
+            raise RuntimeError("generate() called while another generate() is in flight")
+        self._generating = True
+        try:
+            if self._generation_gate is not None:
+                await self._generation_gate.wait()
+            if self._cursor >= len(self._responses):
+                raise FakeModelExhausted(
+                    f"script exhausted: generate() call {self._cursor + 1} "
+                    f"but only {len(self._responses)} scripted response(s)"
+                )
+            message = self._responses[self._cursor]
+            self._cursor += 1
+            self._messages.append(message)
+            return message
+        finally:
+            self._generating = False
 
     @property
     def history(self) -> Sequence[_Message]:
