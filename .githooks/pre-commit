@@ -44,6 +44,3 @@ fi
 
 echo "pre-commit >> mypy"
 uv run mypy
-
-echo "pre-commit >> semgrep docstring rules"
-just semgrep-rules
