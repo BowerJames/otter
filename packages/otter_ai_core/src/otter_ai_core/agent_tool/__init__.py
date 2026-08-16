@@ -1,4 +1,5 @@
-from .tool import AgentTool, create_agent_tool
+from .factory import create_agent_tool
+from .interface import AgentTool
 from .types import AgentToolResult
 
 __all__ = [

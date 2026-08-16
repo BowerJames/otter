@@ -3,7 +3,7 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop import AgentTool, AgentToolResult, create_agent_tool
+from otter_ai_core.agent_tool import AgentTool, AgentToolResult, create_agent_tool
 from otter_ai_core.model.types import ToolCall
 
 

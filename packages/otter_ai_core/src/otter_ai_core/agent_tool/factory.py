@@ -1,22 +1,10 @@
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from .interface import AgentTool
 from .types import AgentToolResult
-
-
-class AgentTool(Protocol):
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def description(self) -> str: ...
-
-    @property
-    def parameters(self) -> type[BaseModel]: ...
-
-    async def execute(self, arguments: dict[str, Any]) -> AgentToolResult: ...
 
 
 class _CallableAgentTool[TPayload: BaseModel]:
