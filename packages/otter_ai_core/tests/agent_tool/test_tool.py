@@ -1,7 +1,7 @@
 from typing import Any, Literal
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult, create_agent_tool
 from otter_ai_core.model.types import ToolCall
@@ -77,6 +77,11 @@ def test_result_defaults() -> None:
     result = AgentToolResult(text="done")
     assert result.is_error is False
     assert result.terminate is False
+
+
+def test_result_forbids_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        AgentToolResult.model_validate({"text": "ok", "isError": True})
 
 
 async def test_execute_accepts_tool_call_parameters() -> None:
