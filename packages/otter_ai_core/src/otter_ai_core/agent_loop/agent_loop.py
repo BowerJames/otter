@@ -33,9 +33,6 @@ class AgentLoop:
     def steer(self, text: str) -> None:
         raise NotImplementedError
 
-    def complete(self) -> None:
-        raise NotImplementedError
-
     def __aiter__(self) -> AsyncIterator[AgentLoopTurn]:
         if self._iteration_claimed:
             raise RuntimeError("AgentLoop is single-use; construct a new AgentLoop to run again")
