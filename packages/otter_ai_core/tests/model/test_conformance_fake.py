@@ -3,7 +3,6 @@ from collections.abc import Callable
 
 import pytest
 
-from otter_ai_core.agent_loop import AgentLoopModel
 from otter_ai_core.model.fake import FakeModel
 from otter_ai_core.model.interface import Model
 from otter_ai_core.model.types import (
@@ -12,8 +11,6 @@ from otter_ai_core.model.types import (
     ToolCall,
 )
 from otter_ai_core.testing.model_conformance import ModelConformanceMixin
-
-_fake_model_as_agent_loop_model: AgentLoopModel = FakeModel([])
 
 
 def _final(text: str) -> AssistantMessage:
