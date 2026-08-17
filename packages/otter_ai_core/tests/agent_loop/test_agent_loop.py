@@ -18,6 +18,7 @@ from otter_ai_core.agent_loop import (
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
 from otter_ai_core.conversation import (
     AssistantMessage,
+    SessionMessage,
     TextContent,
     ToolCall,
     ToolResultMessage,
@@ -39,6 +40,10 @@ def response(
         tool_calls=calls,
         stop_reason="tool_call" if calls else "final_response",
     )
+
+
+async def collect_turns(loop: AgentLoop) -> list[AgentLoopTurn]:
+    return [event async for event in loop if isinstance(event, AgentLoopTurn)]
 
 
 class TimeParams(BaseModel):
@@ -154,7 +159,7 @@ async def test_single_text_turn() -> None:
         loop = AgentLoop(model)
         loop.follow_up("hi")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     assert len(turns) == 1
     turn = turns[0]
@@ -225,7 +230,7 @@ async def test_turn_messages_concatenate_to_model_history() -> None:
         loop.follow_up("what time is it?")
         loop.follow_up("thanks")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     flat = [message for turn in turns for message in turn.messages]
     assert flat == list(model.history)
@@ -264,7 +269,7 @@ async def test_tool_call_round_trip() -> None:
         loop = AgentLoop(model, tools=[tool])
         loop.follow_up("run the tool")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert received == [{"payload": "hello"}]
@@ -306,7 +311,7 @@ async def test_multiple_tool_calls_in_one_turn() -> None:
         loop = AgentLoop(model, tools=[tool])
         loop.follow_up("add twice")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert calls == ["2+3", "10+20"]
@@ -334,7 +339,7 @@ async def test_unknown_tool_synthesizes_error_result() -> None:
         loop = AgentLoop(model)
         loop.follow_up("use the mystery tool")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     execution = turn.tool_executions[0]
@@ -369,7 +374,7 @@ async def test_tool_exception_contained_as_error_result() -> None:
         loop = AgentLoop(model, tools=[tool])
         loop.follow_up("trigger the failure")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     execution = turn.tool_executions[0]
@@ -409,7 +414,7 @@ async def test_tool_terminate_ends_run_with_all_calls_answered() -> None:
         loop = AgentLoop(model, tools=[tool])
         loop.follow_up("try both")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert executed == [{"stop": True}, {"stop": False}]
@@ -468,7 +473,7 @@ async def test_before_tool_call_deny_skips_execution_and_informs_model() -> None
         loop = AgentLoop(model, tools=[tool], hooks=AgentLoopHooks(before_tool_call=deny_first))
         loop.follow_up("try both")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert executed == [2]
@@ -506,7 +511,7 @@ async def test_before_tool_call_fires_for_unknown_tools() -> None:
         loop = AgentLoop(model, hooks=AgentLoopHooks(before_tool_call=observe))
         loop.follow_up("try it")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert observed == ["c1:ghost"]
@@ -540,7 +545,7 @@ async def test_tool_result_hook_rewrites_recorded_result() -> None:
         loop = AgentLoop(model, tools=[tool], hooks=AgentLoopHooks(tool_result=rewrite))
         loop.follow_up("go")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert hook_inputs == [("c1", "original")]
@@ -573,7 +578,7 @@ async def test_tool_result_hook_can_escalate_termination() -> None:
         loop = AgentLoop(model, tools=[tool], hooks=AgentLoopHooks(tool_result=escalate))
         loop.follow_up("go")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert turn.termination == "tool_terminated"
@@ -643,7 +648,7 @@ async def test_steering_drains_all_at_once_before_next_generate() -> None:
         loop_ref.append(loop)
         loop.follow_up("go")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert [type(m) for m in turn.messages] == [
@@ -696,7 +701,7 @@ async def test_steering_drain_one_by_one_spreads_across_generations() -> None:
         loop_ref.append(loop)
         loop.follow_up("go")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     turn = turns[0]
     assert [type(m) for m in turn.messages] == [
@@ -732,10 +737,12 @@ async def test_undrained_steering_raises_stranded() -> None:
         loop.follow_up("go")
 
         iterator = aiter(loop)
-        turn = await anext(iterator)
-        assert turn.termination == "final_response"
+        events: list[SessionMessage | AgentLoopTurn] = []
         with pytest.raises(AgentLoopStranded):
-            await anext(iterator)
+            async for event in iterator:
+                events.append(event)
+        turns = [event for event in events if isinstance(event, AgentLoopTurn)]
+        assert [turn.termination for turn in turns] == ["final_response"]
 
 
 async def test_follow_ups_drain_one_by_one() -> None:
@@ -752,7 +759,7 @@ async def test_follow_ups_drain_one_by_one() -> None:
         loop.follow_up("two")
         loop.follow_up("three")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     assert len(turns) == 3
     assert [turn.assistant_message.id for turn in turns] == ["a1", "a2", "a3"]
@@ -768,7 +775,7 @@ async def test_follow_ups_drain_all_at_once() -> None:
         loop.follow_up("second part")
         loop.follow_up("third part")
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     assert len(turns) == 1
     assert [type(m) for m in turns[0].messages] == [
@@ -790,7 +797,7 @@ async def test_empty_run_ends_cleanly_with_zero_turns() -> None:
     async with model:
         loop = AgentLoop(model)
 
-        turns = [turn async for turn in loop]
+        turns = await collect_turns(loop)
 
     assert turns == []
     assert list(model.history) == []
@@ -833,8 +840,9 @@ async def test_max_generations_exhaustion_raises_after_yielding_prior_turns() ->
 
         collected: list[AgentLoopTurn] = []
         with pytest.raises(AgentLoopExhausted):
-            async for turn in loop:
-                collected.append(turn)
+            async for event in loop:
+                if isinstance(event, AgentLoopTurn):
+                    collected.append(event)
 
     assert [turn.assistant_message.id for turn in collected] == ["a1"]
     assert [turn.generations for turn in collected] == [1]

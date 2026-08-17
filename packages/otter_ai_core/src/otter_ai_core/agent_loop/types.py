@@ -42,3 +42,6 @@ class AgentLoopTurn(BaseModel):
     tool_executions: list[ToolExecution]
     generations: int
     termination: Literal["final_response", "tool_terminated"]
+
+
+type AgentLoopEvent = SessionMessage | AgentLoopTurn
