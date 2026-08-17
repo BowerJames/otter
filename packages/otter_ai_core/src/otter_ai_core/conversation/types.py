@@ -38,3 +38,6 @@ class AssistantMessage(BaseModel):
     content: list[ThinkingContent | TextContent]
     tool_calls: list[ToolCall]
     stop_reason: Literal["final_response", "tool_call"]
+
+
+type SessionMessage = UserMessage | AssistantMessage | ToolResultMessage

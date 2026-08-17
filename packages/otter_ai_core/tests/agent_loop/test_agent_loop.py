@@ -16,14 +16,14 @@ from otter_ai_core.agent_loop import (
     ToolExecution,
 )
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
-from otter_ai_core.model import (
+from otter_ai_core.conversation import (
     AssistantMessage,
-    Model,
     TextContent,
     ToolCall,
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.model import Model
 from otter_ai_core.model.fake import FakeModel
 
 
