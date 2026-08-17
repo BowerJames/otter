@@ -1,4 +1,5 @@
-from typing import Literal
+from collections.abc import Awaitable
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -7,6 +8,16 @@ from otter_ai_core.model import AssistantMessage, ToolResultMessage, UserMessage
 
 type DrainMode = Literal["one-by-one", "all-at-once"]
 type SessionMessage = UserMessage | AssistantMessage | ToolResultMessage
+
+
+class AgentLoopModel(Protocol):
+    def add_user_message(self, text: str) -> Awaitable[UserMessage]: ...
+
+    def add_tool_result_message(
+        self, tool_call_id: str, text: str
+    ) -> Awaitable[ToolResultMessage]: ...
+
+    def generate(self) -> Awaitable[AssistantMessage]: ...
 
 
 class AgentLoopOptions(BaseModel):

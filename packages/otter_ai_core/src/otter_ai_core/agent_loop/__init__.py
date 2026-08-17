@@ -1,6 +1,7 @@
 from .agent_loop import AgentLoop, AgentLoopExhausted, AgentLoopStranded
 from .hooks import AgentLoopHooks, BeforeToolCallHook, ToolCallDecision, ToolResultHook
 from .types import (
+    AgentLoopModel,
     AgentLoopOptions,
     AgentLoopTurn,
     DrainMode,
@@ -12,6 +13,7 @@ __all__ = [
     "AgentLoop",
     "AgentLoopExhausted",
     "AgentLoopHooks",
+    "AgentLoopModel",
     "AgentLoopOptions",
     "AgentLoopStranded",
     "AgentLoopTurn",
