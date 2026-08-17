@@ -814,27 +814,32 @@ async def test_max_generations_exhaustion_raises_after_yielding_prior_turns() ->
 
     tool = create_agent_tool("count", "counts", CountParams, count)
     script = [
+        response("a1", text="first answer"),
         response(
-            f"a{i}",
-            text="more",
-            tool_calls=[ToolCall(id=f"c{i}", tool_name="count", parameters={})],
-        )
-        for i in range(1, 6)
+            "a2", text="more", tool_calls=[ToolCall(id="c2", tool_name="count", parameters={})]
+        ),
+        response(
+            "a3", text="more", tool_calls=[ToolCall(id="c3", tool_name="count", parameters={})]
+        ),
+        response(
+            "a4", text="more", tool_calls=[ToolCall(id="c4", tool_name="count", parameters={})]
+        ),
     ]
     model = FakeModel(script)
     async with model:
         loop = AgentLoop(model, tools=[tool], options=AgentLoopOptions(max_generations=3))
-        loop.follow_up("go")
+        loop.follow_up("first")
+        loop.follow_up("second")
 
         collected: list[AgentLoopTurn] = []
         with pytest.raises(AgentLoopExhausted):
             async for turn in loop:
                 collected.append(turn)
 
-    assert [turn.assistant_message.id for turn in collected] == ["a1", "a2", "a3"]
-    assert all(turn.generations == 1 for turn in collected)
-    assert all(
-        [execution.result.is_error for execution in turn.tool_executions] == [False]
-        for turn in collected
-    )
-    assert all(any(isinstance(m, ToolResultMessage) for m in turn.messages) for turn in collected)
+    assert [turn.assistant_message.id for turn in collected] == ["a1"]
+    assert [turn.generations for turn in collected] == [1]
+    assert len([m for m in model.history if isinstance(m, AssistantMessage)]) == 3
+    assert [m.tool_call_id for m in model.history if isinstance(m, ToolResultMessage)] == [
+        "c2",
+        "c3",
+    ]
