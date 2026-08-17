@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from otter_ai_core.agent_tool import AgentToolResult
-from otter_ai_core.model import ToolCall
+from otter_ai_core.conversation import ToolCall
 
 
 class ToolCallDecision(BaseModel):

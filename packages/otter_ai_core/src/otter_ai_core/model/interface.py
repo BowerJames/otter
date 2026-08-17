@@ -2,7 +2,7 @@ from collections.abc import Awaitable
 from types import TracebackType
 from typing import Protocol, Self
 
-from .types import AssistantMessage, ToolResultMessage, UserMessage
+from otter_ai_core.conversation import AssistantMessage, ToolResultMessage, UserMessage
 
 
 class Model(Protocol):

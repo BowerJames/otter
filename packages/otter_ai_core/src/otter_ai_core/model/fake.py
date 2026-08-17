@@ -5,14 +5,13 @@ from itertools import count
 from types import TracebackType
 from typing import Self
 
-from .types import (
+from otter_ai_core.conversation import (
     AssistantMessage,
+    SessionMessage,
     TextContent,
     ToolResultMessage,
     UserMessage,
 )
-
-type _Message = UserMessage | AssistantMessage | ToolResultMessage
 
 
 class FakeModelExhausted(RuntimeError): ...
@@ -33,7 +32,7 @@ class FakeModel:
         self._responses = list(responses)
         self._generation_gate = generation_gate
         self._cursor = 0
-        self._messages: list[_Message] = []
+        self._messages: list[SessionMessage] = []
         self._ids = count(1)
         self._state = _SessionState.NEW
         self._generating = False
@@ -94,7 +93,7 @@ class FakeModel:
             self._generating = False
 
     @property
-    def history(self) -> Sequence[_Message]:
+    def history(self) -> Sequence[SessionMessage]:
         return tuple(self._messages)
 
     def _require_open(self, method: str) -> None:

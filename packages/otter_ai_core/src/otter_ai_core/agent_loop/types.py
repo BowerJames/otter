@@ -4,10 +4,14 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, Field
 
 from otter_ai_core.agent_tool import AgentToolResult
-from otter_ai_core.model import AssistantMessage, ToolResultMessage, UserMessage
+from otter_ai_core.conversation import (
+    AssistantMessage,
+    SessionMessage,
+    ToolResultMessage,
+    UserMessage,
+)
 
 type DrainMode = Literal["one-by-one", "all-at-once"]
-type SessionMessage = UserMessage | AssistantMessage | ToolResultMessage
 
 
 class AgentLoopModel(Protocol):

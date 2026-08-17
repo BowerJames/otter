@@ -2,14 +2,13 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult
-from otter_ai_core.model import ToolCall
+from otter_ai_core.conversation import SessionMessage, ToolCall
 
 from .hooks import AgentLoopHooks
 from .types import (
     AgentLoopModel,
     AgentLoopOptions,
     AgentLoopTurn,
-    SessionMessage,
     ToolExecution,
 )
 

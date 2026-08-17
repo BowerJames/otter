@@ -3,13 +3,13 @@ from collections.abc import Callable
 
 import pytest
 
-from otter_ai_core.model.fake import FakeModel
-from otter_ai_core.model.interface import Model
-from otter_ai_core.model.types import (
+from otter_ai_core.conversation import (
     AssistantMessage,
     TextContent,
     ToolCall,
 )
+from otter_ai_core.model.fake import FakeModel
+from otter_ai_core.model.interface import Model
 from otter_ai_core.testing.model_conformance import ModelConformanceMixin
 
 

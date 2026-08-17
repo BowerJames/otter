@@ -3,8 +3,8 @@ from collections.abc import Callable
 
 import pytest
 
+from ..conversation.types import AssistantMessage, TextContent, ThinkingContent
 from ..model.interface import Model
-from ..model.types import AssistantMessage, TextContent, ThinkingContent
 
 
 class ModelConformanceMixin:

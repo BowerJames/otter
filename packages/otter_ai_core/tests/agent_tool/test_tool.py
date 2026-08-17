@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult, create_agent_tool
-from otter_ai_core.model.types import ToolCall
+from otter_ai_core.conversation import ToolCall
 
 
 class WeatherParams(BaseModel):

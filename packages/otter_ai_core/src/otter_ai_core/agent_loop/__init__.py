@@ -1,3 +1,5 @@
+from otter_ai_core.conversation import SessionMessage
+
 from .agent_loop import AgentLoop, AgentLoopExhausted, AgentLoopStranded
 from .hooks import AgentLoopHooks, BeforeToolCallHook, ToolCallDecision, ToolResultHook
 from .types import (
@@ -5,7 +7,6 @@ from .types import (
     AgentLoopOptions,
     AgentLoopTurn,
     DrainMode,
-    SessionMessage,
     ToolExecution,
 )
 
