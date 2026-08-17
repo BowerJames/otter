@@ -3,7 +3,7 @@ from collections.abc import Callable
 
 import pytest
 
-from ..conversation.types import AssistantMessage, TextContent, ThinkingContent
+from ..conversation import AssistantMessage, TextContent, ThinkingContent
 from ..model.interface import Model
 
 
