@@ -2,10 +2,11 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult
-from otter_ai_core.conversation import SessionMessage, ToolCall
+from otter_ai_core.conversation import SessionMessage, ToolCall, UserMessage
 
 from .hooks import AgentLoopHooks
 from .types import (
+    AgentLoopEvent,
     AgentLoopModel,
     AgentLoopOptions,
     AgentLoopTurn,
@@ -50,7 +51,7 @@ class AgentLoop:
         self._require_not_finished("steer")
         self._steering_queue.put_nowait(text)
 
-    def __aiter__(self) -> AsyncIterator[AgentLoopTurn]:
+    def __aiter__(self) -> AsyncIterator[AgentLoopEvent]:
         if self._iteration_claimed:
             raise RuntimeError("AgentLoop is single-use; construct a new AgentLoop to run again")
         self._iteration_claimed = True
@@ -60,15 +61,18 @@ class AgentLoop:
         if self._finished:
             raise RuntimeError(f"the AgentLoop run has finished; cannot {action}")
 
-    async def _iterate(self) -> AsyncIterator[AgentLoopTurn]:
+    async def _iterate(self) -> AsyncIterator[AgentLoopEvent]:
         try:
             while True:
                 follow_ups = self._drain_follow_ups()
                 if not follow_ups:
                     break
-                turn = await self._run_turn(follow_ups)
-                yield turn
-                if turn.termination == "tool_terminated":
+                terminated = False
+                async for event in self._run_turn(follow_ups):
+                    yield event
+                    if isinstance(event, AgentLoopTurn) and event.termination == "tool_terminated":
+                        terminated = True
+                if terminated:
                     break
             if not self._steering_queue.empty():
                 raise AgentLoopStranded("steering was queued but never preceded a generation")
@@ -85,10 +89,12 @@ class AgentLoop:
             drained.append(self._follow_up_queue.get_nowait())
         return drained
 
-    async def _run_turn(self, follow_ups: list[str]) -> AgentLoopTurn:
+    async def _run_turn(self, follow_ups: list[str]) -> AsyncIterator[AgentLoopEvent]:
         messages: list[SessionMessage] = []
         for text in follow_ups:
-            messages.append(await self._model.add_user_message(text))
+            user_message = await self._model.add_user_message(text)
+            messages.append(user_message)
+            yield user_message
         generations = 0
         tool_executions: list[ToolExecution] = []
         while True:
@@ -97,47 +103,56 @@ class AgentLoop:
                 raise AgentLoopExhausted(
                     f"max_generations={max_generations} reached before another generate()"
                 )
-            await self._drain_steering(messages)
+            for message in await self._drain_steering():
+                messages.append(message)
+                yield message
             assistant = await self._model.generate()
             self._generations_used += 1
             generations += 1
             messages.append(assistant)
+            yield assistant
             if assistant.stop_reason != "tool_call" or not assistant.tool_calls:
-                return AgentLoopTurn(
+                yield AgentLoopTurn(
                     messages=messages,
                     assistant_message=assistant,
                     tool_executions=tool_executions,
                     generations=generations,
                     termination="final_response",
                 )
+                return
             terminated = False
             for call in assistant.tool_calls:
                 result = await self._execute_call(call)
                 tool_executions.append(
                     ToolExecution(tool_call_id=call.id, tool_name=call.tool_name, result=result)
                 )
-                messages.append(await self._model.add_tool_result_message(call.id, result.text))
+                feedback = await self._model.add_tool_result_message(call.id, result.text)
+                messages.append(feedback)
+                yield feedback
                 terminated = terminated or result.terminate
             if terminated:
-                return AgentLoopTurn(
+                yield AgentLoopTurn(
                     messages=messages,
                     assistant_message=assistant,
                     tool_executions=tool_executions,
                     generations=generations,
                     termination="tool_terminated",
                 )
+                return
 
-    async def _drain_steering(self, messages: list[SessionMessage]) -> None:
+    async def _drain_steering(self) -> list[UserMessage]:
         if self._steering_queue.empty():
-            return
+            return []
         if self._options.steering_drain == "one-by-one":
             texts = [self._steering_queue.get_nowait()]
         else:
             texts = []
             while not self._steering_queue.empty():
                 texts.append(self._steering_queue.get_nowait())
+        drained = []
         for text in texts:
-            messages.append(await self._model.add_user_message(text))
+            drained.append(await self._model.add_user_message(text))
+        return drained
 
     async def _execute_call(self, call: ToolCall) -> AgentToolResult:
         if (before_hook := self._hooks.before_tool_call) is not None:
