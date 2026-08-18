@@ -1,5 +1,5 @@
 from .factory import create_agent_tool
-from .interface import AgentTool
+from .signature import AgentTool
 from .types import AgentToolResult
 
 __all__ = [
