@@ -4,10 +4,10 @@ from collections.abc import Callable
 import pytest
 
 from ..conversation import AssistantMessage, TextContent, ThinkingContent
-from ..model.interface import Model
+from .signature import Model
 
 
-class ModelConformanceMixin:
+class ModelConformanceSuite:
     @pytest.fixture
     def make_model(self) -> Callable[[], Model]:
         raise NotImplementedError("conformance suite requires a make_model fixture")

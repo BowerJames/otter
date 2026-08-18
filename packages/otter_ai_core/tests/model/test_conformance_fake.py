@@ -8,9 +8,9 @@ from otter_ai_core.conversation import (
     TextContent,
     ToolCall,
 )
+from otter_ai_core.model.conformance import ModelConformanceSuite
 from otter_ai_core.model.fake import FakeModel
-from otter_ai_core.model.interface import Model
-from otter_ai_core.testing.model_conformance import ModelConformanceMixin
+from otter_ai_core.model.signature import Model
 
 
 def _final(text: str) -> AssistantMessage:
@@ -34,7 +34,7 @@ def _tool_call() -> AssistantMessage:
     )
 
 
-class TestFakeModelConformance(ModelConformanceMixin):
+class TestFakeModelConformance(ModelConformanceSuite):
     @pytest.fixture
     def make_model(self) -> Callable[[], Model]:
         return lambda: FakeModel([_final("first"), _final("second")])
