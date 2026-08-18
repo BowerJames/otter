@@ -1,11 +1,17 @@
 from otter_ai_core.agent_tool import AgentTool
 
 from .hooks import AgentHooks
-from .types import AgentModel, AgentStream
+from .types import AgentModel, AgentOptions, AgentStream
 
 
 class Agent:
-    def __init__(self, model: AgentModel, tools: list[AgentTool], hooks: AgentHooks) -> None:
+    def __init__(
+        self,
+        model: AgentModel,
+        tools: list[AgentTool],
+        hooks: AgentHooks,
+        options: AgentOptions | None = None,
+    ) -> None:
         raise NotImplementedError
 
     def steer(self, text: str) -> None:
