@@ -68,6 +68,14 @@ class GuardedParams(BaseModel):
     pass
 
 
+class NoteParams(BaseModel):
+    pass
+
+
+class OpenParams(BaseModel):
+    pass
+
+
 class _SteerOnGenerate:
     def __init__(self, inner: AgentModel, agents: list[Agent], text: str) -> None:
         self._inner = inner
@@ -273,10 +281,24 @@ async def test_steer_and_follow_up_raise_while_idle() -> None:
 
 
 async def test_steer_routes_to_live_run_mid_generation() -> None:
-    model = FakeModel([response("a1", text="hi there")])
     agents: list[Agent] = []
-    wrapper = _SteerOnGenerate(model, agents, "look at this first")
-    agent = Agent(wrapper, tools=[])
+
+    async def note(_: NoteParams) -> AgentToolResult:
+        agents[0].steer("look at this first")
+        return AgentToolResult(text="noted")
+
+    tool = create_agent_tool("note", "notes things", NoteParams, note)
+    model = FakeModel(
+        [
+            response(
+                "a1",
+                text="working",
+                tool_calls=[ToolCall(id="c1", tool_name="note", parameters={})],
+            ),
+            response("a2", text="done"),
+        ]
+    )
+    agent = Agent(model, tools=[tool])
     agents.append(agent)
 
     async with model:
@@ -286,19 +308,20 @@ async def test_steer_routes_to_live_run_mid_generation() -> None:
         AgentStart,
         AgentTurnStart,
         UserMessage,
+        AssistantMessage,
+        ToolResultMessage,
         UserMessage,
         AssistantMessage,
         AgentTurnEnd,
         AgentEnd,
     ]
-    opening = events[2]
-    steered = events[3]
-    assert isinstance(opening, UserMessage)
+    steered = events[5]
     assert isinstance(steered, UserMessage)
-    assert opening.content[0].text == "hello"
     assert steered.content[0].text == "look at this first"
     assert [type(message) for message in model.history] == [
         UserMessage,
+        AssistantMessage,
+        ToolResultMessage,
         UserMessage,
         AssistantMessage,
     ]
@@ -569,10 +592,17 @@ async def test_hooks_forwarded_to_run() -> None:
     executed: list[str] = []
 
     async def guarded(_: GuardedParams) -> AgentToolResult:
-        executed.append("ran")
+        executed.append("guarded")
         return AgentToolResult(text="should not happen")
 
-    tool = create_agent_tool("guarded", "a guarded tool", GuardedParams, guarded)
+    async def open_tool(_: OpenParams) -> AgentToolResult:
+        executed.append("open")
+        return AgentToolResult(text="ok")
+
+    tools = [
+        create_agent_tool("guarded", "a guarded tool", GuardedParams, guarded),
+        create_agent_tool("open", "an open tool", OpenParams, open_tool),
+    ]
 
     async def before_tool_call(call: ToolCall) -> ToolCallDecision:
         if call.tool_name == "guarded":
@@ -592,20 +622,28 @@ async def test_hooks_forwarded_to_run() -> None:
             response(
                 "a1",
                 text="working",
-                tool_calls=[ToolCall(id="c1", tool_name="guarded", parameters={})],
+                tool_calls=[
+                    ToolCall(id="c1", tool_name="guarded", parameters={}),
+                    ToolCall(id="c2", tool_name="open", parameters={}),
+                ],
             ),
             response("a2", text="done"),
         ]
     )
-    agent = Agent(model, tools=[tool], hooks=hooks)
+    agent = Agent(model, tools=tools, hooks=hooks)
 
     async with model:
         events = await collect(agent.prompt("hello"))
 
-    assert executed == []
-    feedback = events[4]
-    assert isinstance(feedback, ToolResultMessage)
-    assert feedback.content[0].text == "denied by policy [reviewed]"
+    assert executed == ["open"]
+    denied = events[4]
+    assert isinstance(denied, ToolResultMessage)
+    assert denied.tool_call_id == "c1"
+    assert denied.content[0].text == "denied by policy"
+    reviewed = events[5]
+    assert isinstance(reviewed, ToolResultMessage)
+    assert reviewed.tool_call_id == "c2"
+    assert reviewed.content[0].text == "ok [reviewed]"
     end = events[-1]
     assert isinstance(end, AgentEnd)
     assert end.termination == "final_response"

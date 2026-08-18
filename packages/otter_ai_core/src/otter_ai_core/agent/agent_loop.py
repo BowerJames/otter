@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Iterable, Sequence
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult
 from otter_ai_core.conversation import (
@@ -25,6 +25,13 @@ class AgentLoopExhausted(RuntimeError): ...
 class AgentLoopStranded(RuntimeError): ...
 
 
+def _reject_duplicate_tool_names(tools: Sequence[AgentTool]) -> None:
+    names = [tool.name for tool in tools]
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        raise ValueError(f"duplicate tool names: {duplicates}")
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -42,10 +49,7 @@ class AgentLoop:
         self._generations_used = 0
         self._follow_up_queue: asyncio.Queue[str] = asyncio.Queue()
         self._steering_queue: asyncio.Queue[str] = asyncio.Queue()
-        names = [tool.name for tool in self._tools]
-        duplicates = sorted({name for name in names if names.count(name) > 1})
-        if duplicates:
-            raise ValueError(f"duplicate tool names: {duplicates}")
+        _reject_duplicate_tool_names(self._tools)
         self._tools_by_name: dict[str, AgentTool] = {tool.name: tool for tool in self._tools}
 
     def follow_up(self, text: str) -> None:
