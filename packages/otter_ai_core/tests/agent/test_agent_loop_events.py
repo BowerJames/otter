@@ -1,7 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop import AgentLoop, AgentLoopExhausted, AgentLoopOptions, AgentLoopTurn
+from otter_ai_core.agent import AgentLoop, AgentLoopExhausted, AgentLoopOptions, AgentLoopTurn
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
 from otter_ai_core.conversation import (
     AssistantMessage,

@@ -5,7 +5,7 @@ from typing import Any, Self
 import pytest
 from pydantic import BaseModel
 
-from otter_ai_core.agent_loop import (
+from otter_ai_core.agent import (
     AgentLoop,
     AgentLoopExhausted,
     AgentLoopHooks,
