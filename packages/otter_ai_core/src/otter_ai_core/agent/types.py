@@ -3,6 +3,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
+from otter_ai_core.components import TerminatingStream
 from otter_ai_core.conversation import (
     AssistantMessage,
     SessionMessage,
@@ -43,3 +44,17 @@ class AgentTurnEnd(BaseModel):
 
 
 type AgentLoopEvent = SessionMessage | AgentTurnStart | AgentTurnEnd
+
+
+class AgentStart(BaseModel):
+    pass
+
+
+class AgentEnd(BaseModel):
+    messages: list[SessionMessage]
+    turns: list[AgentTurnEnd]
+    termination: Literal["final_response", "tool_terminated"]
+
+
+type AgentEvent = AgentLoopEvent | AgentStart | AgentEnd
+type AgentStream = TerminatingStream[AgentLoopEvent | AgentStart, AgentEnd]

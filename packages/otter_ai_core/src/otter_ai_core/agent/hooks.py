@@ -21,3 +21,9 @@ type ToolResultHook = Callable[[ToolCall, AgentToolResult], Awaitable[AgentToolR
 class AgentLoopHooks:
     before_tool_call: BeforeToolCallHook | None = None
     tool_result: ToolResultHook | None = None
+
+
+@dataclass(frozen=True)
+class AgentHooks:
+    before_tool_call: BeforeToolCallHook | None = None
+    tool_result: ToolResultHook | None = None
