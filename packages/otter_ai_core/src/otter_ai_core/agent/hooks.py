@@ -24,6 +24,4 @@ class AgentLoopHooks:
 
 
 @dataclass(frozen=True)
-class AgentHooks:
-    before_tool_call: BeforeToolCallHook | None = None
-    tool_result: ToolResultHook | None = None
+class AgentHooks(AgentLoopHooks): ...

@@ -46,6 +46,10 @@ class AgentTurnEnd(BaseModel):
 type AgentLoopEvent = SessionMessage | AgentTurnStart | AgentTurnEnd
 
 
+class AgentOptions(BaseModel):
+    agent_loop_options: AgentLoopOptions = Field(default_factory=AgentLoopOptions)
+
+
 class AgentStart(BaseModel):
     pass
 
