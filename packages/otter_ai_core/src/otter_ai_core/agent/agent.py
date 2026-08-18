@@ -9,7 +9,7 @@ class Agent:
         self,
         model: AgentModel,
         tools: list[AgentTool],
-        hooks: AgentHooks,
+        hooks: AgentHooks | None = None,
         options: AgentOptions | None = None,
     ) -> None:
         raise NotImplementedError
