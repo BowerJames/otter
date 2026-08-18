@@ -1,4 +1,4 @@
-from .interface import Model
+from .signature import Model
 
 __all__ = [
     "Model",

@@ -6,7 +6,7 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
 )
 from otter_ai_core.model.fake import FakeModel, FakeModelExhausted
-from otter_ai_core.model.interface import Model
+from otter_ai_core.model.signature import Model
 
 
 def _assistant_text(text: str) -> AssistantMessage:
