@@ -3,7 +3,6 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from otter_ai_core.agent_tool import AgentToolResult
 from otter_ai_core.conversation import (
     AssistantMessage,
     SessionMessage,
@@ -14,7 +13,7 @@ from otter_ai_core.conversation import (
 type DrainMode = Literal["one-by-one", "all-at-once"]
 
 
-class AgentLoopModel(Protocol):
+class AgentModel(Protocol):
     def add_user_message(self, text: str) -> Awaitable[UserMessage]: ...
 
     def add_tool_result_message(
@@ -30,18 +29,17 @@ class AgentLoopOptions(BaseModel):
     max_generations: int | None = Field(default=None, ge=1)
 
 
-class ToolExecution(BaseModel):
-    tool_call_id: str
-    tool_name: str
-    result: AgentToolResult
+class AgentTurnStart(BaseModel):
+    pass
 
 
-class AgentLoopTurn(BaseModel):
+class AgentTurnEnd(BaseModel):
     messages: list[SessionMessage]
+    user_messages: list[UserMessage]
     assistant_message: AssistantMessage
-    tool_executions: list[ToolExecution]
+    tool_result_messages: list[ToolResultMessage]
     generations: int
     termination: Literal["final_response", "tool_terminated"]
 
 
-type AgentLoopEvent = SessionMessage | AgentLoopTurn
+type AgentLoopEvent = SessionMessage | AgentTurnStart | AgentTurnEnd

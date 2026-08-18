@@ -4,11 +4,11 @@ from .agent_loop import AgentLoop, AgentLoopExhausted, AgentLoopStranded
 from .hooks import AgentLoopHooks, BeforeToolCallHook, ToolCallDecision, ToolResultHook
 from .types import (
     AgentLoopEvent,
-    AgentLoopModel,
     AgentLoopOptions,
-    AgentLoopTurn,
+    AgentModel,
+    AgentTurnEnd,
+    AgentTurnStart,
     DrainMode,
-    ToolExecution,
 )
 
 __all__ = [
@@ -16,14 +16,14 @@ __all__ = [
     "AgentLoopEvent",
     "AgentLoopExhausted",
     "AgentLoopHooks",
-    "AgentLoopModel",
+    "AgentModel",
     "AgentLoopOptions",
     "AgentLoopStranded",
-    "AgentLoopTurn",
+    "AgentTurnEnd",
+    "AgentTurnStart",
     "BeforeToolCallHook",
     "DrainMode",
     "SessionMessage",
     "ToolCallDecision",
-    "ToolExecution",
     "ToolResultHook",
 ]

@@ -7,18 +7,17 @@ from pydantic import BaseModel
 
 from otter_ai_core.agent import (
     AgentLoop,
+    AgentLoopEvent,
     AgentLoopExhausted,
     AgentLoopHooks,
     AgentLoopOptions,
     AgentLoopStranded,
-    AgentLoopTurn,
+    AgentTurnEnd,
     ToolCallDecision,
-    ToolExecution,
 )
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
 from otter_ai_core.conversation import (
     AssistantMessage,
-    SessionMessage,
     TextContent,
     ToolCall,
     ToolResultMessage,
@@ -42,8 +41,8 @@ def response(
     )
 
 
-async def collect_turns(loop: AgentLoop) -> list[AgentLoopTurn]:
-    return [event async for event in loop if isinstance(event, AgentLoopTurn)]
+async def collect_turns(loop: AgentLoop) -> list[AgentTurnEnd]:
+    return [event async for event in loop if isinstance(event, AgentTurnEnd)]
 
 
 class TimeParams(BaseModel):
@@ -165,7 +164,8 @@ async def test_single_text_turn() -> None:
     turn = turns[0]
     assert turn.termination == "final_response"
     assert turn.generations == 1
-    assert turn.tool_executions == []
+    assert [m.content[0].text for m in turn.user_messages] == ["hi"]
+    assert turn.tool_result_messages == []
     assert turn.assistant_message.id == "a1"
     assert turn.assistant_message.content[0].text == "hello there"
     assert [type(m) for m in turn.messages] == [UserMessage, AssistantMessage]
@@ -243,6 +243,11 @@ async def test_turn_messages_concatenate_to_model_history() -> None:
     ]
     assert [type(m) for m in turns[1].messages] == [UserMessage, AssistantMessage]
     assert turns[0].messages[3].content[0].text == "say it in UTC"
+    assert [m.content[0].text for m in turns[0].user_messages] == [
+        "what time is it?",
+        "say it in UTC",
+    ]
+    assert [m.content[0].text for m in turns[1].user_messages] == ["thanks"]
 
 
 async def test_tool_call_round_trip() -> None:
@@ -273,15 +278,12 @@ async def test_tool_call_round_trip() -> None:
 
     turn = turns[0]
     assert received == [{"payload": "hello"}]
-    assert turn.tool_executions == [
-        ToolExecution(
-            tool_call_id="c1", tool_name="echo", result=AgentToolResult(text="echo:hello")
-        )
-    ]
     assert turn.generations == 2
     assert turn.termination == "final_response"
     feedback = model.history[2]
     assert isinstance(feedback, ToolResultMessage)
+    assert turn.tool_result_messages == [feedback]
+    assert turn.messages[2] == feedback
     assert feedback.tool_call_id == "c1"
     assert feedback.content[0].text == "echo:hello"
 
@@ -315,12 +317,8 @@ async def test_multiple_tool_calls_in_one_turn() -> None:
 
     turn = turns[0]
     assert calls == ["2+3", "10+20"]
-    assert [execution.tool_call_id for execution in turn.tool_executions] == ["c1", "c2"]
-    assert [execution.result.text for execution in turn.tool_executions] == ["5", "30"]
-    assert [m.tool_call_id for m in turn.messages if isinstance(m, ToolResultMessage)] == [
-        "c1",
-        "c2",
-    ]
+    assert [m.tool_call_id for m in turn.tool_result_messages] == ["c1", "c2"]
+    assert [m.content[0].text for m in turn.tool_result_messages] == ["5", "30"]
     assert turn.termination == "final_response"
 
 
@@ -342,16 +340,11 @@ async def test_unknown_tool_synthesizes_error_result() -> None:
         turns = await collect_turns(loop)
 
     turn = turns[0]
-    execution = turn.tool_executions[0]
-    assert execution.tool_call_id == "c1"
-    assert execution.tool_name == "nonexistent"
-    assert execution.result.is_error is True
-    assert "nonexistent" in execution.result.text
-
     feedback = model.history[2]
     assert isinstance(feedback, ToolResultMessage)
     assert feedback.tool_call_id == "c1"
-    assert feedback.content[0].text == execution.result.text
+    assert turn.tool_result_messages == [feedback]
+    assert turn.assistant_message.id == "a2"
     assert turn.termination == "final_response"
 
 
@@ -377,14 +370,11 @@ async def test_tool_exception_contained_as_error_result() -> None:
         turns = await collect_turns(loop)
 
     turn = turns[0]
-    execution = turn.tool_executions[0]
-    assert execution.result.is_error is True
-    assert "disk on fire" in execution.result.text
-
     feedback = model.history[2]
     assert isinstance(feedback, ToolResultMessage)
     assert feedback.tool_call_id == "c1"
-    assert feedback.content[0].text == execution.result.text
+    assert turn.tool_result_messages == [feedback]
+    assert turn.assistant_message.id == "a2"
     assert turn.termination == "final_response"
 
 
@@ -420,15 +410,8 @@ async def test_tool_terminate_ends_run_with_all_calls_answered() -> None:
     assert executed == [{"stop": True}, {"stop": False}]
     assert turn.termination == "tool_terminated"
     assert turn.generations == 1
-    assert [(e.tool_call_id, e.result.text) for e in turn.tool_executions] == [
-        ("c1", "stopping"),
-        ("c2", "continuing"),
-    ]
-    assert turn.tool_executions[0].result.terminate is True
-    assert [m.tool_call_id for m in turn.messages if isinstance(m, ToolResultMessage)] == [
-        "c1",
-        "c2",
-    ]
+    assert [m.tool_call_id for m in turn.tool_result_messages] == ["c1", "c2"]
+    assert turn.user_messages == [turn.messages[0]]
 
 
 def test_duplicate_tool_names_rejected_at_construction() -> None:
@@ -477,16 +460,15 @@ async def test_before_tool_call_deny_skips_execution_and_informs_model() -> None
 
     turn = turns[0]
     assert executed == [2]
-    assert [(e.tool_call_id, e.result.is_error) for e in turn.tool_executions] == [
-        ("c1", True),
-        ("c2", False),
-    ]
-    assert "denied probe" in turn.tool_executions[0].result.text
-    assert turn.tool_executions[1].result.text == "probe 2 ran"
     denied_feedback = model.history[2]
     assert isinstance(denied_feedback, ToolResultMessage)
     assert denied_feedback.tool_call_id == "c1"
-    assert denied_feedback.content[0].text == turn.tool_executions[0].result.text
+    assert "denied probe" in denied_feedback.content[0].text
+    allowed_feedback = model.history[3]
+    assert isinstance(allowed_feedback, ToolResultMessage)
+    assert allowed_feedback.tool_call_id == "c2"
+    assert turn.tool_result_messages == [denied_feedback, allowed_feedback]
+    assert turn.assistant_message.id == "a2"
     assert turn.termination == "final_response"
 
 
@@ -515,8 +497,11 @@ async def test_before_tool_call_fires_for_unknown_tools() -> None:
 
     turn = turns[0]
     assert observed == ["c1:ghost"]
-    assert turn.tool_executions[0].result.is_error is True
-    assert "ghost" in turn.tool_executions[0].result.text
+    feedback = model.history[2]
+    assert isinstance(feedback, ToolResultMessage)
+    assert feedback.tool_call_id == "c1"
+    assert turn.tool_result_messages == [feedback]
+    assert turn.assistant_message.id == "a2"
     assert turn.termination == "final_response"
 
 
@@ -549,11 +534,11 @@ async def test_tool_result_hook_rewrites_recorded_result() -> None:
 
     turn = turns[0]
     assert hook_inputs == [("c1", "original")]
-    assert turn.tool_executions[0].result.text == "REWRITTEN"
     feedback = model.history[2]
     assert isinstance(feedback, ToolResultMessage)
     assert feedback.tool_call_id == "c1"
     assert feedback.content[0].text == "REWRITTEN"
+    assert turn.tool_result_messages == [feedback]
     assert turn.termination == "final_response"
 
 
@@ -582,8 +567,10 @@ async def test_tool_result_hook_can_escalate_termination() -> None:
 
     turn = turns[0]
     assert turn.termination == "tool_terminated"
-    assert turn.tool_executions[0].result.terminate is True
-    assert turn.tool_executions[0].result.text == "finished normally"
+    feedback = model.history[2]
+    assert isinstance(feedback, ToolResultMessage)
+    assert feedback.tool_call_id == "c1"
+    assert turn.tool_result_messages == [feedback]
 
 
 async def test_hook_exceptions_propagate() -> None:
@@ -659,8 +646,11 @@ async def test_steering_drains_all_at_once_before_next_generate() -> None:
         UserMessage,
         AssistantMessage,
     ]
-    steered = [m.content[0].text for m in turn.messages if isinstance(m, UserMessage)][1:]
-    assert steered == ["first correction", "second correction"]
+    assert [m.content[0].text for m in turn.user_messages] == [
+        "go",
+        "first correction",
+        "second correction",
+    ]
 
 
 async def test_steering_drain_one_by_one_spreads_across_generations() -> None:
@@ -716,6 +706,11 @@ async def test_steering_drain_one_by_one_spreads_across_generations() -> None:
     ]
     assert turn.messages[3].content[0].text == "first correction"
     assert turn.messages[6].content[0].text == "second correction"
+    assert [m.content[0].text for m in turn.user_messages] == [
+        "go",
+        "first correction",
+        "second correction",
+    ]
 
 
 async def test_undrained_steering_raises_stranded() -> None:
@@ -737,11 +732,11 @@ async def test_undrained_steering_raises_stranded() -> None:
         loop.follow_up("go")
 
         iterator = aiter(loop)
-        events: list[SessionMessage | AgentLoopTurn] = []
+        events: list[AgentLoopEvent] = []
         with pytest.raises(AgentLoopStranded):
             async for event in iterator:
                 events.append(event)
-        turns = [event for event in events if isinstance(event, AgentLoopTurn)]
+        turns = [event for event in events if isinstance(event, AgentTurnEnd)]
         assert [turn.termination for turn in turns] == ["final_response"]
 
 
@@ -763,7 +758,11 @@ async def test_follow_ups_drain_one_by_one() -> None:
 
     assert len(turns) == 3
     assert [turn.assistant_message.id for turn in turns] == ["a1", "a2", "a3"]
-    assert [turn.messages[0].content[0].text for turn in turns] == ["one", "two", "three"]
+    assert [[m.content[0].text for m in turn.user_messages] for turn in turns] == [
+        ["one"],
+        ["two"],
+        ["three"],
+    ]
     assert all(turn.generations == 1 for turn in turns)
 
 
@@ -784,7 +783,7 @@ async def test_follow_ups_drain_all_at_once() -> None:
         UserMessage,
         AssistantMessage,
     ]
-    assert [m.content[0].text for m in turns[0].messages if isinstance(m, UserMessage)] == [
+    assert [m.content[0].text for m in turns[0].user_messages] == [
         "first part",
         "second part",
         "third part",
@@ -838,10 +837,10 @@ async def test_max_generations_exhaustion_raises_after_yielding_prior_turns() ->
         loop.follow_up("first")
         loop.follow_up("second")
 
-        collected: list[AgentLoopTurn] = []
+        collected: list[AgentTurnEnd] = []
         with pytest.raises(AgentLoopExhausted):
             async for event in loop:
-                if isinstance(event, AgentLoopTurn):
+                if isinstance(event, AgentTurnEnd):
                     collected.append(event)
 
     assert [turn.assistant_message.id for turn in collected] == ["a1"]

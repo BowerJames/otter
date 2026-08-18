@@ -1,11 +1,17 @@
 import pytest
 from pydantic import BaseModel
 
-from otter_ai_core.agent import AgentLoop, AgentLoopExhausted, AgentLoopOptions, AgentLoopTurn
+from otter_ai_core.agent import (
+    AgentLoop,
+    AgentLoopEvent,
+    AgentLoopExhausted,
+    AgentLoopOptions,
+    AgentTurnEnd,
+    AgentTurnStart,
+)
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
 from otter_ai_core.conversation import (
     AssistantMessage,
-    SessionMessage,
     TextContent,
     ToolCall,
     ToolResultMessage,
@@ -59,22 +65,27 @@ async def test_event_stream_interleaves_session_messages_and_turn() -> None:
         loop = AgentLoop(model, tools=[tool])
         loop.follow_up("what time is it?")
 
-        events: list[SessionMessage | AgentLoopTurn] = [event async for event in loop]
+        events: list[AgentLoopEvent] = [event async for event in loop]
 
     assert [type(event) for event in events] == [
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
         ToolResultMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
     ]
-    message_events = [event for event in events if not isinstance(event, AgentLoopTurn)]
+    message_events = [
+        event
+        for event in events
+        if isinstance(event, (UserMessage, AssistantMessage, ToolResultMessage))
+    ]
     assert message_events == list(model.history)
     turn = events[-1]
-    assert isinstance(turn, AgentLoopTurn)
+    assert isinstance(turn, AgentTurnEnd)
     assert turn.termination == "final_response"
     assert turn.messages == message_events
-    assert turn.tool_executions[0].tool_name == "get_time"
+    assert turn.tool_result_messages == [message_events[2]]
 
 
 async def test_steered_user_message_appears_between_generations() -> None:
@@ -103,19 +114,20 @@ async def test_steered_user_message_appears_between_generations() -> None:
         events = [event async for event in loop]
 
     assert [type(event) for event in events] == [
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
         ToolResultMessage,
         UserMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
     ]
-    steered = events[3]
+    steered = events[4]
     assert isinstance(steered, UserMessage)
     assert steered.content[0].text == "say it in UTC"
 
 
-async def test_each_turn_closes_with_a_turn_event() -> None:
+async def test_each_turn_opens_and_closes_with_turn_events() -> None:
     model = FakeModel(
         [
             response("a1", text="one"),
@@ -132,17 +144,20 @@ async def test_each_turn_closes_with_a_turn_event() -> None:
         events = [event async for event in loop]
 
     assert [type(event) for event in events] == [
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
     ]
-    turns = [event for event in events if isinstance(event, AgentLoopTurn)]
+    turns = [event for event in events if isinstance(event, AgentTurnEnd)]
     assert [turn.assistant_message.id for turn in turns] == ["a1", "a2", "a3"]
 
 
@@ -156,7 +171,7 @@ async def test_event_stream_empty_without_follow_ups() -> None:
     assert events == []
 
 
-async def test_message_events_stream_from_partial_turn_before_exhaustion() -> None:
+async def test_exhaustion_streams_partial_turn_and_leaves_start_dangling() -> None:
     async def count(_: CountParams) -> AgentToolResult:
         return AgentToolResult(text="counted")
 
@@ -174,15 +189,17 @@ async def test_message_events_stream_from_partial_turn_before_exhaustion() -> No
         loop.follow_up("first")
         loop.follow_up("second")
 
-        events: list[SessionMessage | AgentLoopTurn] = []
+        events: list[AgentLoopEvent] = []
         with pytest.raises(AgentLoopExhausted):
             async for event in loop:
                 events.append(event)
 
     assert [type(event) for event in events] == [
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
-        AgentLoopTurn,
+        AgentTurnEnd,
+        AgentTurnStart,
         UserMessage,
         AssistantMessage,
         ToolResultMessage,

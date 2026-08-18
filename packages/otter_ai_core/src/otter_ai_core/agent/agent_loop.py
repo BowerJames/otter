@@ -2,15 +2,20 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable
 
 from otter_ai_core.agent_tool import AgentTool, AgentToolResult
-from otter_ai_core.conversation import SessionMessage, ToolCall, UserMessage
+from otter_ai_core.conversation import (
+    SessionMessage,
+    ToolCall,
+    ToolResultMessage,
+    UserMessage,
+)
 
 from .hooks import AgentLoopHooks
 from .types import (
     AgentLoopEvent,
-    AgentLoopModel,
     AgentLoopOptions,
-    AgentLoopTurn,
-    ToolExecution,
+    AgentModel,
+    AgentTurnEnd,
+    AgentTurnStart,
 )
 
 
@@ -23,7 +28,7 @@ class AgentLoopStranded(RuntimeError): ...
 class AgentLoop:
     def __init__(
         self,
-        model: AgentLoopModel,
+        model: AgentModel,
         tools: Iterable[AgentTool] = (),
         options: AgentLoopOptions | None = None,
         hooks: AgentLoopHooks | None = None,
@@ -70,7 +75,7 @@ class AgentLoop:
                 terminated = False
                 async for event in self._run_turn(follow_ups):
                     yield event
-                    if isinstance(event, AgentLoopTurn) and event.termination == "tool_terminated":
+                    if isinstance(event, AgentTurnEnd) and event.termination == "tool_terminated":
                         terminated = True
                 if terminated:
                     break
@@ -90,13 +95,16 @@ class AgentLoop:
         return drained
 
     async def _run_turn(self, follow_ups: list[str]) -> AsyncIterator[AgentLoopEvent]:
+        yield AgentTurnStart()
         messages: list[SessionMessage] = []
+        user_messages: list[UserMessage] = []
         for text in follow_ups:
             user_message = await self._model.add_user_message(text)
             messages.append(user_message)
+            user_messages.append(user_message)
             yield user_message
         generations = 0
-        tool_executions: list[ToolExecution] = []
+        tool_result_messages: list[ToolResultMessage] = []
         while True:
             max_generations = self._options.max_generations
             if max_generations is not None and self._generations_used >= max_generations:
@@ -105,6 +113,7 @@ class AgentLoop:
                 )
             for message in await self._drain_steering():
                 messages.append(message)
+                user_messages.append(message)
                 yield message
             assistant = await self._model.generate()
             self._generations_used += 1
@@ -112,10 +121,11 @@ class AgentLoop:
             messages.append(assistant)
             yield assistant
             if assistant.stop_reason != "tool_call" or not assistant.tool_calls:
-                yield AgentLoopTurn(
+                yield AgentTurnEnd(
                     messages=messages,
+                    user_messages=user_messages,
                     assistant_message=assistant,
-                    tool_executions=tool_executions,
+                    tool_result_messages=tool_result_messages,
                     generations=generations,
                     termination="final_response",
                 )
@@ -123,18 +133,17 @@ class AgentLoop:
             terminated = False
             for call in assistant.tool_calls:
                 result = await self._execute_call(call)
-                tool_executions.append(
-                    ToolExecution(tool_call_id=call.id, tool_name=call.tool_name, result=result)
-                )
                 feedback = await self._model.add_tool_result_message(call.id, result.text)
+                tool_result_messages.append(feedback)
                 messages.append(feedback)
                 yield feedback
                 terminated = terminated or result.terminate
             if terminated:
-                yield AgentLoopTurn(
+                yield AgentTurnEnd(
                     messages=messages,
+                    user_messages=user_messages,
                     assistant_message=assistant,
-                    tool_executions=tool_executions,
+                    tool_result_messages=tool_result_messages,
                     generations=generations,
                     termination="tool_terminated",
                 )
