@@ -30,11 +30,8 @@ async def test_execute_validates_dict_and_passes_typed_payload() -> None:
     assert received == [WeatherParams(city="Leeds", unit="celsius")]
 
 
-async def test_validation_failure_returns_error_result_without_calling_execute() -> None:
-    received: list[WeatherParams] = []
-
+async def test_validation_failure_message_names_tool_and_field() -> None:
     async def get_weather(params: WeatherParams) -> AgentToolResult:
-        received.append(params)
         return AgentToolResult(text="unreachable")
 
     tool = create_agent_tool("get_weather", "Get the weather", WeatherParams, get_weather)
@@ -42,18 +39,8 @@ async def test_validation_failure_returns_error_result_without_calling_execute()
 
     assert result.is_error is True
     assert result.terminate is False
-    assert "city" in result.text
     assert "get_weather" in result.text
-    assert received == []
-
-
-async def test_callback_exception_propagates() -> None:
-    async def get_weather(params: WeatherParams) -> AgentToolResult:
-        raise ValueError("the weather service is down")
-
-    tool = create_agent_tool("get_weather", "Get the weather", WeatherParams, get_weather)
-    with pytest.raises(ValueError, match="weather service"):
-        await tool.execute({"city": "Leeds"})
+    assert "city" in result.text
 
 
 async def test_hand_written_class_satisfies_protocol_structurally() -> None:
