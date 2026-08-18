@@ -8,12 +8,12 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.model import Model
 
 from .hooks import AgentLoopHooks
 from .types import (
     AgentLoopEvent,
     AgentLoopOptions,
-    AgentModel,
     AgentTurnEnd,
     AgentTurnStart,
 )
@@ -35,7 +35,7 @@ def _reject_duplicate_tool_names(tools: Sequence[AgentTool]) -> None:
 class AgentLoop:
     def __init__(
         self,
-        model: AgentModel,
+        model: Model,
         tools: Iterable[AgentTool] = (),
         options: AgentLoopOptions | None = None,
         hooks: AgentLoopHooks | None = None,

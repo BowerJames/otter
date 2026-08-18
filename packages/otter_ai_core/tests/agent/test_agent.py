@@ -1,4 +1,6 @@
 import asyncio
+from types import TracebackType
+from typing import Self
 
 import pytest
 from pydantic import BaseModel
@@ -11,7 +13,6 @@ from otter_ai_core.agent import (
     AgentLoopExhausted,
     AgentLoopOptions,
     AgentLoopStranded,
-    AgentModel,
     AgentOptions,
     AgentStart,
     AgentStream,
@@ -27,6 +28,7 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.model import Model
 from otter_ai_core.model.fake import FakeModel
 
 
@@ -77,11 +79,23 @@ class OpenParams(BaseModel):
 
 
 class _SteerOnGenerate:
-    def __init__(self, inner: AgentModel, agents: list[Agent], text: str) -> None:
+    def __init__(self, inner: Model, agents: list[Agent], text: str) -> None:
         self._inner = inner
         self._agents = agents
         self._text = text
         self._armed = True
+
+    async def __aenter__(self) -> Self:
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self._inner.__aexit__(exc_type, exc_value, traceback)
 
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
@@ -97,10 +111,22 @@ class _SteerOnGenerate:
 
 
 class _GatedModel:
-    def __init__(self, inner: AgentModel) -> None:
+    def __init__(self, inner: Model) -> None:
         self._inner = inner
         self.reached = asyncio.Event()
         self.release = asyncio.Event()
+
+    async def __aenter__(self) -> Self:
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self._inner.__aexit__(exc_type, exc_value, traceback)
 
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
