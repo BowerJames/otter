@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .interface import AgentTool
+from .signature import AgentTool
 from .types import AgentToolResult
 
 
