@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from otter_ai_core.agent_loop import AgentLoopOptions
+from otter_ai_core.agent import AgentLoopOptions
 
 
 def test_max_generations_must_be_at_least_one() -> None:
