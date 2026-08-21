@@ -1,5 +1,7 @@
 from collections.abc import Awaitable, Callable
 
+from otter_ai_core.model import MODEL_CONTRACT_CHECKS
+
 from .signature import Provider
 
 # A ProviderFactory yields a fresh Provider. Checks arrange all state they
@@ -7,4 +9,23 @@ from .signature import Provider
 type ProviderFactory = Callable[[], Provider]
 type ProviderContractCheck = Callable[[ProviderFactory], Awaitable[None]]
 
-PROVIDER_CONTRACT_CHECKS: list[ProviderContractCheck] = []
+
+async def check_model_factory_satisfies_model_contract(
+    make_provider: ProviderFactory,
+) -> None:
+    provider = make_provider()
+    factory = provider.get_model_factory("some-model", "sk-test")
+    first = factory("system prompt", [])
+    second = factory("system prompt", [])
+    async with first, second:
+        await first.add_user_message("hello")
+        message = await second.add_user_message("hello")
+        assert message.content[0].text == "hello"
+        await first.generate()
+    for model_check in MODEL_CONTRACT_CHECKS:
+        await model_check(lambda system_prompt, tools: factory(system_prompt, tools))
+
+
+PROVIDER_CONTRACT_CHECKS: list[ProviderContractCheck] = [
+    check_model_factory_satisfies_model_contract,
+]
