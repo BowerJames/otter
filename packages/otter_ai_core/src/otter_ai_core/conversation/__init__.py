@@ -1,5 +1,6 @@
 from .types import (
     AssistantMessage,
+    SessionEntry,
     SessionMessage,
     TextContent,
     ThinkingContent,
@@ -10,6 +11,7 @@ from .types import (
 
 __all__ = [
     "AssistantMessage",
+    "SessionEntry",
     "SessionMessage",
     "TextContent",
     "ThinkingContent",

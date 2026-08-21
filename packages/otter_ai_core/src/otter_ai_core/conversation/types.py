@@ -41,3 +41,5 @@ class AssistantMessage(BaseModel):
 
 
 type SessionMessage = UserMessage | AssistantMessage | ToolResultMessage
+
+type SessionEntry = SessionMessage
