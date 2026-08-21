@@ -20,7 +20,7 @@ def _assistant_text(text: str) -> AssistantMessage:
 
 @pytest.mark.parametrize("check", MODEL_CONTRACT_CHECKS, ids=lambda c: c.__name__)
 async def test_fake_model_satisfies_model_contract(check: ModelContractCheck) -> None:
-    await check(lambda: FakeModel([_assistant_text("hello")]))
+    await check(lambda system_prompt, tools: FakeModel([_assistant_text("hello")]))
 
 
 async def test_generate_returns_scripted_responses_in_order() -> None:
