@@ -33,7 +33,7 @@ async def test_get_model_factory_resolves_provider_model_and_api_key() -> None:
     factory = await registry.get_model_factory("openai", "gpt-4o")
 
     assert provider.received == ("gpt-4o", "sk-key")
-    assert factory is not None
+    assert factory is provider.returned_factory
 
 
 async def test_unknown_provider_raises_key_error_naming_provider() -> None:
