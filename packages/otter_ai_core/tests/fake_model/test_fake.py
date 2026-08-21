@@ -5,8 +5,8 @@ from otter_ai_core.conversation import (
     TextContent,
     ToolResultMessage,
 )
-from otter_ai_core.model.fake import FakeModel, FakeModelExhausted
-from otter_ai_core.model.signature import Model
+from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
+from otter_ai_core.model import Model
 
 
 def _assistant_text(text: str) -> AssistantMessage:
