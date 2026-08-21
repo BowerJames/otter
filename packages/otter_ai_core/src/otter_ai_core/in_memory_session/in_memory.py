@@ -3,7 +3,7 @@ from enum import Enum, auto
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core.conversation import SessionMessage
+from otter_ai_core.conversation import SessionEntry, SessionMessage
 
 
 class _SessionState(Enum):
@@ -40,6 +40,10 @@ class InMemorySessionManager:
 
     async def get_messages(self) -> Sequence[SessionMessage]:
         self._require_open("get_messages")
+        return tuple(self._messages)
+
+    @property
+    def entries(self) -> Sequence[SessionEntry]:
         return tuple(self._messages)
 
     def _require_open(self, method: str) -> None:

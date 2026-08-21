@@ -18,7 +18,8 @@ def _user_message(text: str) -> UserMessage:
 
 async def test_entries_reflects_appended_messages_across_session_lifecycle() -> None:
     manager = InMemorySessionManager()
-    assert manager.entries == ()
+    initial = manager.entries
+    assert initial == ()
     first = _user_message("first")
     second = _user_message("second")
     async with manager:
