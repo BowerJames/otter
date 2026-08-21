@@ -14,7 +14,7 @@ class _SessionState(Enum):
 
 class InMemorySessionManager:
     def __init__(self) -> None:
-        self._messages: list[SessionMessage] = []
+        self._messages: list[SessionEntry] = []
         self._state = _SessionState.NEW
 
     async def __aenter__(self) -> Self:
@@ -40,7 +40,7 @@ class InMemorySessionManager:
 
     async def get_messages(self) -> Sequence[SessionMessage]:
         self._require_open("get_messages")
-        return tuple(self._messages)
+        return self.entries
 
     @property
     def entries(self) -> Sequence[SessionEntry]:
