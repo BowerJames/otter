@@ -1,7 +1,7 @@
 import pytest
 
+from otter_ai_core.in_memory_session import InMemorySessionManager
 from otter_ai_core.session import SESSION_MANAGER_CONTRACT_CHECKS, SessionManagerContractCheck
-from otter_ai_core.session.in_memory import InMemorySessionManager
 
 
 @pytest.mark.parametrize("check", SESSION_MANAGER_CONTRACT_CHECKS, ids=lambda c: c.__name__)
