@@ -30,7 +30,7 @@ async def test_get_model_factory_resolves_provider_model_and_api_key() -> None:
     provider.set_returned_factory(lambda system_prompt, tools: FakeModel([]))
     registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
 
-    factory = registry.get_model_factory("openai", "gpt-4o")
+    factory = await registry.get_model_factory("openai", "gpt-4o")
 
     assert provider.received == ("gpt-4o", "sk-key")
     assert factory is not None
@@ -41,7 +41,7 @@ async def test_unknown_provider_raises_key_error_naming_provider() -> None:
     registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
 
     with pytest.raises(KeyError) as exc_info:
-        registry.get_model_factory("anthropic", "claude-sonnet-4")
+        await registry.get_model_factory("anthropic", "claude-sonnet-4")
 
     assert "anthropic" in str(exc_info.value)
     assert provider.received is None
@@ -52,7 +52,7 @@ async def test_unknown_model_raises_key_error_naming_provider_and_model() -> Non
     registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
 
     with pytest.raises(KeyError) as exc_info:
-        registry.get_model_factory("openai", "o3")
+        await registry.get_model_factory("openai", "o3")
 
     assert "openai/o3" in str(exc_info.value)
 
@@ -62,7 +62,7 @@ async def test_missing_api_key_propagates_key_error_from_auth_storage() -> None:
     registry = ModelRegistry({"openai": provider}, InMemoryAuthStorage())
 
     with pytest.raises(KeyError) as exc_info:
-        registry.get_model_factory("openai", "gpt-4o")
+        await registry.get_model_factory("openai", "gpt-4o")
 
     assert "openai" in str(exc_info.value)
     assert provider.received is None
@@ -78,7 +78,7 @@ async def test_factories_for_distinct_providers_are_resolved_independently() -> 
         await _storage_seeded_with(("openai", "sk-openai"), ("anthropic", "sk-ant")),
     )
 
-    assert registry.get_model_factory("openai", "gpt-4o") is openai._factory
-    assert registry.get_model_factory("anthropic", "claude-sonnet-4") is anthropic._factory
+    assert await registry.get_model_factory("openai", "gpt-4o") is openai._factory
+    assert await registry.get_model_factory("anthropic", "claude-sonnet-4") is anthropic._factory
     assert openai.received == ("gpt-4o", "sk-openai")
     assert anthropic.received == ("claude-sonnet-4", "sk-ant")
