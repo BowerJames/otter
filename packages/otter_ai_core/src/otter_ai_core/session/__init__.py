@@ -3,10 +3,12 @@ from .contract import (
     SessionManagerContractCheck,
     SessionManagerFactory,
 )
+from .in_memory import InMemorySessionManager
 from .signature import SessionManager
 
 __all__ = [
     "SESSION_MANAGER_CONTRACT_CHECKS",
+    "InMemorySessionManager",
     "SessionManager",
     "SessionManagerContractCheck",
     "SessionManagerFactory",
