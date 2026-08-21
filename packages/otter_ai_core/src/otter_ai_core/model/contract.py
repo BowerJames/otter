@@ -1,15 +1,17 @@
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 
+from otter_ai_core.agent_tool import AgentTool
 from otter_ai_core.conversation import TextContent, ToolResultMessage, UserMessage
 
 from .signature import Model
 
-# A ModelFactory yields a fresh, unentered model whose session can complete at
-# least one generate() and accepts a tool result for an arbitrary tool_call_id.
-# Anything a check needs to observe through the interface must be arranged by
-# the factory; checks receive nothing else.
-type ModelFactory = Callable[[], Model]
+# A ModelFactory yields a fresh, unentered model, bound to the given system
+# prompt and tools, whose session can complete at least one generate() and
+# accepts a tool result for an arbitrary tool_call_id. Anything a check needs
+# to observe through the interface must be arranged by the factory; checks
+# receive nothing else.
+type ModelFactory = Callable[[str, list[AgentTool]], Model]
 type ModelContractCheck = Callable[[ModelFactory], Awaitable[None]]
 
 
@@ -32,7 +34,7 @@ def _propagates(exc_type: type[BaseException]) -> Iterator[None]:
 
 
 async def check_methods_gated_by_session_lifecycle(make_model: ModelFactory) -> None:
-    model = make_model()
+    model = make_model("system prompt", [])
     with _raises_runtime_error():
         await model.add_user_message("hello")
     with _raises_runtime_error():
@@ -54,7 +56,7 @@ async def check_methods_gated_by_session_lifecycle(make_model: ModelFactory) -> 
 
 
 async def check_session_cannot_be_reentered(make_model: ModelFactory) -> None:
-    model = make_model()
+    model = make_model("system prompt", [])
     async with model:
         pass
     with _raises_runtime_error():
@@ -62,7 +64,7 @@ async def check_session_cannot_be_reentered(make_model: ModelFactory) -> None:
 
 
 async def check_exit_does_not_suppress_exceptions(make_model: ModelFactory) -> None:
-    model = make_model()
+    model = make_model("system prompt", [])
     with _propagates(ZeroDivisionError):
         async with model:
             await model.add_user_message("hello")
@@ -70,7 +72,7 @@ async def check_exit_does_not_suppress_exceptions(make_model: ModelFactory) -> N
 
 
 async def check_add_user_message_returns_message_with_text(make_model: ModelFactory) -> None:
-    model = make_model()
+    model = make_model("system prompt", [])
     async with model:
         message = await model.add_user_message("hello")
     assert isinstance(message, UserMessage)
@@ -80,7 +82,7 @@ async def check_add_user_message_returns_message_with_text(make_model: ModelFact
 async def check_add_tool_result_message_returns_message_with_text(
     make_model: ModelFactory,
 ) -> None:
-    model = make_model()
+    model = make_model("system prompt", [])
     async with model:
         message = await model.add_tool_result_message("tool-call-1", "the result")
     assert isinstance(message, ToolResultMessage)
