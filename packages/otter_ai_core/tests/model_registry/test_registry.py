@@ -78,7 +78,10 @@ async def test_factories_for_distinct_providers_are_resolved_independently() -> 
         await _storage_seeded_with(("openai", "sk-openai"), ("anthropic", "sk-ant")),
     )
 
-    assert await registry.get_model_factory("openai", "gpt-4o") is openai._factory
-    assert await registry.get_model_factory("anthropic", "claude-sonnet-4") is anthropic._factory
+    assert await registry.get_model_factory("openai", "gpt-4o") is openai.returned_factory
+    assert (
+        await registry.get_model_factory("anthropic", "claude-sonnet-4")
+        is anthropic.returned_factory
+    )
     assert openai.received == ("gpt-4o", "sk-openai")
     assert anthropic.received == ("claude-sonnet-4", "sk-ant")

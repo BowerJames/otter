@@ -17,5 +17,5 @@ class ModelRegistry:
         api_key = await self._auth_storage.get_api_key(provider)
         try:
             return self._providers[provider].get_model_factory(model, api_key)
-        except KeyError:
-            raise KeyError(f"Unknown model for provider: {provider}/{model}") from None
+        except KeyError as exc:
+            raise KeyError(f"Unknown model for provider: {provider}/{model}: {exc}") from exc

@@ -23,7 +23,7 @@ async def check_model_factory_satisfies_model_contract(
         assert message.content[0].text == "hello"
         await first.generate()
     for model_check in MODEL_CONTRACT_CHECKS:
-        await model_check(lambda system_prompt, tools: factory(system_prompt, tools))
+        await model_check(factory)
 
 
 PROVIDER_CONTRACT_CHECKS: list[ProviderContractCheck] = [

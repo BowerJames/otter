@@ -26,6 +26,10 @@ class FakeProvider:
     def set_returned_factory(self, factory: ModelFactory) -> None:
         self._factory = factory
 
+    @property
+    def returned_factory(self) -> ModelFactory:
+        return self._factory
+
     def get_model_factory(self, model: str, api_key: str) -> ModelFactory:
         if self._known_models is not None and model not in self._known_models:
             raise KeyError(f"Unknown model for provider: {model}")
