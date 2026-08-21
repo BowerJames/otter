@@ -5,8 +5,8 @@ from otter_ai_core.conversation import (
     TextContent,
     ToolResultMessage,
 )
-from otter_ai_core.model.fake import FakeModel, FakeModelExhausted
-from otter_ai_core.model.signature import Model
+from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
+from otter_ai_core.model import MODEL_CONTRACT_CHECKS, ModelContractCheck
 
 
 def _assistant_text(text: str) -> AssistantMessage:
@@ -18,18 +18,9 @@ def _assistant_text(text: str) -> AssistantMessage:
     )
 
 
-async def test_fake_model_conforms_to_model_interface() -> None:
-    model: Model = FakeModel([_assistant_text("hello")])
-    async with model:
-        await model.generate()
-
-
-async def test_add_user_message_returns_user_message_with_text() -> None:
-    model = FakeModel([])
-    async with model:
-        message = await model.add_user_message("hello")
-    assert message.role == "user"
-    assert message.content == [TextContent(text="hello")]
+@pytest.mark.parametrize("check", MODEL_CONTRACT_CHECKS, ids=lambda c: c.__name__)
+async def test_fake_model_satisfies_model_contract(check: ModelContractCheck) -> None:
+    await check(lambda: FakeModel([_assistant_text("hello")]))
 
 
 async def test_generate_returns_scripted_responses_in_order() -> None:
@@ -47,22 +38,6 @@ async def test_generate_beyond_script_raises_exhausted() -> None:
         await model.generate()
         with pytest.raises(FakeModelExhausted):
             await model.generate()
-
-
-async def test_methods_called_outside_session_raise() -> None:
-    model = FakeModel([_assistant_text("hello")])
-    with pytest.raises(RuntimeError):
-        await model.add_user_message("hello")
-    with pytest.raises(RuntimeError):
-        await model.generate()
-
-
-async def test_session_cannot_be_reentered() -> None:
-    model = FakeModel([_assistant_text("hello")])
-    async with model:
-        await model.generate()
-    with pytest.raises(RuntimeError):
-        await model.__aenter__()
 
 
 async def test_history_records_messages_in_order() -> None:

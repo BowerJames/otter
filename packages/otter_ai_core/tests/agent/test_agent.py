@@ -28,8 +28,8 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
     UserMessage,
 )
+from otter_ai_core.fake_model import FakeModel
 from otter_ai_core.model import Model
-from otter_ai_core.model.fake import FakeModel
 
 
 def response(
