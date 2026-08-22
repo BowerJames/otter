@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from otter_ai_core.model import ModelFactory
+from ..model import ModelFactory
 
 
 class Provider(Protocol):

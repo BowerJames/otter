@@ -18,6 +18,7 @@ from otter_ai_core.agent import (
     AgentStream,
     AgentTurnEnd,
     AgentTurnStart,
+    Model,
     ToolCallDecision,
 )
 from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
@@ -29,7 +30,7 @@ from otter_ai_core.conversation import (
     UserMessage,
 )
 from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.model import Model
+from otter_ai_core.model_registry import EnterableModel
 
 
 def response(
@@ -98,18 +99,6 @@ class _SteerOnGenerate:
         self._text = text
         self._armed = True
 
-    async def __aenter__(self) -> Self:
-        await self._inner.__aenter__()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        await self._inner.__aexit__(exc_type, exc_value, traceback)
-
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
 
@@ -129,18 +118,6 @@ class _GatedModel:
         self.reached = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def __aenter__(self) -> Self:
-        await self._inner.__aenter__()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        await self._inner.__aexit__(exc_type, exc_value, traceback)
-
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
 
@@ -154,7 +131,7 @@ class _GatedModel:
 
 
 class BoomModel:
-    def __init__(self, inner: Model, failing: str) -> None:
+    def __init__(self, inner: EnterableModel, failing: str) -> None:
         self._inner = inner
         self._failing = failing
         self.exited = False

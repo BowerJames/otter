@@ -8,9 +8,9 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
     UserMessage,
 )
-from otter_ai_core.model import Model
 
 from .hooks import AgentLoopHooks
+from .model import Model
 from .types import (
     AgentLoopEvent,
     AgentLoopOptions,
