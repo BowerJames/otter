@@ -11,17 +11,25 @@ Design **deep modules**: a lot of behaviour behind a small interface, placed at 
 
 Use these terms exactly — don't substitute "component," "service," "API," or "boundary." Consistent language is the whole point.
 
-**Module** — anything with an interface and an implementation. Deliberately scale-agnostic: a function, class, package, or tier-spanning slice. _Avoid_: unit, component, service.
+**Module** — anything with a interface and an implementation testd completely through the interfce. Deliberately scale-agnostic: a function, class, package, or tier-spanning slice. All of these can be considered modules if they provide implementions fully tested through an interface. 
 
-**Interface** — everything a caller must know to use the module correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics. _Avoid_: API, signature (too narrow — they refer only to the type-level surface).
+_Avoid_: unit, component, service.
+
+**Interface** — everything a caller must know to use an module correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics. 
+
+_Avoid_: API, signature (too narrow — they refer only to the type-level surface).
 
 **Implementation** — what's inside a module, its body of code. Distinct from **Adapter**: a thing can be a small adapter with a large implementation (a Postgres repo) or a large adapter with a small implementation (an in-memory fake). Reach for "adapter" when the seam is the topic; "implementation" otherwise.
 
+**Abstraction** - everything a caller needs must know to use its subject correctly. Differs from an interface in that its subject is an abstract entity rather than a complete module with an implementation.
+
 **Depth** — leverage at the interface: the amount of behaviour a caller (or test) can exercise per unit of interface they have to learn. A module is **deep** when a large amount of behaviour sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.
 
-**Seam** _(Michael Feathers)_ — a place where you can alter behaviour without editing in that place; the *location* at which a module's interface lives. Where to put the seam is its own design decision, distinct from what goes behind it. _Avoid_: boundary (overloaded with DDD's bounded context).
+**Seam** _(Michael Feathers)_ — a place where you can alter behaviour without editing in that place; the *location* at which an abstraction lives. Where to put the seam is its own design decision, distinct from what goes behind it. Modules with seams must provide adapters that satisfy the abstraction for testing.
 
-**Adapter** — a concrete thing that satisfies an interface at a seam. Describes *role* (what slot it fills), not substance (what's inside).
+_Avoid_: boundary (overloaded with DDD's bounded context).
+
+**Adapter** — a concrete thing that satisfies an abstraction at a seam.
 
 **Leverage** — what callers get from depth: more capability per unit of interface they learn. One implementation pays back across N call sites and M tests.
 
@@ -100,8 +108,8 @@ Good interfaces make testing natural:
 
 - A **Module** has exactly one **Interface** (the surface it presents to callers and tests).
 - **Depth** is a property of a **Module**, measured against its **Interface**.
-- A **Seam** is where a **Module**'s **Interface** lives.
-- An **Adapter** sits at a **Seam** and satisfies the **Interface**.
+- A **Seam** is where an **Abstraction** lives.
+- An **Adapter** sits at a **Seam** and satisfies the **Abstraction**.
 - **Depth** produces **Leverage** for callers and **Locality** for maintainers.
 
 ## Rejected framings
