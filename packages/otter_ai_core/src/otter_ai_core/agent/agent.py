@@ -4,10 +4,10 @@ from collections.abc import AsyncGenerator, Callable
 from otter_ai_core.agent_tool import AgentTool
 from otter_ai_core.components import TerminatingStream
 from otter_ai_core.conversation import SessionMessage
-from otter_ai_core.model import Model
 
 from .agent_loop import AgentLoop, _reject_duplicate_tool_names
 from .hooks import AgentHooks, AgentLoopHooks
+from .model import Model
 from .types import (
     AgentEnd,
     AgentLoopEvent,

@@ -29,7 +29,7 @@ from otter_ai_core.conversation import (
     UserMessage,
 )
 from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.model import Model
+from otter_ai_core.model_registry import EnterableModel
 
 
 def response(
@@ -92,7 +92,7 @@ class ReportParams(BaseModel):
 
 
 class _SteerOnGenerate:
-    def __init__(self, inner: Model, agents: list[Agent], text: str) -> None:
+    def __init__(self, inner: EnterableModel, agents: list[Agent], text: str) -> None:
         self._inner = inner
         self._agents = agents
         self._text = text
@@ -124,7 +124,7 @@ class _SteerOnGenerate:
 
 
 class _GatedModel:
-    def __init__(self, inner: Model) -> None:
+    def __init__(self, inner: EnterableModel) -> None:
         self._inner = inner
         self.reached = asyncio.Event()
         self.release = asyncio.Event()
@@ -154,7 +154,7 @@ class _GatedModel:
 
 
 class BoomModel:
-    def __init__(self, inner: Model, failing: str) -> None:
+    def __init__(self, inner: EnterableModel, failing: str) -> None:
         self._inner = inner
         self._failing = failing
         self.exited = False

@@ -3,7 +3,7 @@ import pytest
 from otter_ai_core.fake_model import FakeModel
 from otter_ai_core.in_memory_auth_storage import InMemoryAuthStorage
 from otter_ai_core.model_registry import ModelRegistry
-from otter_ai_core.model_registry.contract import (
+from otter_ai_core.model_registry.provider import (
     PROVIDER_CONTRACT_CHECKS,
     ProviderContractCheck,
 )
