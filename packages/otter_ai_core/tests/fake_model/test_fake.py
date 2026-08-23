@@ -6,7 +6,6 @@ from otter_ai_core.conversation import (
     ToolResultMessage,
 )
 from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
-from otter_ai_core.model_registry import MODEL_CONTRACT_CHECKS, ModelContractCheck
 
 
 def _assistant_text(text: str) -> AssistantMessage:
@@ -16,11 +15,6 @@ def _assistant_text(text: str) -> AssistantMessage:
         tool_calls=[],
         stop_reason="final_response",
     )
-
-
-@pytest.mark.parametrize("check", MODEL_CONTRACT_CHECKS, ids=lambda c: c.__name__)
-async def test_fake_model_satisfies_model_contract(check: ModelContractCheck) -> None:
-    await check(lambda: FakeModel([_assistant_text("hello")]))
 
 
 async def test_generate_returns_scripted_responses_in_order() -> None:

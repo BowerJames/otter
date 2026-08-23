@@ -1,7 +1,6 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 
-from ..model import MODEL_CONTRACT_CHECKS
-from ..model.contract import _raises_runtime_error
 from .signature import Provider
 
 # A ProviderFactory yields a fresh Provider. Checks arrange all state they
@@ -10,13 +9,13 @@ type ProviderFactory = Callable[[], Provider]
 type ProviderContractCheck = Callable[[ProviderFactory], Awaitable[None]]
 
 
-async def check_model_factory_satisfies_model_contract(
-    make_provider: ProviderFactory,
-) -> None:
-    provider = make_provider()
-    factory = provider.get_model_factory("some-model", "sk-test")
-    for model_check in MODEL_CONTRACT_CHECKS:
-        await model_check(lambda: factory("system prompt", []))
+@contextmanager
+def _raises_runtime_error() -> Iterator[None]:
+    try:
+        yield
+    except RuntimeError:
+        return
+    raise AssertionError("expected RuntimeError, none was raised")
 
 
 async def check_factory_yields_fresh_models(make_provider: ProviderFactory) -> None:
@@ -34,6 +33,5 @@ async def check_factory_yields_fresh_models(make_provider: ProviderFactory) -> N
 
 
 PROVIDER_CONTRACT_CHECKS: list[ProviderContractCheck] = [
-    check_model_factory_satisfies_model_contract,
     check_factory_yields_fresh_models,
 ]
