@@ -1,7 +1,7 @@
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 
-from otter_ai_core.conversation import (
+from otter_ai_core.types import (
     AssistantMessage,
     SessionMessage,
     TextContent,

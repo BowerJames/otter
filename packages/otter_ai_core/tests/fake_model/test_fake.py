@@ -1,11 +1,11 @@
 import pytest
 
-from otter_ai_core.conversation import (
+from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
+from otter_ai_core.types import (
     AssistantMessage,
     TextContent,
     ToolResultMessage,
 )
-from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
 
 
 def _assistant_text(text: str) -> AssistantMessage:

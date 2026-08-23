@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Sequence
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter_ai_core.conversation import SessionMessage
+from otter_ai_core.types import SessionMessage
 
 
 class SessionManager(Protocol):

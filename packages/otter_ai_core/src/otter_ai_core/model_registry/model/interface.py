@@ -2,8 +2,9 @@ from collections.abc import Awaitable, Callable
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter_ai_core.agent_tool import AgentTool
-from otter_ai_core.conversation import AssistantMessage, ToolResultMessage, UserMessage
+from otter_ai_core.types import AssistantMessage, ToolResultMessage, UserMessage
+
+from ..tool_spec.interface import ToolSpec
 
 
 class EnterableModel(Protocol):
@@ -46,4 +47,4 @@ class EnterableModel(Protocol):
 
 # A ModelFactory yields a fresh, unentered model, bound to the given system
 # prompt and tools
-type ModelFactory = Callable[[str, list[AgentTool]], EnterableModel]
+type ModelFactory = Callable[[str, list[ToolSpec]], EnterableModel]

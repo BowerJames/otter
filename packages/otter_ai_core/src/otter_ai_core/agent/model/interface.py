@@ -1,7 +1,7 @@
 from collections.abc import Awaitable
 from typing import Protocol
 
-from otter_ai_core.conversation import AssistantMessage, ToolResultMessage, UserMessage
+from otter_ai_core.types import AssistantMessage, ToolResultMessage, UserMessage
 
 
 class Model(Protocol):

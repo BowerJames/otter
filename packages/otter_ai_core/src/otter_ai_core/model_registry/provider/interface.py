@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from ..model import ModelFactory
+from ..model.interface import ModelFactory
 
 
 class Provider(Protocol):

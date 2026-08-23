@@ -3,8 +3,9 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .signature import AgentTool
-from .types import AgentToolResult
+from otter_ai_core.types import AgentToolResult
+
+from .interface import AgentTool
 
 
 class _CallableAgentTool[TPayload: BaseModel]:

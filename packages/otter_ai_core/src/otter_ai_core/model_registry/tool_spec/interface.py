@@ -1,11 +1,9 @@
-from typing import Any, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel
 
-from .types import AgentToolResult
 
-
-class AgentTool(Protocol):
+class ToolSpec(Protocol):
     @property
     def name(self) -> str: ...
 
@@ -14,5 +12,3 @@ class AgentTool(Protocol):
 
     @property
     def parameters(self) -> type[BaseModel]: ...
-
-    async def execute(self, arguments: dict[str, Any]) -> AgentToolResult: ...
