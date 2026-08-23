@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
@@ -32,6 +34,49 @@ async def test_generate_beyond_script_raises_exhausted() -> None:
         await model.generate()
         with pytest.raises(FakeModelExhausted):
             await model.generate()
+
+
+async def test_model_cannot_be_reentered() -> None:
+    model = FakeModel([])
+    async with model:
+        pass
+    with pytest.raises(RuntimeError):
+        async with model:
+            pass
+
+
+async def test_methods_are_gated_by_session_lifecycle() -> None:
+    model = FakeModel([_assistant_text("reply")])
+    with pytest.raises(RuntimeError):
+        await model.add_user_message("hello")
+    with pytest.raises(RuntimeError):
+        await model.add_tool_result_message("call", "result")
+    with pytest.raises(RuntimeError):
+        await model.generate()
+
+    async with model:
+        await model.add_user_message("hello")
+
+    with pytest.raises(RuntimeError):
+        await model.add_user_message("again")
+    with pytest.raises(RuntimeError):
+        await model.add_tool_result_message("call", "result")
+    with pytest.raises(RuntimeError):
+        await model.generate()
+
+
+async def test_generate_gating_and_concurrency() -> None:
+    gate = asyncio.Event()
+    model = FakeModel([_assistant_text("reply")], generation_gate=gate)
+
+    async with model:
+        first = asyncio.create_task(model.generate())
+        await asyncio.sleep(0)  # first generate reaches the gate and waits
+        with pytest.raises(RuntimeError):
+            await model.generate()
+
+        gate.set()
+        assert (await first).content[0].text == "reply"
 
 
 async def test_history_records_messages_in_order() -> None:
