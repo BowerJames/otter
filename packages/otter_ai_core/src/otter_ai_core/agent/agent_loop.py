@@ -1,16 +1,17 @@
 import asyncio
 from collections.abc import AsyncIterator, Iterable, Sequence
 
-from otter_ai_core.agent_tool import AgentTool, AgentToolResult
-from otter_ai_core.conversation import (
+from otter_ai_core.types import (
+    AgentToolResult,
     SessionMessage,
     ToolCall,
     ToolResultMessage,
     UserMessage,
 )
 
+from .agent_tool.interface import AgentTool
 from .hooks import AgentLoopHooks
-from .model import Model
+from .model.interface import Model
 from .types import (
     AgentLoopEvent,
     AgentLoopOptions,

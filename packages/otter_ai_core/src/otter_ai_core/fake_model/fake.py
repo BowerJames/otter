@@ -5,7 +5,7 @@ from itertools import count
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core.conversation import (
+from otter_ai_core.types import (
     AssistantMessage,
     SessionMessage,
     TextContent,

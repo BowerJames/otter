@@ -3,7 +3,7 @@ from enum import Enum, auto
 from types import TracebackType
 from typing import Self
 
-from otter_ai_core.conversation import SessionEntry, SessionMessage
+from otter_ai_core.types import SessionEntry, SessionMessage
 
 
 class _SessionState(Enum):

@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from otter_ai_core.components import TerminatingStream
-from otter_ai_core.conversation import (
+from otter_ai_core.types import (
     AssistantMessage,
     SessionMessage,
     ToolResultMessage,

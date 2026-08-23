@@ -1,9 +1,8 @@
-from otter_ai_core.conversation import SessionMessage
+from otter_ai_core.types import SessionMessage
 
 from .agent import Agent
 from .agent_loop import AgentLoop, AgentLoopExhausted, AgentLoopStranded
 from .hooks import AgentHooks, AgentLoopHooks, BeforeToolCallHook, ToolCallDecision, ToolResultHook
-from .model import Model
 from .types import (
     AgentEnd,
     AgentEvent,
@@ -35,7 +34,6 @@ __all__ = [
     "AgentTurnStart",
     "BeforeToolCallHook",
     "DrainMode",
-    "Model",
     "SessionMessage",
     "ToolCallDecision",
     "ToolResultHook",

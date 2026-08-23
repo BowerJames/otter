@@ -1,4 +1,5 @@
-from .types import (
+from .agent_tool import AgentToolResult
+from .conversation import (
     AssistantMessage,
     SessionEntry,
     SessionMessage,
@@ -10,6 +11,7 @@ from .types import (
 )
 
 __all__ = [
+    "AgentToolResult",
     "AssistantMessage",
     "SessionEntry",
     "SessionMessage",

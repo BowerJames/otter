@@ -18,19 +18,20 @@ from otter_ai_core.agent import (
     AgentStream,
     AgentTurnEnd,
     AgentTurnStart,
-    Model,
     ToolCallDecision,
 )
-from otter_ai_core.agent_tool import AgentToolResult, create_agent_tool
-from otter_ai_core.conversation import (
+from otter_ai_core.agent.model.interface import Model
+from otter_ai_core.agent_tool_factory import create_agent_tool
+from otter_ai_core.fake_model import FakeModel
+from otter_ai_core.model_registry.model.interface import EnterableModel
+from otter_ai_core.types import (
+    AgentToolResult,
     AssistantMessage,
     TextContent,
     ToolCall,
     ToolResultMessage,
     UserMessage,
 )
-from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.model_registry import EnterableModel
 
 
 def response(

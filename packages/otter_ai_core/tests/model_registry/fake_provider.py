@@ -1,10 +1,10 @@
-from otter_ai_core.agent_tool import AgentTool
-from otter_ai_core.conversation import AssistantMessage, TextContent
 from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.model_registry import EnterableModel, ModelFactory
+from otter_ai_core.model_registry.model.interface import EnterableModel, ModelFactory
+from otter_ai_core.model_registry.tool_spec.interface import ToolSpec
+from otter_ai_core.types import AssistantMessage, TextContent
 
 
-def _scripted_model(system_prompt: str, tools: list[AgentTool]) -> EnterableModel:
+def _scripted_model(system_prompt: str, tools: list[ToolSpec]) -> EnterableModel:
     return FakeModel(
         [
             AssistantMessage(
