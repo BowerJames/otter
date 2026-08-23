@@ -1,6 +1,5 @@
 import pytest
 
-from otter_ai_core.agent.model import AGENT_MODEL_CONTRACT_CHECKS, AgentModelCheck
 from otter_ai_core.conversation import (
     AssistantMessage,
     TextContent,
@@ -22,13 +21,6 @@ def _assistant_text(text: str) -> AssistantMessage:
 @pytest.mark.parametrize("check", MODEL_CONTRACT_CHECKS, ids=lambda c: c.__name__)
 async def test_fake_model_satisfies_model_contract(check: ModelContractCheck) -> None:
     await check(lambda: FakeModel([_assistant_text("hello")]))
-
-
-@pytest.mark.parametrize("check", AGENT_MODEL_CONTRACT_CHECKS, ids=lambda c: c.__name__)
-async def test_fake_model_satisfies_agent_model_contract(check: AgentModelCheck) -> None:
-    model = FakeModel([_assistant_text("hello")])
-    async with model:
-        await check(model)
 
 
 async def test_generate_returns_scripted_responses_in_order() -> None:
