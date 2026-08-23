@@ -73,9 +73,7 @@ async def test_add_provider_replaces_existing_provider() -> None:
     original = FakeProvider(known_models={"gpt-4o"})
     replacement = FakeProvider(known_models={"gpt-4o"})
     replacement.set_returned_factory(lambda system_prompt, tools: FakeModel([]))
-    registry = ModelRegistry(
-        {"openai": original}, await _storage_seeded_with(("openai", "sk-key"))
-    )
+    registry = ModelRegistry({"openai": original}, await _storage_seeded_with(("openai", "sk-key")))
 
     registry.add_provider("openai", replacement)
     factory = await registry.get_model_factory("openai", "gpt-4o")
@@ -86,9 +84,7 @@ async def test_add_provider_replaces_existing_provider() -> None:
 
 async def test_remove_provider_deregisters_provider() -> None:
     provider = FakeProvider(known_models={"gpt-4o"})
-    registry = ModelRegistry(
-        {"openai": provider}, await _storage_seeded_with(("openai", "sk-key"))
-    )
+    registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
 
     registry.remove_provider("openai")
 
@@ -100,7 +96,7 @@ async def test_remove_provider_deregisters_provider() -> None:
 async def test_remove_provider_unknown_name_is_noop() -> None:
     registry = ModelRegistry({}, InMemoryAuthStorage())
 
-    assert registry.remove_provider("openai") is None
+    registry.remove_provider("openai")
 
 
 async def test_factories_for_distinct_providers_are_resolved_independently() -> None:
