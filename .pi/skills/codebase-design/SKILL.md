@@ -11,17 +11,17 @@ Design **deep modules**: a lot of behaviour behind a small interface, placed at 
 
 Use these terms exactly — don't substitute "component," "service," "API," or "boundary." Consistent language is the whole point.
 
-**Module** — anything with a interface and an implementation testd completely through the interfce. Deliberately scale-agnostic: a function, class, package, or tier-spanning slice. All of these can be considered modules if they provide implementions fully tested through an interface. 
+**Module** — anything with a interface and an implementation tested completely through the interface. Deliberately scale-agnostic: a function, class, package, or tier-spanning slice. All of these can be considered modules if they provide implementions fully tested through an interface. 
 
 _Avoid_: unit, component, service.
 
-**Interface** — everything a caller must know to use an module correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics. 
+**Interface** — everything a caller must know to use an entity correctly: the type signature, but also invariants, ordering constraints, error modes, required configuration, and performance characteristics. 
 
 _Avoid_: API, signature (too narrow — they refer only to the type-level surface).
 
 **Implementation** — what's inside a module, its body of code. Distinct from **Adapter**: a thing can be a small adapter with a large implementation (a Postgres repo) or a large adapter with a small implementation (an in-memory fake). Reach for "adapter" when the seam is the topic; "implementation" otherwise.
 
-**Abstraction** - everything a caller needs must know to use its subject correctly. Differs from an interface in that its subject is an abstract entity rather than a complete module with an implementation.
+**Abstraction** - Any abstract entity with an interface but no concrete specified implementation. Usually used by modules to represent the expected behaviour of entities used in areas where bheaviour can be altered.
 
 **Depth** — leverage at the interface: the amount of behaviour a caller (or test) can exercise per unit of interface they have to learn. A module is **deep** when a large amount of behaviour sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.
 
@@ -34,6 +34,8 @@ _Avoid_: boundary (overloaded with DDD's bounded context).
 **Leverage** — what callers get from depth: more capability per unit of interface they learn. One implementation pays back across N call sites and M tests.
 
 **Locality** — what maintainers get from depth: change, bugs, knowledge, and verification concentrate in one place rather than spreading across callers. Fix once, fixed everywhere.
+
+**Comments** — any non-executing, human-readable text embedded in the source code. Deliberately syntax-agnostic: this encompasses inline notes, block explanations, and structural entity documentation (like Python docstrings, Javadoc, or rustdoc). Comments serve two distinct architectural roles: at the **Interface**, they document everything a consumer needs to know to use the entity (this should be implementation agnsotic); within the **Implementation**, they explain the domain context and the "why" behind the code.
 
 ## Deep vs shallow
 
