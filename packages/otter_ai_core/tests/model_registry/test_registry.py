@@ -57,6 +57,52 @@ async def test_missing_api_key_propagates_key_error_from_auth_storage() -> None:
     assert provider.received is None
 
 
+async def test_add_provider_registers_new_provider() -> None:
+    provider = FakeProvider()
+    provider.set_returned_factory(lambda system_prompt, tools: FakeModel([]))
+    registry = ModelRegistry({}, await _storage_seeded_with(("openai", "sk-key")))
+
+    registry.add_provider("openai", provider)
+    factory = await registry.get_model_factory("openai", "gpt-4o")
+
+    assert provider.received == ("gpt-4o", "sk-key")
+    assert factory is provider.returned_factory
+
+
+async def test_add_provider_replaces_existing_provider() -> None:
+    original = FakeProvider(known_models={"gpt-4o"})
+    replacement = FakeProvider(known_models={"gpt-4o"})
+    replacement.set_returned_factory(lambda system_prompt, tools: FakeModel([]))
+    registry = ModelRegistry(
+        {"openai": original}, await _storage_seeded_with(("openai", "sk-key"))
+    )
+
+    registry.add_provider("openai", replacement)
+    factory = await registry.get_model_factory("openai", "gpt-4o")
+
+    assert original.received is None
+    assert factory is replacement.returned_factory
+
+
+async def test_remove_provider_deregisters_provider() -> None:
+    provider = FakeProvider(known_models={"gpt-4o"})
+    registry = ModelRegistry(
+        {"openai": provider}, await _storage_seeded_with(("openai", "sk-key"))
+    )
+
+    registry.remove_provider("openai")
+
+    with pytest.raises(KeyError):
+        await registry.get_model_factory("openai", "gpt-4o")
+    assert provider.received is None
+
+
+async def test_remove_provider_unknown_name_is_noop() -> None:
+    registry = ModelRegistry({}, InMemoryAuthStorage())
+
+    assert registry.remove_provider("openai") is None
+
+
 async def test_factories_for_distinct_providers_are_resolved_independently() -> None:
     openai = FakeProvider(known_models={"gpt-4o"})
     anthropic = FakeProvider(known_models={"claude-sonnet-4"})
