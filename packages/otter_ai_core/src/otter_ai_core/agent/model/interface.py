@@ -5,10 +5,23 @@ from otter_ai_core.conversation import AssistantMessage, ToolResultMessage, User
 
 
 class Model(Protocol):
-    def add_user_message(self, text: str) -> Awaitable[UserMessage]: ...
+    """Abstraction over a chat model that owns the conversation history.
 
-    def add_tool_result_message(
-        self, tool_call_id: str, text: str
-    ) -> Awaitable[ToolResultMessage]: ...
+    A Model accumulates user, tool-result, and assistant messages and
+    produces assistant responses via `generate`. Adapters are responsible
+    for persisting history; the abstraction promises messages are recorded
+    in the order the caller adds or generates them.
+    """
 
-    def generate(self) -> Awaitable[AssistantMessage]: ...
+    def add_user_message(self, text: str) -> Awaitable[UserMessage]:
+        """Sends a user message to the model. Message is recorded if successfully awaited."""
+        ...
+
+    def add_tool_result_message(self, tool_call_id: str, text: str) -> Awaitable[ToolResultMessage]:
+        """Sends a tool result message to the model. Message is recorded if
+        successfully awaited."""
+        ...
+
+    def generate(self) -> Awaitable[AssistantMessage]:
+        """Generates the next assistant message. Message is recorded if successfully awaited."""
+        ...
