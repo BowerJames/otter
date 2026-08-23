@@ -101,6 +101,18 @@ def configure_logging(
     *,
     format: Literal["json", "text"] = "text",
 ) -> None:
+    """Configures the root logger for the monorepo's logging conventions.
+
+    Records at WARNING and below are routed to stdout, ERROR and above to
+    stderr, both with UTC timestamps and any active `logging_context` fields
+    attached. `format` selects text or JSON lines. `level` accepts a name or
+    numeric value from DEBUG..ERROR; when omitted it falls back to the
+    LOG_LEVEL environment variable, then to INFO. An unknown level raises
+    ValueError naming the accepted set.
+
+    Safe to call repeatedly: only handlers previously attached by this
+    function are replaced, so no duplicates accumulate and other root
+    handlers are left untouched."""
     root = logging.getLogger()
     root.setLevel(_resolve_level(level))
 

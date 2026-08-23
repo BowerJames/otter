@@ -42,4 +42,10 @@ def create_agent_tool[TPayload: BaseModel](
     parameters: type[TPayload],
     execute: Callable[[TPayload], Awaitable[AgentToolResult]],
 ) -> AgentTool:
+    """Creates a tool from the given name, description, argument schema, and
+    execution callable.
+
+    The returned tool validates raw arguments against `parameters` before
+    invoking `execute`, passing it a validated payload. Invalid arguments
+    yield an error result naming the invalid fields."""
     return _CallableAgentTool[TPayload](name, description, parameters, execute)

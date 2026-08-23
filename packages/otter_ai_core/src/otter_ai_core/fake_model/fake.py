@@ -24,6 +24,10 @@ class _SessionState(Enum):
 
 
 class FakeModel:
+    """A scripted chat model: `generate` returns the scripted assistant
+    messages in order, and every message sent to the model is recorded and
+    visible through `history`."""
+
     def __init__(
         self,
         responses: Iterable[AssistantMessage],
@@ -38,6 +42,8 @@ class FakeModel:
         self._generating = False
 
     async def __aenter__(self) -> Self:
+        """Opens the model's session. A model can only be entered once;
+        re-entering raises RuntimeError."""
         if self._state is not _SessionState.NEW:
             raise RuntimeError(
                 "FakeModel session can only be entered once; construct a new FakeModel"
@@ -51,9 +57,12 @@ class FakeModel:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Closes the session. Exceptions from the session body propagate."""
         self._state = _SessionState.CLOSED
 
     async def add_user_message(self, text: str) -> UserMessage:
+        """Records and returns a user message carrying `text`. Raises
+        RuntimeError outside an open session."""
         self._require_open("add_user_message")
         message = UserMessage(
             id=f"user-{next(self._ids)}",
@@ -63,6 +72,8 @@ class FakeModel:
         return message
 
     async def add_tool_result_message(self, tool_call_id: str, text: str) -> ToolResultMessage:
+        """Records and returns a tool result message for `tool_call_id`.
+        Raises RuntimeError outside an open session."""
         self._require_open("add_tool_result_message")
         message = ToolResultMessage(
             id=f"tool-result-{next(self._ids)}",
@@ -73,6 +84,10 @@ class FakeModel:
         return message
 
     async def generate(self) -> AssistantMessage:
+        """Returns the next scripted assistant message and records it. Raises
+        RuntimeError outside an open session or while another generate is in
+        flight, and FakeModelExhausted when the script is exhausted. When a
+        generation gate was supplied at construction, waits on it first."""
         self._require_open("generate")
         if self._generating:
             raise RuntimeError("generate() called while another generate() is in flight")
@@ -94,6 +109,7 @@ class FakeModel:
 
     @property
     def history(self) -> Sequence[SessionMessage]:
+        """Returns every message recorded this session, in order."""
         return tuple(self._messages)
 
     def _require_open(self, method: str) -> None:

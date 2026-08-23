@@ -181,6 +181,29 @@ async def test_duplicate_tool_names_raise_at_construction() -> None:
     assert model.history == ()
 
 
+async def test_later_changes_to_the_tools_list_do_not_affect_the_agent() -> None:
+    model = FakeModel(
+        [
+            response("a1", tool_calls=[ToolCall(id="call-1", tool_name="pong", parameters={})]),
+            response("a2", text="done"),
+        ]
+    )
+
+    async def ping(_: PingParams) -> AgentToolResult:
+        return AgentToolResult(text="pong")
+
+    tools = [create_agent_tool("ping", "ping tool", PingParams, ping)]
+    agent = Agent(model, tools=tools)
+    tools.append(create_agent_tool("pong", "pong tool", PingParams, ping))
+
+    async with model:
+        events = await collect(agent.prompt("hello"))
+
+    tool_results = [event for event in events if isinstance(event, ToolResultMessage)]
+    assert len(tool_results) == 1
+    assert "unknown tool" in tool_results[0].content[0].text
+
+
 async def test_prompt_streams_start_events_then_end() -> None:
     model = FakeModel([response("a1", text="hello there")])
     agent = Agent(model, tools=[])
