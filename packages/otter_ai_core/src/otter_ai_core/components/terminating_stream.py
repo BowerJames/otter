@@ -5,6 +5,12 @@ from typing import ClassVar
 
 
 class TerminatingStream[TPartialEvent, TTerminalEvent](ABC):
+    """Abstraction over an async-iterable stream of events that ends itself.
+
+    Iteration yields the stream's events in order; the first event of the
+    terminal type is the last event yielded."""
+
+    #: The event class whose appearance ends iteration; bound per stream.
     terminal_event_type: ClassVar[type[TTerminalEvent]]
 
     @abstractmethod
