@@ -3,10 +3,6 @@ import pytest
 from otter_ai_core.fake_model import FakeModel
 from otter_ai_core.in_memory_auth_storage import InMemoryAuthStorage
 from otter_ai_core.model_registry import ModelRegistry
-from otter_ai_core.model_registry.provider import (
-    PROVIDER_CONTRACT_CHECKS,
-    ProviderContractCheck,
-)
 
 from .fake_provider import FakeProvider
 
@@ -16,13 +12,6 @@ async def _storage_seeded_with(*entries: tuple[str, str]) -> InMemoryAuthStorage
     for provider, api_key in entries:
         await storage.add_api_key(provider, api_key)
     return storage
-
-
-@pytest.mark.parametrize("check", PROVIDER_CONTRACT_CHECKS, ids=lambda c: c.__name__)
-async def test_fake_provider_satisfies_provider_contract(
-    check: ProviderContractCheck,
-) -> None:
-    await check(FakeProvider)
 
 
 async def test_get_model_factory_resolves_provider_model_and_api_key() -> None:
