@@ -26,8 +26,8 @@ class AgentTool(Protocol):
 
     async def execute(self, arguments: dict[str, Any]) -> AgentToolResult:
         """Runs the tool with the raw arguments, validating them against
-        `parameters` first: invalid arguments yield an error result rather
-        than a raised ValidationError. The returned AgentToolResult carries
+        `parameters` first: invalid arguments yield an error result naming
+        the invalid fields. The returned AgentToolResult carries
         the outcome: is_error marks the result as a failure, terminate
         requests that the caller make no further tool calls."""
         ...

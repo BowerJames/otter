@@ -47,6 +47,5 @@ def create_agent_tool[TPayload: BaseModel](
 
     The returned tool validates raw arguments against `parameters` before
     invoking `execute`, passing it a validated payload. Invalid arguments
-    yield an error result naming the invalid fields rather than raising a
-    ValidationError."""
+    yield an error result naming the invalid fields."""
     return _CallableAgentTool[TPayload](name, description, parameters, execute)
