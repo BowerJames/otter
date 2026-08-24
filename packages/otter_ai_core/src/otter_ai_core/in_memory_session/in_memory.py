@@ -1,35 +1,28 @@
 from collections.abc import Sequence
-from enum import Enum, auto
 from types import TracebackType
 from typing import Self
 
 from otter_ai_core.types import SessionEntry, SessionMessage
 
 
-class _SessionState(Enum):
-    NEW = auto()
-    OPEN = auto()
-    CLOSED = auto()
-
-
 class InMemorySessionManager:
-    """An in-memory session store. Writes are append-only: entries are held
-    in the order they were appended and readable for the session's
-    lifetime."""
+    """An in-memory session store. Writes are append-only: entries are
+    held in the order they were appended and readable for the session's
+    lifetime. Sessions may be closed and reopened; entries persist across
+    opens."""
 
     def __init__(self) -> None:
         self._messages: list[SessionEntry] = []
-        self._state = _SessionState.NEW
+        self._open = False
 
     async def __aenter__(self) -> Self:
-        """Opens the session. A session can only be entered once;
-        re-entering raises RuntimeError."""
-        if self._state is not _SessionState.NEW:
+        """Opens the session. Entering a session that is already open
+        raises RuntimeError; a closed session may be reopened."""
+        if self._open:
             raise RuntimeError(
-                "InMemorySessionManager session can only be entered once; "
-                "construct a new InMemorySessionManager"
+                "InMemorySessionManager session is already open; close it before reopening"
             )
-        self._state = _SessionState.OPEN
+        self._open = True
         return self
 
     async def __aexit__(
@@ -39,7 +32,7 @@ class InMemorySessionManager:
         traceback: TracebackType | None,
     ) -> None:
         """Closes the session. Exceptions from the session body propagate."""
-        self._state = _SessionState.CLOSED
+        self._open = False
 
     async def append_message(self, message: SessionMessage) -> None:
         """Appends the message to the session. Raises RuntimeError outside an
@@ -61,7 +54,5 @@ class InMemorySessionManager:
         return tuple(self._messages)
 
     def _require_open(self, method: str) -> None:
-        if self._state is not _SessionState.OPEN:
-            raise RuntimeError(
-                f"{method}() called outside an open session (state: {self._state.name})"
-            )
+        if not self._open:
+            raise RuntimeError(f"{method}() called outside an open session")

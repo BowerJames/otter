@@ -10,6 +10,7 @@ from otter_ai_core.in_memory_session import InMemorySessionManager
 from otter_ai_core.model_registry import ModelRegistry
 from otter_ai_core.types import (
     AssistantMessage,
+    SessionMessage,
     TextContent,
     ToolResultMessage,
     UserMessage,
@@ -46,7 +47,7 @@ async def test_construction_performs_no_io() -> None:
 
 async def test_enter_replays_session_messages_into_factory_prefix() -> None:
     manager = InMemorySessionManager()
-    history = [_user_message("earlier"), _assistant_message()]
+    history: list[SessionMessage] = [_user_message("earlier"), _assistant_message()]
     async with manager:
         for message in history:
             await manager.append_message(message)
@@ -280,7 +281,7 @@ async def test_exit_does_not_suppress_exceptions() -> None:
 
 async def test_resumed_session_appends_after_the_replayed_prefix() -> None:
     manager = InMemorySessionManager()
-    prefix = [_user_message("earlier"), _assistant_message()]
+    prefix: list[SessionMessage] = [_user_message("earlier"), _assistant_message()]
     async with manager:
         for message in prefix:
             await manager.append_message(message)

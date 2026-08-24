@@ -49,13 +49,24 @@ async def test_methods_are_gated_by_session_lifecycle() -> None:
         await manager.get_messages()
 
 
-async def test_session_cannot_be_reentered() -> None:
+async def test_entering_an_already_open_session_raises() -> None:
     manager = InMemorySessionManager()
     async with manager:
-        pass
-    with pytest.raises(RuntimeError):
-        async with manager:
-            pass
+        with pytest.raises(RuntimeError):
+            await manager.__aenter__()
+
+
+async def test_session_can_be_reopened_after_closing() -> None:
+    manager = InMemorySessionManager()
+    async with manager:
+        await manager.append_message(_user_message("first"))
+
+    async with manager:
+        await manager.append_message(_user_message("second"))
+        retrieved = await manager.get_messages()
+
+    assert [message.content[0].text for message in retrieved] == ["first", "second"]
+    assert [message.content[0].text for message in manager.entries] == ["first", "second"]
 
 
 async def test_exit_does_not_suppress_exceptions() -> None:

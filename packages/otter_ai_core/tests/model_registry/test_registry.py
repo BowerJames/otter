@@ -16,9 +16,7 @@ async def _storage_seeded_with(*entries: tuple[str, str]) -> InMemoryAuthStorage
 
 async def test_get_model_factory_resolves_provider_model_and_api_key() -> None:
     provider = FakeProvider()
-    provider.set_returned_factory(
-        lambda system_prompt, tools, initial_messages: FakeModel(list(initial_messages))
-    )
+    provider.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
     registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
 
     factory = await registry.get_model_factory("openai", "gpt-4o")
@@ -61,9 +59,7 @@ async def test_missing_api_key_propagates_key_error_from_auth_storage() -> None:
 
 async def test_add_provider_registers_new_provider() -> None:
     provider = FakeProvider()
-    provider.set_returned_factory(
-        lambda system_prompt, tools, initial_messages: FakeModel(list(initial_messages))
-    )
+    provider.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
     registry = ModelRegistry({}, await _storage_seeded_with(("openai", "sk-key")))
 
     registry.add_provider("openai", provider)
@@ -76,9 +72,7 @@ async def test_add_provider_registers_new_provider() -> None:
 async def test_add_provider_replaces_existing_provider() -> None:
     original = FakeProvider(known_models={"gpt-4o"})
     replacement = FakeProvider(known_models={"gpt-4o"})
-    replacement.set_returned_factory(
-        lambda system_prompt, tools, initial_messages: FakeModel(list(initial_messages))
-    )
+    replacement.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
     registry = ModelRegistry({"openai": original}, await _storage_seeded_with(("openai", "sk-key")))
 
     registry.add_provider("openai", replacement)
@@ -108,12 +102,8 @@ async def test_remove_provider_unknown_name_is_noop() -> None:
 async def test_factories_for_distinct_providers_are_resolved_independently() -> None:
     openai = FakeProvider(known_models={"gpt-4o"})
     anthropic = FakeProvider(known_models={"claude-sonnet-4"})
-    openai.set_returned_factory(
-        lambda system_prompt, tools, initial_messages: FakeModel(list(initial_messages))
-    )
-    anthropic.set_returned_factory(
-        lambda system_prompt, tools, initial_messages: FakeModel(list(initial_messages))
-    )
+    openai.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
+    anthropic.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
     registry = ModelRegistry(
         {"openai": openai, "anthropic": anthropic},
         await _storage_seeded_with(("openai", "sk-openai"), ("anthropic", "sk-ant")),
