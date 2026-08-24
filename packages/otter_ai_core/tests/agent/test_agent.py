@@ -5,6 +5,7 @@ from typing import Any, Self
 import pytest
 from pydantic import BaseModel
 
+from otter_ai_core.abstractions import Model
 from otter_ai_core.agent import (
     Agent,
     AgentEnd,
@@ -20,10 +21,8 @@ from otter_ai_core.agent import (
     AgentTurnStart,
     ToolCallDecision,
 )
-from otter_ai_core.agent.model.interface import Model
 from otter_ai_core.agent_tool_factory import create_agent_tool
 from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.model_registry.model.interface import EnterableModel
 from otter_ai_core.types import (
     AgentToolResult,
     AssistantMessage,
@@ -100,6 +99,18 @@ class _SteerOnGenerate:
         self._text = text
         self._armed = True
 
+    async def __aenter__(self) -> Self:
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self._inner.__aexit__(exc_type, exc_value, traceback)
+
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
 
@@ -119,6 +130,18 @@ class _GatedModel:
         self.reached = asyncio.Event()
         self.release = asyncio.Event()
 
+    async def __aenter__(self) -> Self:
+        await self._inner.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self._inner.__aexit__(exc_type, exc_value, traceback)
+
     async def add_user_message(self, text: str) -> UserMessage:
         return await self._inner.add_user_message(text)
 
@@ -132,7 +155,7 @@ class _GatedModel:
 
 
 class BoomModel:
-    def __init__(self, inner: EnterableModel, failing: str) -> None:
+    def __init__(self, inner: Model, failing: str) -> None:
         self._inner = inner
         self._failing = failing
         self.exited = False

@@ -1,11 +1,17 @@
+"""Factory for building AgentTools from callables.
+
+Validation lives here, not in the AgentTool abstraction: tools built by
+this factory validate raw arguments against their `parameters` schema
+before invoking the wrapped callable, passing it a validated payload, and
+invalid arguments yield an error result naming the invalid fields."""
+
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from otter_ai_core.abstractions import AgentTool
 from otter_ai_core.types import AgentToolResult
-
-from .interface import AgentTool
 
 
 class _CallableAgentTool[TPayload: BaseModel]:

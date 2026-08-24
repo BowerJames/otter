@@ -1,13 +1,12 @@
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 
+from otter_ai_core.abstractions import AgentTool, Model
 from otter_ai_core.components import TerminatingStream
 from otter_ai_core.types import SessionMessage
 
 from .agent_loop import AgentLoop, _reject_duplicate_tool_names
-from .agent_tool.interface import AgentTool
 from .hooks import AgentHooks, AgentLoopHooks
-from .model.interface import Model
 from .types import (
     AgentEnd,
     AgentLoopEvent,
@@ -49,7 +48,8 @@ class Agent:
     Each run is started with `prompt` and consumed as an event stream that
     ends with an AgentEnd terminal event. The model, tools, hooks, and
     options given at construction apply to every run for the agent's
-    lifetime."""
+    lifetime. The model must already be entered; the agent never enters
+    or exits it."""
 
     def __init__(
         self,

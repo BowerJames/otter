@@ -1,8 +1,6 @@
 from collections.abc import Mapping
 
-from .auth_storage import AuthStorage
-from .model.interface import ModelFactory
-from .provider import Provider
+from otter_ai_core.abstractions import AuthStorage, ModelFactory, Provider
 
 
 class ModelRegistry:

@@ -3,8 +3,8 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from otter_ai_core.abstractions import AgentTool
 from otter_ai_core.agent_tool_factory import create_agent_tool
-from otter_ai_core.agent_tool_factory.interface import AgentTool
 from otter_ai_core.types import AgentToolResult, ToolCall
 
 
