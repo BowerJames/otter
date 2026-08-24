@@ -19,12 +19,15 @@ from otter_ai_core.types import (
 from .support import (
     LifecycleSpySessionManager,
     RecordingModelFactory,
+    StubProvider,
     _assistant_message,
     _final_response,
     _make_session,
+    _noop_tool,
     _tool_call_response,
     _user_message,
     collect_events,
+    seeded_storage,
 )
 
 
@@ -81,6 +84,31 @@ async def test_enter_failure_unwinds_partial_entry() -> None:
     assert factory.calls == []
     assert spy.entered == 1
     assert spy.exited == 1
+
+
+async def test_enter_failure_after_model_entry_unwinds_everything() -> None:
+    spy = LifecycleSpySessionManager(InMemorySessionManager())
+    factory = RecordingModelFactory([_final_response("hello")])
+    registry = ModelRegistry(
+        {"openai": StubProvider(factory)},
+        await seeded_storage(("openai", "sk-key")),
+    )
+
+    session = AgentSession(
+        model="gpt-4o",
+        provider="openai",
+        system_prompt="system",
+        tools=[_noop_tool(), _noop_tool()],  # duplicate names: Agent rejects
+        session_manager=spy,
+        model_registry=registry,
+    )
+
+    with pytest.raises(ValueError):
+        await session.__aenter__()
+
+    assert len(factory.calls) == 1  # factory called, model entered...
+    assert spy.entered == 1
+    assert spy.exited == 1  # ...and the unwind closed the manager
 
 
 async def test_prompt_runs_records_and_yields_run_events() -> None:

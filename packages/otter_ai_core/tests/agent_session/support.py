@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from types import TracebackType
-from typing import Self
+from typing import Any, Self
+
+from pydantic import BaseModel
 
 from otter_ai_core.agent_session import AgentSession, AgentSessionEvent
 from otter_ai_core.fake_model import FakeModel
@@ -10,6 +12,7 @@ from otter_ai_core.model_registry import ModelRegistry
 from otter_ai_core.model_registry.model.interface import EnterableModel, ModelFactory
 from otter_ai_core.model_registry.tool_spec.interface import ToolSpec
 from otter_ai_core.types import (
+    AgentToolResult,
     AssistantMessage,
     SessionMessage,
     TextContent,
@@ -47,6 +50,33 @@ def _tool_call_response() -> AssistantMessage:
         tool_calls=[ToolCall(id="call-1", tool_name="ping", parameters={})],
         stop_reason="tool_call",
     )
+
+
+class _NoopParameters(BaseModel):
+    pass
+
+
+class NoopTool:
+    """Trivial AgentTool: returns 'ok'; takes no arguments."""
+
+    @property
+    def name(self) -> str:
+        return "noop"
+
+    @property
+    def description(self) -> str:
+        return "Does nothing."
+
+    @property
+    def parameters(self) -> type[BaseModel]:
+        return _NoopParameters
+
+    async def execute(self, arguments: dict[str, Any]) -> AgentToolResult:
+        return AgentToolResult(text="ok")
+
+
+def _noop_tool() -> NoopTool:
+    return NoopTool()
 
 
 class RecordingModelFactory:

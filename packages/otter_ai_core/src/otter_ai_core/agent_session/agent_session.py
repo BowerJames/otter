@@ -98,12 +98,13 @@ class AgentSession:
             model = factory(self._system_prompt, cast(list[ToolSpec], self._tools), replayed)
             await model.__aenter__()
             stack.push_async_exit(model.__aexit__)
+            agent = Agent(model, self._tools, options=self._agent_options)
         except BaseException:
             self._state = _SessionState.CLOSED
             await stack.aclose()
             raise
         self._exit_stack = stack
-        self._agent = Agent(model, self._tools, options=self._agent_options)
+        self._agent = agent
         self._state = _SessionState.OPEN
         return self
 
