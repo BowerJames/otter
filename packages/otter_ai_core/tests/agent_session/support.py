@@ -43,11 +43,11 @@ def _final_response(text: str) -> AssistantMessage:
     )
 
 
-def _tool_call_response() -> AssistantMessage:
+def _tool_call_response(tool_name: str = "ping") -> AssistantMessage:
     return AssistantMessage(
         id="assistant-tool",
         content=[TextContent(text="calling")],
-        tool_calls=[ToolCall(id="call-1", tool_name="ping", parameters={})],
+        tool_calls=[ToolCall(id="call-1", tool_name=tool_name, parameters={})],
         stop_reason="tool_call",
     )
 

@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from otter_ai_core.agent import AgentLoopExhausted, AgentLoopOptions, AgentOptions
 from otter_ai_core.agent.types import AgentEnd, AgentStart, AgentTurnEnd, AgentTurnStart
 from otter_ai_core.agent_session import AgentSession
 from otter_ai_core.fake_model import FakeModel, FakeModelExhausted
@@ -332,6 +333,30 @@ async def test_resumed_session_appends_after_the_replayed_prefix() -> None:
     assert resumed_user.content[0].text == "and now"
     assert entries[3] == _final_response("continued")
     assert len(entries) == 4
+
+
+async def test_agent_options_are_passed_through_to_the_agent() -> None:
+    manager = InMemorySessionManager()
+    options = AgentOptions(agent_loop_options=AgentLoopOptions(max_generations=1))
+    factory = RecordingModelFactory([_tool_call_response("noop")])
+    registry = ModelRegistry(
+        {"openai": StubProvider(factory)},
+        await seeded_storage(("openai", "sk-key")),
+    )
+    session = AgentSession(
+        model="gpt-4o",
+        provider="openai",
+        system_prompt="system",
+        tools=[_noop_tool()],
+        session_manager=manager,
+        model_registry=registry,
+        agent_options=options,
+    )
+
+    async with session:
+        session.prompt("one generation only")
+        with pytest.raises(AgentLoopExhausted):
+            await collect_events(session)
 
 
 async def test_run_error_propagates_to_channel_and_poisons_the_session() -> None:
