@@ -1,10 +1,16 @@
+from collections.abc import Sequence
+
 from otter_ai_core.fake_model import FakeModel
 from otter_ai_core.model_registry.model.interface import EnterableModel, ModelFactory
 from otter_ai_core.model_registry.tool_spec.interface import ToolSpec
-from otter_ai_core.types import AssistantMessage, TextContent
+from otter_ai_core.types import AssistantMessage, SessionMessage, TextContent
 
 
-def _scripted_model(system_prompt: str, tools: list[ToolSpec]) -> EnterableModel:
+def _scripted_model(
+    system_prompt: str,
+    tools: list[ToolSpec],
+    initial_messages: Sequence[SessionMessage] = (),
+) -> EnterableModel:
     return FakeModel(
         [
             AssistantMessage(
