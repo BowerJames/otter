@@ -5,17 +5,15 @@ from enum import Enum, auto
 from types import TracebackType
 from typing import Self, cast
 
+from otter_ai_core.abstractions import AgentTool, SessionManager, ToolSpec
 from otter_ai_core.agent import Agent, AgentOptions, AgentStream
-from otter_ai_core.agent.agent_tool.interface import AgentTool
 from otter_ai_core.model_registry import ModelRegistry
-from otter_ai_core.model_registry.tool_spec.interface import ToolSpec
 from otter_ai_core.types import (
     AssistantMessage,
     ToolResultMessage,
     UserMessage,
 )
 
-from .session_manager import SessionManager
 from .types import AgentSessionEvent
 
 

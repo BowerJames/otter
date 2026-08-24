@@ -4,13 +4,12 @@ from typing import Any, Self
 
 from pydantic import BaseModel
 
+from otter_ai_core.abstractions import Model, ModelFactory, ToolSpec
 from otter_ai_core.agent_session import AgentSession, AgentSessionEvent
 from otter_ai_core.fake_model import FakeModel
 from otter_ai_core.in_memory_auth_storage import InMemoryAuthStorage
 from otter_ai_core.in_memory_session import InMemorySessionManager
 from otter_ai_core.model_registry import ModelRegistry
-from otter_ai_core.model_registry.model.interface import EnterableModel, ModelFactory
-from otter_ai_core.model_registry.tool_spec.interface import ToolSpec
 from otter_ai_core.types import (
     AgentToolResult,
     AssistantMessage,
@@ -86,10 +85,10 @@ class RecordingModelFactory:
     def __init__(self, responses: Sequence[AssistantMessage]) -> None:
         self.calls: list[tuple[str, list[ToolSpec], list[SessionMessage]]] = []
         self._responses = list(responses)
-        self._model: EnterableModel | None = None
+        self._model: Model | None = None
 
     @classmethod
-    def for_model(cls, model: EnterableModel) -> Self:
+    def for_model(cls, model: Model) -> Self:
         factory = cls([])
         factory._model = model
         return factory
@@ -99,7 +98,7 @@ class RecordingModelFactory:
         system_prompt: str,
         tools: list[ToolSpec],
         initial_messages: Sequence[SessionMessage],
-    ) -> EnterableModel:
+    ) -> Model:
         self.calls.append((system_prompt, list(tools), list(initial_messages)))
         if self._model is not None:
             return self._model

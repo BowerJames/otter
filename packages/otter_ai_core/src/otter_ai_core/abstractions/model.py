@@ -4,16 +4,17 @@ from typing import Protocol, Self
 
 from otter_ai_core.types import AssistantMessage, SessionMessage, ToolResultMessage, UserMessage
 
-from ..tool_spec.interface import ToolSpec
+from .tool_spec import ToolSpec
 
 
-class EnterableModel(Protocol):
+class Model(Protocol):
     """Abstraction over a chat model with an explicit session lifecycle.
 
     A model that has been exited cannot be entered again. Models receive
     their initial message context at construction via their factory and
     hold conversation history for their own generation needs; the durable
-    record of a conversation lives in the session manager."""
+    record of a conversation lives in the session manager. Messages are
+    recorded in the order the caller adds or generates them."""
 
     def add_user_message(self, text: str) -> Awaitable[UserMessage]:
         """Sends a user message to the model. Message is recorded if successfully
@@ -50,4 +51,4 @@ class EnterableModel(Protocol):
 
 # A ModelFactory yields a fresh, unentered model, bound to the given system
 # prompt, tools, and initial messages (empty for a fresh conversation)
-type ModelFactory = Callable[[str, list[ToolSpec], Sequence[SessionMessage]], EnterableModel]
+type ModelFactory = Callable[[str, list[ToolSpec], Sequence[SessionMessage]], Model]
