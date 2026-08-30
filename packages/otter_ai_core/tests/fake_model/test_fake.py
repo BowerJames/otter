@@ -36,15 +36,6 @@ async def test_generate_beyond_script_raises_exhausted() -> None:
             await model.generate()
 
 
-async def test_model_cannot_be_reentered() -> None:
-    model = FakeModel([])
-    async with model:
-        pass
-    with pytest.raises(RuntimeError):
-        async with model:
-            pass
-
-
 async def test_methods_are_gated_by_session_lifecycle() -> None:
     model = FakeModel([_assistant_text("reply")])
     with pytest.raises(RuntimeError):

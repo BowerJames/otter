@@ -1,10 +1,8 @@
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter_ai_core.types import AssistantMessage, SessionMessage, ToolResultMessage, UserMessage
-
-from .tool_spec import ToolSpec
+from otter_ai_core.types import AssistantMessage, ToolResultMessage, UserMessage
 
 
 class Model(Protocol):
@@ -47,8 +45,3 @@ class Model(Protocol):
         """Releases the resources acquired by `__aenter__` and ends the session.
         Exceptions raised in the session body are not suppressed."""
         ...
-
-
-# A ModelFactory yields a fresh, unentered model, bound to the given system
-# prompt, tools, and initial messages (empty for a fresh conversation)
-type ModelFactory = Callable[[str, list[ToolSpec], Sequence[SessionMessage]], Model]

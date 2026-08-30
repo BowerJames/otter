@@ -1,42 +1,43 @@
-from collections.abc import Mapping
+from collections.abc import Callable
 
-from otter_ai_core.abstractions import AuthStorage, ModelFactory, Provider
+from otter_ai_core.abstractions import AgentTool, Model
+
+# A function that will resolve a system prompt and agent tools returning a model adapter
+type ModelFactory = Callable[[str, list[AgentTool]], Model]
+
+# A function that will resolve a model name and api key and return a model factory.
+type ProviderFn = Callable[[str, str], ModelFactory]
+
+# A function that will resolve only an api key to return a model factoy
+type CustomModelFn = Callable[[str], ModelFactory]
 
 
 class ModelRegistry:
-    """Resolves a provider name and model name into a model factory bound to
-    the provider's stored API key.
+    """
+    A registry for storing factories for many Model adapters.
+    Supports provider level factories which would provide common builders for a given
+    provider allowing the model name and api key to vary as they wish.
+    Supports model level factories which provide builders that only require a specific api key.
+    """
 
-    Constructed with an initial provider mapping and an auth storage; the
-    storage must hold a key for a provider before models can be resolved
-    from it."""
+    def add_provider(self, provider: str, provider_fn: ProviderFn) -> None:
+        """
+        Add a provider level builder to the registry that is keyed on the `provider` string.
+        Will replace an existing one if called with a provider already in the registry.
+        """
+        raise NotImplementedError
 
-    def __init__(self, providers: Mapping[str, Provider], auth_storage: AuthStorage) -> None:
-        self._providers = dict(providers)
-        self._auth_storage = auth_storage
+    def add_custom_model(self, model: str, custom_model_fn: CustomModelFn) -> None:
+        """
+        Add a model level builder to the registry that is keyed on the model string.
+        Will replace an existing one if called with a model already in the registry.
+        """
+        raise NotImplementedError
 
-    def add_provider(self, provider: str, impl: Provider) -> None:
-        """Registers impl under the given provider name, replacing any
-        existing provider registered under that name."""
-        self._providers[provider] = impl
-
-    def remove_provider(self, provider: str) -> None:
-        """Removes the provider registered under the given name. Removing a
-        name that is not registered is a no-op."""
-        self._providers.pop(provider, None)
-
-    async def get_model_factory(self, provider: str, model: str) -> ModelFactory:
-        """Resolves the provider and model freshly on every call, using the
-        provider's stored API key.
-
-        Raises KeyError naming the provider when no provider is registered
-        under the name; KeyError naming both provider and model when the
-        provider does not know the model; and the auth storage's KeyError
-        naming the provider when no API key is stored for it."""
-        if provider not in self._providers:
-            raise KeyError(f"Unknown provider: {provider}")
-        api_key = await self._auth_storage.get_api_key(provider)
-        try:
-            return self._providers[provider].get_model_factory(model, api_key)
-        except KeyError as exc:
-            raise KeyError(f"Unknown model for provider: {provider}/{model}: {exc}") from exc
+    def get_model(self, api_key: str, model: str, provider: str | None) -> ModelFactory:
+        """
+        Resolves the (provider, model) pair in to the correct model factory.
+        If provider is `None` it will attempt to resolve against the standalone custom models.
+        If provider a string it will look for a provider builder.
+        """
+        raise NotImplementedError
