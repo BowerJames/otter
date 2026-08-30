@@ -1,118 +1,137 @@
+from collections.abc import Callable
+from typing import cast
+
 import pytest
 
-from otter_ai_core.fake_model import FakeModel
-from otter_ai_core.in_memory_auth_storage import InMemoryAuthStorage
-from otter_ai_core.model_registry import ModelRegistry
-
-from .fake_provider import FakeProvider
+from otter_ai_core.abstractions import AgentTool, Model
+from otter_ai_core.model_registry import ModelRegistry, UnknownModelError
 
 
-async def _storage_seeded_with(*entries: tuple[str, str]) -> InMemoryAuthStorage:
-    storage = InMemoryAuthStorage()
-    for provider, api_key in entries:
-        await storage.add_api_key(provider, api_key)
-    return storage
+class _RecordingFactory:
+    """Stand-in for the registered fns (`_ProviderFn` / `_CustomModelFn`)
+    that records every invocation and returns a fixed sentinel factory.
+    The sentinel is opaque: the registry returns it without ever invoking
+    it, so identity comparison is the only thing tests need."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.factory = cast(Callable[[str, list[AgentTool]], Model], object())
+
+    def __call__(self, *args: str) -> Callable[[str, list[AgentTool]], Model]:
+        self.calls.append(args)
+        return self.factory
 
 
-async def test_get_model_factory_resolves_provider_model_and_api_key() -> None:
-    provider = FakeProvider()
-    provider.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
-    registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
+def test_empty_registry_raises_for_provider_lookup() -> None:
+    registry = ModelRegistry()
 
-    factory = await registry.get_model_factory("openai", "gpt-4o")
-
-    assert provider.received == ("gpt-4o", "sk-key")
-    assert factory is provider.returned_factory
+    with pytest.raises(UnknownModelError):
+        registry.get_model("openai", "gpt-4o", "api-key-1")
 
 
-async def test_unknown_provider_raises_key_error_naming_provider() -> None:
-    provider = FakeProvider()
-    registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
+def test_empty_registry_raises_for_custom_model_lookup() -> None:
+    registry = ModelRegistry()
 
-    with pytest.raises(KeyError) as exc_info:
-        await registry.get_model_factory("anthropic", "claude-sonnet-4")
-
-    assert "anthropic" in str(exc_info.value)
-    assert provider.received is None
+    with pytest.raises(UnknownModelError):
+        registry.get_model(None, "gpt-4o", "api-key-1")
 
 
-async def test_unknown_model_raises_key_error_naming_provider_and_model() -> None:
-    provider = FakeProvider(known_models={"gpt-4o"})
-    registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
-
-    with pytest.raises(KeyError) as exc_info:
-        await registry.get_model_factory("openai", "o3")
-
-    assert "openai/o3" in str(exc_info.value)
-
-
-async def test_missing_api_key_propagates_key_error_from_auth_storage() -> None:
-    provider = FakeProvider()
-    registry = ModelRegistry({"openai": provider}, InMemoryAuthStorage())
-
-    with pytest.raises(KeyError) as exc_info:
-        await registry.get_model_factory("openai", "gpt-4o")
-
-    assert "openai" in str(exc_info.value)
-    assert provider.received is None
-
-
-async def test_add_provider_registers_new_provider() -> None:
-    provider = FakeProvider()
-    provider.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
-    registry = ModelRegistry({}, await _storage_seeded_with(("openai", "sk-key")))
-
+def test_provider_resolution_invokes_fn_with_model_and_api_key() -> None:
+    registry = ModelRegistry()
+    provider = _RecordingFactory()
     registry.add_provider("openai", provider)
-    factory = await registry.get_model_factory("openai", "gpt-4o")
 
-    assert provider.received == ("gpt-4o", "sk-key")
-    assert factory is provider.returned_factory
+    resolved = registry.get_model("openai", "gpt-4o", "api-key-1")
 
-
-async def test_add_provider_replaces_existing_provider() -> None:
-    original = FakeProvider(known_models={"gpt-4o"})
-    replacement = FakeProvider(known_models={"gpt-4o"})
-    replacement.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
-    registry = ModelRegistry({"openai": original}, await _storage_seeded_with(("openai", "sk-key")))
-
-    registry.add_provider("openai", replacement)
-    factory = await registry.get_model_factory("openai", "gpt-4o")
-
-    assert original.received is None
-    assert factory is replacement.returned_factory
+    assert resolved is provider.factory
+    assert provider.calls == [("gpt-4o", "api-key-1")]
 
 
-async def test_remove_provider_deregisters_provider() -> None:
-    provider = FakeProvider(known_models={"gpt-4o"})
-    registry = ModelRegistry({"openai": provider}, await _storage_seeded_with(("openai", "sk-key")))
+def test_custom_model_resolution_invokes_fn_with_api_key() -> None:
+    registry = ModelRegistry()
+    custom_model = _RecordingFactory()
+    registry.add_custom_model("gpt-4o", custom_model)
 
-    registry.remove_provider("openai")
+    resolved = registry.get_model(None, "gpt-4o", "api-key-1")
 
-    with pytest.raises(KeyError):
-        await registry.get_model_factory("openai", "gpt-4o")
-    assert provider.received is None
-
-
-async def test_remove_provider_unknown_name_is_noop() -> None:
-    registry = ModelRegistry({}, InMemoryAuthStorage())
-
-    registry.remove_provider("openai")
+    assert resolved is custom_model.factory
+    assert custom_model.calls == [("api-key-1",)]
 
 
-async def test_factories_for_distinct_providers_are_resolved_independently() -> None:
-    openai = FakeProvider(known_models={"gpt-4o"})
-    anthropic = FakeProvider(known_models={"claude-sonnet-4"})
-    openai.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
-    anthropic.set_returned_factory(lambda system_prompt, tools, initial_messages: FakeModel([]))
-    registry = ModelRegistry(
-        {"openai": openai, "anthropic": anthropic},
-        await _storage_seeded_with(("openai", "sk-openai"), ("anthropic", "sk-ant")),
-    )
+def test_provider_lookup_does_not_fall_back_to_custom_models() -> None:
+    registry = ModelRegistry()
+    custom_model = _RecordingFactory()
+    registry.add_custom_model("gpt-4o", custom_model)
 
-    assert await registry.get_model_factory("openai", "gpt-4o") is openai.returned_factory
-    assert (
-        await registry.get_model_factory("anthropic", "claude-sonnet-4")
-        is anthropic.returned_factory
-    )
-    assert openai.received == ("gpt-4o", "sk-openai")
-    assert anthropic.received == ("claude-sonnet-4", "sk-ant")
+    with pytest.raises(UnknownModelError):
+        registry.get_model("openai", "gpt-4o", "api-key-1")
+
+    assert custom_model.calls == []
+
+
+def test_custom_model_lookup_does_not_fall_back_to_providers() -> None:
+    registry = ModelRegistry()
+    provider = _RecordingFactory()
+    registry.add_provider("openai", provider)
+
+    with pytest.raises(UnknownModelError):
+        registry.get_model(None, "gpt-4o", "api-key-1")
+
+    assert provider.calls == []
+
+
+def test_reregistered_provider_replaces_previous() -> None:
+    registry = ModelRegistry()
+    first = _RecordingFactory()
+    second = _RecordingFactory()
+    registry.add_provider("openai", first)
+    registry.add_provider("openai", second)
+
+    resolved = registry.get_model("openai", "gpt-4o", "api-key-1")
+
+    assert resolved is second.factory
+    assert first.calls == []
+    assert second.calls == [("gpt-4o", "api-key-1")]
+
+
+def test_reregistered_custom_model_replaces_previous() -> None:
+    registry = ModelRegistry()
+    first = _RecordingFactory()
+    second = _RecordingFactory()
+    registry.add_custom_model("gpt-4o", first)
+    registry.add_custom_model("gpt-4o", second)
+
+    resolved = registry.get_model(None, "gpt-4o", "api-key-1")
+
+    assert resolved is second.factory
+    assert first.calls == []
+    assert second.calls == [("api-key-1",)]
+
+
+def test_keys_are_matched_exactly() -> None:
+    registry = ModelRegistry()
+    provider = _RecordingFactory()
+    custom_model = _RecordingFactory()
+    registry.add_provider("openai", provider)
+    registry.add_custom_model("gpt-4o", custom_model)
+
+    with pytest.raises(UnknownModelError):
+        registry.get_model("OpenAI", "gpt-4o", "api-key-1")
+    with pytest.raises(UnknownModelError):
+        registry.get_model(None, "GPT-4O", "api-key-1")
+
+    resolved = registry.get_model("openai", "GPT-4O", "api-key-1")
+
+    assert resolved is provider.factory
+    assert provider.calls == [("GPT-4O", "api-key-1")]
+    assert custom_model.calls == []
+
+
+def test_unknown_model_error_names_missing_key_and_path() -> None:
+    registry = ModelRegistry()
+    registry.add_provider("anthropic", _RecordingFactory())
+
+    with pytest.raises(UnknownModelError, match="openai"):
+        registry.get_model("openai", "gpt-4o", "api-key-1")
+    with pytest.raises(UnknownModelError, match="gpt-4o"):
+        registry.get_model(None, "gpt-4o", "api-key-1")

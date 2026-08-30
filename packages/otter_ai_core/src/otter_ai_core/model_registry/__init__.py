@@ -1,5 +1,3 @@
-from .registry import ModelRegistry
+from otter_ai_core.model_registry.registry import ModelRegistry, UnknownModelError
 
-__all__ = [
-    "ModelRegistry",
-]
+__all__ = ["ModelRegistry", "UnknownModelError"]
