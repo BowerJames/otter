@@ -51,11 +51,7 @@ async def collect(stream: AgentStream) -> list[AgentEvent]:
     return [event async for event in stream]
 
 
-class PingParams(BaseModel):
-    pass
-
-
-class ScheduleParams(BaseModel):
+class NoParams(BaseModel):
     pass
 
 
@@ -63,41 +59,17 @@ class StopParams(BaseModel):
     stop: bool
 
 
-class SpinParams(BaseModel):
-    pass
-
-
-class GuardedParams(BaseModel):
-    pass
-
-
-class NoteParams(BaseModel):
-    pass
-
-
-class OpenParams(BaseModel):
-    pass
-
-
 class AddParams(BaseModel):
     a: int
     b: int
 
 
-class FailParams(BaseModel):
-    pass
+class ModelWrapper:
+    """Delegates the whole Model protocol to an inner model; subclasses
+    override individual methods to intercept them."""
 
-
-class ReportParams(BaseModel):
-    pass
-
-
-class _SteerOnGenerate:
-    def __init__(self, inner: Model, agents: list[Agent], text: str) -> None:
+    def __init__(self, inner: Model) -> None:
         self._inner = inner
-        self._agents = agents
-        self._text = text
-        self._armed = True
 
     async def __aenter__(self) -> Self:
         await self._inner.__aenter__()
@@ -116,6 +88,17 @@ class _SteerOnGenerate:
 
     async def add_tool_result_message(self, tool_call_id: str, text: str) -> ToolResultMessage:
         return await self._inner.add_tool_result_message(tool_call_id, text)
+
+    async def generate(self) -> AssistantMessage:
+        return await self._inner.generate()
+
+
+class SteerOnGenerate(ModelWrapper):
+    def __init__(self, inner: Model, agents: list[Agent], text: str) -> None:
+        super().__init__(inner)
+        self._agents = agents
+        self._text = text
+        self._armed = True
 
     async def generate(self) -> AssistantMessage:
         if self._armed:
@@ -124,29 +107,11 @@ class _SteerOnGenerate:
         return await self._inner.generate()
 
 
-class _GatedModel:
+class GatedModel(ModelWrapper):
     def __init__(self, inner: Model) -> None:
-        self._inner = inner
+        super().__init__(inner)
         self.reached = asyncio.Event()
         self.release = asyncio.Event()
-
-    async def __aenter__(self) -> Self:
-        await self._inner.__aenter__()
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        await self._inner.__aexit__(exc_type, exc_value, traceback)
-
-    async def add_user_message(self, text: str) -> UserMessage:
-        return await self._inner.add_user_message(text)
-
-    async def add_tool_result_message(self, tool_call_id: str, text: str) -> ToolResultMessage:
-        return await self._inner.add_tool_result_message(tool_call_id, text)
 
     async def generate(self) -> AssistantMessage:
         self.reached.set()
@@ -154,15 +119,11 @@ class _GatedModel:
         return await self._inner.generate()
 
 
-class BoomModel:
+class FailingModel(ModelWrapper):
     def __init__(self, inner: Model, failing: str) -> None:
-        self._inner = inner
+        super().__init__(inner)
         self._failing = failing
         self.exited = False
-
-    async def __aenter__(self) -> Self:
-        await self._inner.__aenter__()
-        return self
 
     async def __aexit__(
         self,
@@ -171,7 +132,7 @@ class BoomModel:
         traceback: TracebackType | None,
     ) -> None:
         self.exited = True
-        await self._inner.__aexit__(exc_type, exc_value, traceback)
+        await super().__aexit__(exc_type, exc_value, traceback)
 
     async def add_user_message(self, text: str) -> UserMessage:
         if self._failing == "add_user_message":
@@ -192,11 +153,11 @@ class BoomModel:
 async def test_duplicate_tool_names_raise_at_construction() -> None:
     model = FakeModel([])
 
-    async def ping(_: PingParams) -> AgentToolResult:
+    async def ping(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="pong")
 
-    tool_a = create_agent_tool("dup", "first duplicate", PingParams, ping)
-    tool_b = create_agent_tool("dup", "second duplicate", PingParams, ping)
+    tool_a = create_agent_tool("dup", "first duplicate", NoParams, ping)
+    tool_b = create_agent_tool("dup", "second duplicate", NoParams, ping)
 
     with pytest.raises(ValueError):
         Agent(model, tools=[tool_a, tool_b])
@@ -212,12 +173,12 @@ async def test_later_changes_to_the_tools_list_do_not_affect_the_agent() -> None
         ]
     )
 
-    async def ping(_: PingParams) -> AgentToolResult:
+    async def ping(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="pong")
 
-    tools = [create_agent_tool("ping", "ping tool", PingParams, ping)]
+    tools = [create_agent_tool("ping", "ping tool", NoParams, ping)]
     agent = Agent(model, tools=tools)
-    tools.append(create_agent_tool("pong", "pong tool", PingParams, ping))
+    tools.append(create_agent_tool("pong", "pong tool", NoParams, ping))
 
     async with model:
         events = await collect(agent.prompt("hello"))
@@ -389,12 +350,12 @@ async def test_steer_and_follow_up_raise_while_idle() -> None:
 async def test_steer_routes_to_live_run_mid_generation() -> None:
     agents: list[Agent] = []
 
-    async def note(_: NoteParams) -> AgentToolResult:
+    async def note(_: NoParams) -> AgentToolResult:
         agents[0].steer("first correction")
         agents[0].steer("second correction")
         return AgentToolResult(text="noted")
 
-    tool = create_agent_tool("note", "notes things", NoteParams, note)
+    tool = create_agent_tool("note", "notes things", NoParams, note)
     model = FakeModel(
         [
             response(
@@ -457,11 +418,11 @@ async def test_steer_routes_to_live_run_mid_generation() -> None:
 async def test_follow_up_from_within_tool_schedules_next_turn() -> None:
     agents: list[Agent] = []
 
-    async def schedule(_: ScheduleParams) -> AgentToolResult:
+    async def schedule(_: NoParams) -> AgentToolResult:
         agents[0].follow_up("queued question")
         return AgentToolResult(text="scheduled")
 
-    tool = create_agent_tool("schedule", "schedules a follow-up", ScheduleParams, schedule)
+    tool = create_agent_tool("schedule", "schedules a follow-up", NoParams, schedule)
     model = FakeModel(
         [
             response(
@@ -618,10 +579,10 @@ async def test_unknown_tool_synthesizes_error_result() -> None:
 
 
 async def test_tool_exception_contained_as_error_result() -> None:
-    async def explode(_: FailParams) -> AgentToolResult:
+    async def explode(_: NoParams) -> AgentToolResult:
         raise RuntimeError("disk on fire")
 
-    tool = create_agent_tool("explode", "always raises", FailParams, explode)
+    tool = create_agent_tool("explode", "always raises", NoParams, explode)
     model = FakeModel(
         [
             response(
@@ -716,10 +677,10 @@ async def test_tool_terminate_end_event_reflects_it() -> None:
 
 
 async def test_exhausted_propagates_and_agent_recovers() -> None:
-    async def spin(_: SpinParams) -> AgentToolResult:
+    async def spin(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="spun")
 
-    tool = create_agent_tool("spin", "spins without finishing", SpinParams, spin)
+    tool = create_agent_tool("spin", "spins without finishing", NoParams, spin)
     model = FakeModel(
         [
             response("a1", text="first answer"),
@@ -784,7 +745,7 @@ async def test_exhausted_propagates_and_agent_recovers() -> None:
 async def test_stranded_steering_propagates_and_agent_recovers() -> None:
     model = FakeModel([response("a1", text="done"), response("a2", text="done again")])
     agents: list[Agent] = []
-    wrapper = _SteerOnGenerate(model, agents, "too late")
+    wrapper = SteerOnGenerate(model, agents, "too late")
     agent = Agent(wrapper, tools=[])
     agents.append(agent)
 
@@ -820,7 +781,7 @@ async def test_stranded_steering_propagates_and_agent_recovers() -> None:
 
 async def test_early_stream_closure_returns_agent_to_idle() -> None:
     model = FakeModel([response("a1", text="hello there")])
-    wrapper = _GatedModel(model)
+    wrapper = GatedModel(model)
     agent = Agent(wrapper, tools=[])
 
     async with model:
@@ -883,17 +844,17 @@ async def test_prompt_is_lazy_until_iterated() -> None:
 async def test_hooks_forwarded_to_run() -> None:
     executed: list[str] = []
 
-    async def guarded(_: GuardedParams) -> AgentToolResult:
+    async def guarded(_: NoParams) -> AgentToolResult:
         executed.append("guarded")
         return AgentToolResult(text="should not happen")
 
-    async def open_tool(_: OpenParams) -> AgentToolResult:
+    async def open_tool(_: NoParams) -> AgentToolResult:
         executed.append("open")
         return AgentToolResult(text="ok")
 
     tools = [
-        create_agent_tool("guarded", "a guarded tool", GuardedParams, guarded),
-        create_agent_tool("open", "an open tool", OpenParams, open_tool),
+        create_agent_tool("guarded", "a guarded tool", NoParams, guarded),
+        create_agent_tool("open", "an open tool", NoParams, open_tool),
     ]
 
     async def before_tool_call(call: ToolCall) -> ToolCallDecision:
@@ -985,13 +946,13 @@ async def test_before_tool_call_fires_for_unknown_tools() -> None:
 
 
 async def test_tool_result_hook_can_escalate_termination() -> None:
-    async def report(_: ReportParams) -> AgentToolResult:
+    async def report(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="finished normally")
 
     async def escalate(_: ToolCall, result: AgentToolResult) -> AgentToolResult:
         return result.model_copy(update={"terminate": True})
 
-    tool = create_agent_tool("report", "reports", ReportParams, report)
+    tool = create_agent_tool("report", "reports", NoParams, report)
     model = FakeModel(
         [
             response(
@@ -1032,10 +993,10 @@ async def test_tool_result_hook_can_escalate_termination() -> None:
 
 
 async def test_hook_exceptions_propagate_and_settle_agent() -> None:
-    async def ping(_: PingParams) -> AgentToolResult:
+    async def ping(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="pong")
 
-    tool = create_agent_tool("ping", "pings", PingParams, ping)
+    tool = create_agent_tool("ping", "pings", NoParams, ping)
     script = [
         response(
             "a1", text="trying", tool_calls=[ToolCall(id="c1", tool_name="ping", parameters={})]
@@ -1066,10 +1027,10 @@ async def test_hook_exceptions_propagate_and_settle_agent() -> None:
 
 
 async def test_model_exceptions_propagate_and_settle_agent() -> None:
-    async def ping(_: PingParams) -> AgentToolResult:
+    async def ping(_: NoParams) -> AgentToolResult:
         return AgentToolResult(text="pong")
 
-    tool = create_agent_tool("ping", "pings", PingParams, ping)
+    tool = create_agent_tool("ping", "pings", NoParams, ping)
     tool_call_script = [
         response(
             "a1", text="working", tool_calls=[ToolCall(id="c1", tool_name="ping", parameters={})]
@@ -1083,7 +1044,7 @@ async def test_model_exceptions_propagate_and_settle_agent() -> None:
     ]
 
     for failing, inner in scenarios:
-        model = BoomModel(inner, failing)
+        model = FailingModel(inner, failing)
         agent = Agent(model, tools=[tool])
         async with model:
             with pytest.raises(RuntimeError, match="provider 500"):
@@ -1095,7 +1056,7 @@ async def test_model_exceptions_propagate_and_settle_agent() -> None:
 
 async def test_wait_for_idle_wakes_when_run_settles() -> None:
     model = FakeModel([response("a1", text="hello there")])
-    wrapper = _GatedModel(model)
+    wrapper = GatedModel(model)
     agent = Agent(wrapper, tools=[])
 
     async with model:
