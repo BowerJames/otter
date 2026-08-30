@@ -39,13 +39,17 @@ class ModelRegistry:
     them. Keys are matched exactly. Resolution failures raise
     UnknownModelError."""
 
+    def __init__(self) -> None:
+        self._providers: dict[_ProviderName, _ProviderFn] = {}
+        self._custom_models: dict[_ModelName, _CustomModelFn] = {}
+
     def add_provider(self, provider: _ProviderName, provider_fn: _ProviderFn) -> None:
         """
         Add a provider level builder to the registry, keyed on the exact
         `provider` string. Registering under a provider already present
         replaces it; the most recent registration wins.
         """
-        raise NotImplementedError
+        self._providers[provider] = provider_fn
 
     def add_custom_model(self, model: _ModelName, custom_model_fn: _CustomModelFn) -> None:
         """
@@ -53,7 +57,7 @@ class ModelRegistry:
         string. Registering under a model already present replaces it; the
         most recent registration wins.
         """
-        raise NotImplementedError
+        self._custom_models[model] = custom_model_fn
 
     def get_model(
         self, provider: _ProviderName | None, model: _ModelName, api_key: _ApiKey
@@ -72,4 +76,13 @@ class ModelRegistry:
         name exists, and vice versa. Re-registration takes effect immediately
         for subsequent calls.
         """
-        raise NotImplementedError
+        if provider is not None:
+            provider_fn = self._providers.get(provider)
+            if provider_fn is None:
+                raise UnknownModelError(f"unknown provider {provider!r}")
+            return provider_fn(model, api_key)
+
+        custom_model_fn = self._custom_models.get(model)
+        if custom_model_fn is None:
+            raise UnknownModelError(f"unknown custom model {model!r}")
+        return custom_model_fn(api_key)
