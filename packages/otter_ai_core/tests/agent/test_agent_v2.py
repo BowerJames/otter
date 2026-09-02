@@ -1,11 +1,11 @@
 import asyncio
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel
 
-from otter_ai_core.abstractions import Model
+from otter_ai_core.abstractions import AgentTool, Model
 from otter_ai_core.agent import (
     Agent,
     AgentEnd,
@@ -157,7 +157,7 @@ async def test_agent_turn_end_event_contains_turn_messages(
         assert turn_end_event.messages == [default_user_message, default_assistant_message]
 
 
-class TestBlockingModel:
+class TestSingleTurnBlockingModelActions:
     @pytest.fixture
     def gate(self) -> asyncio.Event:
         return asyncio.Event()
@@ -246,3 +246,99 @@ class TestBlockingModel:
                 AgentTurnEnd,
                 AgentEnd,
             ]
+
+
+class TestMutliTurn:
+    @pytest.fixture
+    def tool_name(self) -> str:
+        return "tool-name"
+
+    @pytest.fixture
+    def tool_schema(self) -> type[BaseModel]:
+        class ABCArgs(BaseModel):
+            a: int
+            b: str
+            c: str | None
+
+        return ABCArgs
+
+    @pytest.fixture
+    def tool_result(self) -> AgentToolResult:
+        return AgentToolResult(text="tool-result", is_error=False, terminate=False)
+
+    @pytest.fixture
+    def tool_execute(
+        self, tool_result: AgentToolResult
+    ) -> Callable[[object], Awaitable[AgentToolResult]]:
+        async def execute(args: object) -> AgentToolResult:
+            return tool_result
+
+        return execute
+
+    @pytest.fixture
+    def tool(
+        self,
+        tool_name: str,
+        tool_schema: type[BaseModel],
+        tool_execute: Callable[[object], Awaitable[AgentToolResult]],
+    ) -> AgentTool:
+
+        return create_agent_tool(tool_name, "", tool_schema, tool_execute)
+
+    @pytest.fixture
+    def tool_call_assistant_message(self, tool_name: str) -> AssistantMessage:
+        return AssistantMessage(
+            id="assistant-tool-call-id",
+            content=[],
+            tool_calls=[
+                ToolCall(id="tool-call-id", tool_name=tool_name, parameters={"a": 5, "b": "b"})
+            ],
+            stop_reason="tool_call",
+        )
+
+    @pytest.fixture
+    def tool_result_message(self, tool_result: AgentToolResult) -> ToolResultMessage:
+        return ToolResultMessage(
+            id="tool-result-id",
+            tool_call_id="tool-call-id",
+            content=[TextContent(text=tool_result.text)],
+        )
+
+    @pytest.fixture
+    def model(
+        self,
+        default_user_message: UserMessage,
+        default_assistant_message: AssistantMessage,
+        tool_call_assistant_message: AssistantMessage,
+        tool_result_message: ToolResultMessage,
+    ) -> Model:
+        model = MagicMock(spec=Model)
+        model.__aenter__ = AsyncMock(return_value=model)
+        model.__aexit__ = AsyncMock(return_value=None)
+
+        model.add_user_message = AsyncMock(side_effect=[default_user_message])
+        model.generate = AsyncMock(
+            side_effect=[tool_call_assistant_message, default_assistant_message]
+        )
+        model.add_tool_result_message = AsyncMock(side_effect=[tool_result_message])
+        return model
+
+    async def test_multi_turn_agent_events_order(self, model: Model, tool: AgentTool) -> None:
+        async with model:
+            agent = Agent(model, tools=[tool])
+            event_stream = agent.prompt("hi")
+            events = await collect(event_stream)
+
+        assert [type(event) for event in events] == [
+            AgentStart,
+            AgentTurnStart,
+            UserMessage,
+            AssistantMessage,
+            ToolResultMessage,
+            AgentTurnEnd,
+            AgentTurnStart,
+            UserMessage,
+            AssistantMessage,
+            AgentTurnEnd,
+            AgentEnd,
+        ]
