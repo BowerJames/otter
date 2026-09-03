@@ -6,14 +6,15 @@ import pytest
 from pydantic import BaseModel
 
 from otter_ai_core.abstractions import AgentTool, Model
-from otter_ai_core.agent import (
+from otter_ai_core.agent_v2 import (
     Agent,
-    AgentEnd,
-    AgentEvent,
-    AgentStart,
-    AgentStream,
-    AgentTurnEnd,
-    AgentTurnStart,
+    AgentTurnStartEvent,
+    AgentIterationStartEvent,
+    AgentSessionMessageEvent,
+    AgentIterationEndEvent,
+    AgentTurnEndEvent,
+    AgentEvents
+    
 )
 from otter_ai_core.agent_tool_factory import create_agent_tool
 from otter_ai_core.types import (
@@ -27,35 +28,17 @@ from otter_ai_core.types import (
 
 
 @pytest.fixture
-def default_prompt() -> str:
+def prompt_text() -> str:
     return "hello"
 
 
 @pytest.fixture
-def default_model_response() -> str:
+def model_response() -> AssistantMessage:
     return "world"
 
 
 @pytest.fixture
-def default_assistant_message(default_model_response: str) -> AssistantMessage:
-    return AssistantMessage(
-        id="assistant-default",
-        content=[TextContent(text=default_model_response)],
-        tool_calls=[],
-        stop_reason="final_response",
-    )
-
-
-@pytest.fixture
-def default_user_message(default_prompt: str) -> UserMessage:
-    return UserMessage(
-        id="user-default",
-        content=[TextContent(text=default_prompt)],
-    )
-
-
-@pytest.fixture
-def model(default_assistant_message: AssistantMessage, default_user_message: UserMessage) -> Model:
+def model(prompt_text: str, model_response_text: str) -> Model:
     """Test adapter for the Model seam. Returns a mock satisfying the
     Model interface contract: methods are awaitable within an active
     session and return well-typed messages."""
