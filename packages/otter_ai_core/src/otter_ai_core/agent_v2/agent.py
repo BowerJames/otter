@@ -1,15 +1,15 @@
-from typing import AsyncIterable
+from collections.abc import AsyncIterable
 
-from otter_ai_core.abstractions import Model, AgentTool
+from otter_ai_core.abstractions import AgentTool, Model
 from otter_ai_core.agent_v2.types import AgentEvents
 
-class Agent:
 
+class Agent:
     def __init__(
-            self,
-            model: Model,
-            tools: list[AgentTool],
-        ):
+        self,
+        model: Model,
+        tools: list[AgentTool],
+    ):
         raise NotImplementedError
 
     def stream(self) -> AsyncIterable[AgentEvents]:
@@ -24,8 +24,5 @@ class Agent:
     def is_idle(self) -> bool:
         raise NotImplementedError
 
-    async def wait_for_idle(self):
+    async def wait_for_idle(self) -> None:
         raise NotImplementedError
-
-
-    

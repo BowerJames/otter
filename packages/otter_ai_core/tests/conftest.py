@@ -6,15 +6,19 @@ from otter_ai_core.abstractions import Model
 
 
 @pytest.fixture
-def mock_model() -> Model:
+def mock_model() -> MagicMock:
     """Plain Model mock: spec-enforced, session-wired, nothing scripted.
 
     The interface methods are installed as fresh AsyncMocks explicitly:
     the Model protocol declares them as plain ``def -> Awaitable[...]``
     (not ``async def``), so ``MagicMock(spec=Model)`` does not configure
-    them as awaitable on its own. Script them with
+    them as awaitable on their own. Script them with
     ``tests.support.mock_scripting.script`` — or overwrite them — before
     driving behaviour through the mock.
+
+    Typed as ``MagicMock`` rather than ``Model`` so tests can reach the
+    AsyncMock methods directly for scripting; it satisfies ``Model``
+    structurally wherever it is consumed.
     """
     model = MagicMock(spec=Model)
     model.__aenter__ = AsyncMock(return_value=model)
