@@ -1,6 +1,7 @@
 import asyncio
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterable
+from collections.abc import AsyncGenerator, AsyncIterable, Iterable
+from typing import Literal
 
 from otter_ai_core.abstractions import AgentTool, Model
 from otter_ai_core.agent_v2.types import (
@@ -12,7 +13,7 @@ from otter_ai_core.agent_v2.types import (
     AgentTurnStartEvent,
     _Iteration,
 )
-from otter_ai_core.types import UserMessage
+from otter_ai_core.types import AssistantMessage, ToolCall, ToolResultMessage, UserMessage
 
 
 class Agent:
@@ -26,9 +27,11 @@ class Agent:
     only when :meth:`cancel_stream` closes it.
 
     Within a turn, each iteration adds pending input messages to the
-    model, generates one assistant message, and ends the turn when the
-    assistant's ``stop_reason`` is ``final_response``. Assistant messages
-    are treated as opaque except for ``stop_reason``.
+    model, generates one assistant message, and either ends the turn
+    when the assistant's ``stop_reason`` is ``final_response`` or
+    executes the requested tool calls and iterates again with their
+    results. Assistant messages are treated as opaque except for
+    ``stop_reason`` and ``tool_calls``.
     """
 
     def __init__(self, model: Model, tools: list[AgentTool]) -> None:
@@ -37,7 +40,7 @@ class Agent:
         if duplicates:
             raise ValueError(f"duplicate tool names: {duplicates}")
         self._model = model
-        self._tools = tools
+        self._tools_by_name = {tool.name: tool for tool in tools}
         self._events: asyncio.Queue[AgentEvents | None] = asyncio.Queue()
         self._turn: asyncio.Task[None] | None = None
 
@@ -84,21 +87,8 @@ class Agent:
             self._emit(AgentSessionMessageEvent(id=_event_id(), message=assistant))
 
             if assistant.stop_reason == "final_response":
-                self._emit(
-                    AgentIterationEndEvent(
-                        id=_event_id(),
-                        user_messages=user_messages,
-                        assistant_message=assistant,
-                        tool_result_messages=None,
-                        termination="final_response",
-                    )
-                )
                 iterations.append(
-                    _Iteration(
-                        user_messages=user_messages,
-                        assistant_message=assistant,
-                        tool_result_messages=None,
-                    )
+                    self._close_iteration(user_messages, assistant, None, "final_response")
                 )
                 self._emit(
                     AgentTurnEndEvent(
@@ -109,7 +99,44 @@ class Agent:
                 )
                 return
 
-            raise NotImplementedError("tool_call iterations are not implemented yet")
+            tool_result_messages = await self._execute_tool_calls(assistant.tool_calls)
+            iterations.append(
+                self._close_iteration(
+                    user_messages, assistant, tool_result_messages, "tool_response"
+                )
+            )
+
+    async def _execute_tool_calls(self, calls: Iterable[ToolCall]) -> list[ToolResultMessage]:
+        tool_result_messages: list[ToolResultMessage] = []
+        for call in calls:
+            tool = self._tools_by_name[call.tool_name]
+            result = await tool.execute(call.parameters)
+            message = await self._model.add_tool_result_message(call.id, result.text)
+            tool_result_messages.append(message)
+            self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
+        return tool_result_messages
+
+    def _close_iteration(
+        self,
+        user_messages: list[UserMessage],
+        assistant_message: AssistantMessage,
+        tool_result_messages: list[ToolResultMessage] | None,
+        termination: Literal["final_response", "tool_response"],
+    ) -> _Iteration:
+        self._emit(
+            AgentIterationEndEvent(
+                id=_event_id(),
+                user_messages=user_messages,
+                assistant_message=assistant_message,
+                tool_result_messages=tool_result_messages,
+                termination=termination,
+            )
+        )
+        return _Iteration(
+            user_messages=user_messages,
+            assistant_message=assistant_message,
+            tool_result_messages=tool_result_messages,
+        )
 
     def _emit(self, event: AgentEvents) -> None:
         self._events.put_nowait(event)
