@@ -15,7 +15,7 @@ class _Event(BaseModel):
     id: str
 
 
-class _Iteration(BaseModel):
+class AgentIteration(BaseModel):
     user_messages: list[UserMessage]
     assistant_message: AssistantMessage
     tool_result_messages: list[ToolResultMessage] | None
@@ -47,7 +47,7 @@ class AgentIterationEndEvent(_Event):
 class AgentTurnEndEvent(_Event):
     type: Literal["agent_turn_end"] = "agent_turn_end"
 
-    iterations: list[_Iteration]
+    iterations: list[AgentIteration]
     termination: Literal["final_response", "error"]
 
 

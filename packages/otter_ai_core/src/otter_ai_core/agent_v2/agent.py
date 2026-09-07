@@ -1,17 +1,17 @@
 import asyncio
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterable, Iterable
+from collections.abc import AsyncGenerator, Iterable
 from typing import Literal
 
 from otter_ai_core.abstractions import AgentTool, Model
 from otter_ai_core.agent_v2.types import (
     AgentEvents,
+    AgentIteration,
     AgentIterationEndEvent,
     AgentIterationStartEvent,
     AgentSessionMessageEvent,
     AgentTurnEndEvent,
     AgentTurnStartEvent,
-    _Iteration,
 )
 from otter_ai_core.types import AssistantMessage, ToolCall, ToolResultMessage, UserMessage
 
@@ -23,8 +23,10 @@ class Agent:
     Turns are started with :meth:`prompt` and observed by iterating the
     object returned by :meth:`stream`; events emitted before iteration
     begins are buffered, so a consumer attaching just before a turn
-    still sees every event. The stream stays open across turns and ends
-    only when :meth:`cancel_stream` closes it.
+    still sees every event. The stream stays open across turns, ends
+    only when :meth:`cancel_stream` closes it, and supports a single
+    consumer at a time — concurrent iterations would split events
+    between them.
 
     Within a turn, each iteration adds pending input messages to the
     model, generates one assistant message, and either ends the turn
@@ -44,10 +46,7 @@ class Agent:
         self._events: asyncio.Queue[AgentEvents | None] = asyncio.Queue()
         self._turn: asyncio.Task[None] | None = None
 
-    def stream(self) -> AsyncIterable[AgentEvents]:
-        return self._stream_events()
-
-    async def _stream_events(self) -> AsyncGenerator[AgentEvents, None]:
+    async def stream(self) -> AsyncGenerator[AgentEvents, None]:
         while True:
             event = await self._events.get()
             if event is None:
@@ -68,7 +67,7 @@ class Agent:
             await self._turn
 
     async def _run_turn(self, text: str) -> None:
-        iterations: list[_Iteration] = []
+        iterations: list[AgentIteration] = []
         pending_text: str | None = text
 
         self._emit(AgentTurnStartEvent(id=_event_id()))
@@ -122,7 +121,7 @@ class Agent:
         assistant_message: AssistantMessage,
         tool_result_messages: list[ToolResultMessage] | None,
         termination: Literal["final_response", "tool_response"],
-    ) -> _Iteration:
+    ) -> AgentIteration:
         self._emit(
             AgentIterationEndEvent(
                 id=_event_id(),
@@ -132,7 +131,7 @@ class Agent:
                 termination=termination,
             )
         )
-        return _Iteration(
+        return AgentIteration(
             user_messages=user_messages,
             assistant_message=assistant_message,
             tool_result_messages=tool_result_messages,

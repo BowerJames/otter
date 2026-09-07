@@ -1,6 +1,7 @@
 from .agent import Agent
 from .types import (
     AgentEvents,
+    AgentIteration,
     AgentIterationEndEvent,
     AgentIterationStartEvent,
     AgentSessionMessageEvent,
@@ -14,6 +15,7 @@ __all__ = [
     "AgentSessionMessageEvent",
     "AgentIterationEndEvent",
     "AgentTurnEndEvent",
+    "AgentIteration",
     "AgentEvents",
     "Agent",
 ]
