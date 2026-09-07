@@ -26,7 +26,7 @@ class AgentTurnStartEvent(_Event):
 
 
 class AgentIterationStartEvent(BaseModel):
-    type: Literal["agent_iteration_start"]
+    type: Literal["agent_iteration_start"] = "agent_iteration_start"
 
 
 class AgentSessionMessageEvent(_Event):

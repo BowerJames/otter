@@ -1,13 +1,11 @@
+from .agent import Agent
 from .types import (
-    AgentTurnStartEvent,
+    AgentEvents,
+    AgentIterationEndEvent,
     AgentIterationStartEvent,
     AgentSessionMessageEvent,
-    AgentIterationEndEvent,
     AgentTurnEndEvent,
-    AgentEvents
-)
-from .agent import (
-    Agent
+    AgentTurnStartEvent,
 )
 
 __all__ = [
@@ -17,5 +15,5 @@ __all__ = [
     "AgentIterationEndEvent",
     "AgentTurnEndEvent",
     "AgentEvents",
-    "Agent"
+    "Agent",
 ]
