@@ -15,6 +15,7 @@ from otter_ai_core.agent_v2 import (
     AgentTurnEndEvent,
     AgentTurnStartEvent,
 )
+from otter_ai_core.components import Gate
 from otter_ai_core.types import (
     AgentToolResult,
     AssistantMessage,
@@ -193,3 +194,140 @@ async def test_single_turn_tool_round_trip_events_order(
     assert turn_end.iterations[1].user_messages == []
     assert turn_end.iterations[1].assistant_message is final
     assert turn_end.iterations[1].tool_result_messages is None
+
+
+async def test_agent_awaits_each_model_call_before_proceeding(
+    mock_model: MagicMock,
+) -> None:
+    class NoParams(BaseModel):
+        pass
+
+    gate = Gate()
+
+    user_message = NonCallableMagicMock(spec=UserMessage)
+
+    call_id = object()
+    tool_call = NonCallableMagicMock(spec=ToolCall)
+    tool_call.id = call_id
+    tool_call.tool_name = "stop"
+    tool_call.parameters = {}
+
+    tool_call_message = NonCallableMagicMock(spec=AssistantMessage)
+    tool_call_message.stop_reason = "tool_call"
+    tool_call_message.tool_calls = [tool_call]
+
+    final = NonCallableMagicMock(spec=AssistantMessage)
+    final.stop_reason = "final_response"
+
+    responses = iter([tool_call_message, final])
+
+    async def gated_add_user_message(text: str) -> NonCallableMagicMock:
+        await gate.wait_for_open()
+        return user_message
+
+    async def gated_generate() -> NonCallableMagicMock:
+        await gate.wait_for_open()
+        return next(responses)
+
+    tool_result = NonCallableMagicMock(spec=ToolResultMessage)
+
+    async def gated_add_tool_result_message(tool_call_id: str, text: str) -> NonCallableMagicMock:
+        await gate.wait_for_open()
+        return tool_result
+
+    script(mock_model.add_user_message, gated_add_user_message)
+    script(mock_model.generate, gated_generate)
+    script(mock_model.add_tool_result_message, gated_add_tool_result_message)
+
+    execute = AsyncMock(return_value=AgentToolResult(text="stopped"))
+    stop_tool = create_agent_tool("stop", "requests the final response", NoParams, execute)
+
+    async with mock_model:
+        agent = Agent(mock_model, tools=[stop_tool])
+        async with asyncio.timeout(1):
+            events: list[AgentEvents] = []
+            task = asyncio.create_task(collect(agent.stream(), events))
+            agent.prompt("hello")
+
+            # add_user_message in flight: the loop has touched nothing else
+            await gate.wait_for_arrival()
+            await asyncio.sleep(0)
+            assert mock_model.add_user_message.await_count == 1
+            assert mock_model.add_user_message.outcomes == []
+            assert mock_model.generate.await_count == 0
+            assert mock_model.add_tool_result_message.await_count == 0
+            assert execute.await_count == 0
+            assert [type(event) for event in events] == [
+                AgentTurnStartEvent,
+                AgentIterationStartEvent,
+            ]
+            assert not agent.is_idle()
+            gate.open()
+
+            # first generate in flight: the user message resolved and was emitted
+            await gate.wait_for_arrival()
+            await asyncio.sleep(0)
+            assert mock_model.add_user_message.outcomes == [user_message]
+            assert mock_model.generate.await_count == 1
+            assert mock_model.generate.outcomes == []
+            assert mock_model.add_tool_result_message.await_count == 0
+            assert [type(event) for event in events] == [
+                AgentTurnStartEvent,
+                AgentIterationStartEvent,
+                AgentSessionMessageEvent,
+            ]
+            gate.open()
+
+            # add_tool_result_message in flight: the tool ran, nothing further
+            await gate.wait_for_arrival()
+            await asyncio.sleep(0)
+            assert mock_model.generate.outcomes == [tool_call_message]
+            assert execute.await_args_list[0].args[0] == NoParams()
+            assert mock_model.add_tool_result_message.await_count == 1
+            assert mock_model.add_tool_result_message.outcomes == []
+            assert mock_model.add_tool_result_message.await_args_list[0].args[0] is call_id
+            assert [type(event) for event in events] == [
+                AgentTurnStartEvent,
+                AgentIterationStartEvent,
+                AgentSessionMessageEvent,
+                AgentSessionMessageEvent,
+            ]
+            gate.open()
+
+            # second generate in flight: the tool result resolved, iteration 1 closed
+            await gate.wait_for_arrival()
+            await asyncio.sleep(0)
+            assert mock_model.add_tool_result_message.outcomes == [tool_result]
+            assert mock_model.generate.await_count == 2
+            assert mock_model.generate.outcomes == [tool_call_message]
+            assert [type(event) for event in events] == [
+                AgentTurnStartEvent,
+                AgentIterationStartEvent,
+                AgentSessionMessageEvent,
+                AgentSessionMessageEvent,
+                AgentSessionMessageEvent,
+                AgentIterationEndEvent,
+                AgentIterationStartEvent,
+            ]
+            gate.open()
+
+            await agent.wait_for_idle()
+            agent.cancel_stream()
+            await task
+
+    assert [type(event) for event in events] == [
+        AgentTurnStartEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentTurnEndEvent,
+    ]
+    turn_end = events[-1]
+    assert isinstance(turn_end, AgentTurnEndEvent)
+    assert turn_end.termination == "final_response"
+    assert len(turn_end.iterations) == 2
