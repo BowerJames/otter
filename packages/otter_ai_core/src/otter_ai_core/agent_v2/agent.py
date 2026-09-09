@@ -27,9 +27,12 @@ class Agent:
     only when :meth:`cancel_stream` closes it, and supports a single
     consumer at a time — concurrent iterations would split events
     between them. A prompt sent while a turn is running is queued as a
-    steering prompt: the running turn is left undisturbed and, when it
-    ends, a follow-up turn starts immediately, adding every queued
-    prompt as a user message in its first iteration. :meth:`is_idle`
+    steering prompt: the current iteration is left undisturbed and
+    the prompt is added as a user message at the next generation
+    boundary — the next iteration of the running turn when the
+    current one ends with a tool response, otherwise the first
+    iteration of a follow-up turn that starts when the running
+    turn ends. :meth:`is_idle`
     and :meth:`wait_for_idle` cover a run — the current turn together
     with any follow-up turns it chains.
 
@@ -65,9 +68,11 @@ class Agent:
     def prompt(self, text: str) -> None:
         """Starts a turn from ``text`` when idle. While a turn is
         running, ``text`` is queued as a steering prompt instead: the
-        running turn is left undisturbed and, when it ends, a follow-up
-        turn starts immediately, adding every queued prompt as a user
-        message in its first iteration."""
+        current iteration is left undisturbed and the prompt is added
+        as a user message at the next generation boundary — the next
+        iteration of the running turn when the current one ends with a
+        tool response, otherwise the first iteration of a follow-up
+        turn that starts when the running turn ends."""
         if not self.is_idle():
             self._steering_prompts.append(text)
             return
@@ -135,6 +140,7 @@ class Agent:
                     user_messages, assistant, tool_result_messages, "tool_response"
                 )
             )
+            pending_texts = self._drain_steering_prompts()
 
     async def _execute_tool_calls(self, calls: Iterable[ToolCall]) -> list[ToolResultMessage]:
         tool_result_messages: list[ToolResultMessage] = []
