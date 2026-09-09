@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator, Iterator
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -156,3 +157,109 @@ async def test_sync_behavior_works_on_async_mock() -> None:
 
     assert await mock() == "value"
     assert mock.outcomes == ["value"]
+
+
+async def test_async_generator_script_yields_one_item_per_call() -> None:
+    async def behavior() -> AsyncIterator[str]:
+        yield "a"
+        yield "b"
+
+    mock = AsyncMock()
+    script(mock, behavior)
+
+    assert await mock() == "a"
+    assert await mock() == "b"
+    with pytest.raises(ScriptExhausted):
+        await mock()
+    assert mock.outcomes[:2] == ["a", "b"]
+    assert isinstance(mock.outcomes[2], ScriptExhausted)
+
+
+async def test_async_generator_script_awaits_only_before_first_yield() -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def behavior() -> AsyncIterator[str]:
+        started.set()
+        await release.wait()
+        yield "first"
+        yield "second"
+
+    mock = AsyncMock()
+    script(mock, behavior)
+
+    first = asyncio.create_task(mock())
+    await started.wait()
+    assert mock.outcomes == []
+
+    release.set()
+    assert await first == "first"
+    # No second release: the generator resumes straight after the first
+    # yield, so the await before it has already run once.
+    assert await mock() == "second"
+    assert mock.outcomes == ["first", "second"]
+
+
+def test_sync_generator_script_yields_one_item_per_call() -> None:
+    def behavior() -> Iterator[str]:
+        yield "a"
+        yield "b"
+
+    mock = Mock()
+    script(mock, behavior)
+
+    assert mock() == "a"
+    assert mock() == "b"
+    with pytest.raises(ScriptExhausted):
+        mock()
+    assert mock.outcomes[:2] == ["a", "b"]
+    assert isinstance(mock.outcomes[2], ScriptExhausted)
+
+
+async def test_generator_script_raises_yielded_exceptions_per_convention() -> None:
+    async def behavior() -> AsyncIterator[object]:
+        yield ValueError
+        yield RuntimeError("boom")
+        yield "after"
+
+    mock = AsyncMock()
+    script(mock, behavior)
+
+    with pytest.raises(ValueError):
+        await mock()
+    with pytest.raises(RuntimeError):
+        await mock()
+    assert await mock() == "after"
+    assert mock.outcomes[0] is ValueError
+    assert isinstance(mock.outcomes[1], RuntimeError)
+    assert mock.outcomes[2] == "after"
+
+
+async def test_async_generator_script_body_raise_is_recorded_and_propagates() -> None:
+    async def behavior() -> AsyncIterator[str]:
+        yield "a"
+        raise RuntimeError("generator boom")
+
+    mock = AsyncMock()
+    script(mock, behavior)
+
+    assert await mock() == "a"
+    with pytest.raises(RuntimeError):
+        await mock()
+    assert mock.outcomes[0] == "a"
+    assert isinstance(mock.outcomes[1], RuntimeError)
+
+
+async def test_generator_script_passes_first_calls_args_to_the_generator() -> None:
+    received: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    async def behavior(*args: object, **kwargs: object) -> AsyncIterator[str]:
+        received.append((args, kwargs))
+        yield "done"
+
+    mock = AsyncMock()
+    script(mock, behavior)
+
+    assert await mock("x", key=1) == "done"
+    assert await mock("ignored") == "done"
+    assert received == [(("x",), {"key": 1})]

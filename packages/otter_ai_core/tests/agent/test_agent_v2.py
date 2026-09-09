@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -209,11 +209,11 @@ async def test_steering_prompt_while_generating(
     gate = Gate()
     assistant_message1 = mock_assistant_message()
     assistant_message2 = mock_assistant_message()
-    messages = iter([assistant_message1, assistant_message2])
 
-    async def generate() -> AssistantMessage:
+    async def generate() -> AsyncIterator[AssistantMessage]:
         await gate.wait_for_open()
-        return next(messages)
+        yield assistant_message1
+        yield assistant_message2
 
     script(mock_model.generate, generate)
 
@@ -223,11 +223,6 @@ async def test_steering_prompt_while_generating(
         agent.prompt(mock_string())
         await gate.wait_for_arrival()
         agent.prompt(mock_string())
-        gate.open()
-        # The gate closes again behind turn 1's generation, so the
-        # follow-up turn's generate() parks afresh and needs a second
-        # release.
-        await gate.wait_for_arrival()
         gate.open()
         await agent.wait_for_idle()
         agent.cancel_stream()
