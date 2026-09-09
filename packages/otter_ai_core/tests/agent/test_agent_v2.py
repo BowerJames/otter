@@ -224,6 +224,11 @@ async def test_steering_prompt_while_generating(
         await gate.wait_for_arrival()
         agent.prompt(mock_string())
         gate.open()
+        # The gate closes again behind turn 1's generation, so the
+        # follow-up turn's generate() parks afresh and needs a second
+        # release.
+        await gate.wait_for_arrival()
+        gate.open()
         await agent.wait_for_idle()
         agent.cancel_stream()
         events = await task
@@ -234,6 +239,8 @@ async def test_steering_prompt_while_generating(
         AgentSessionMessageEvent,
         AgentSessionMessageEvent,
         AgentIterationEndEvent,
+        AgentTurnEndEvent,
+        AgentTurnStartEvent,
         AgentIterationStartEvent,
         AgentSessionMessageEvent,
         AgentSessionMessageEvent,
