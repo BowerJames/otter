@@ -36,6 +36,7 @@ async def collect(
     return events
 
 
+@pytest.mark.timeout(1)
 async def test_duplicate_tool_names_raise_at_construction(mock_model: MagicMock) -> None:
     class NoParams(BaseModel):
         pass
@@ -46,6 +47,7 @@ async def test_duplicate_tool_names_raise_at_construction(mock_model: MagicMock)
         Agent(mock_model, tools=[tool_a, tool_b])
 
 
+@pytest.mark.timeout(1)
 async def test_single_turn_agent_loop_events_order(
     mock_model: MagicMock,
 ) -> None:
@@ -57,12 +59,11 @@ async def test_single_turn_agent_loop_events_order(
 
     async with mock_model:
         agent = Agent(mock_model, tools=[])
-        async with asyncio.timeout(1):
-            task = asyncio.create_task(collect(agent.stream()))
-            agent.prompt("hello")
-            await agent.wait_for_idle()
-            agent.cancel_stream()
-            events = await task
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt("hello")
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
 
     assert [type(event) for event in events] == [
         AgentTurnStartEvent,
@@ -96,6 +97,7 @@ async def test_single_turn_agent_loop_events_order(
     assert turn_end.iterations[0].tool_result_messages is None
 
 
+@pytest.mark.timeout(1)
 async def test_single_turn_tool_round_trip_events_order(
     mock_model: MagicMock,
 ) -> None:
@@ -128,12 +130,11 @@ async def test_single_turn_tool_round_trip_events_order(
 
     async with mock_model:
         agent = Agent(mock_model, tools=[stop_tool])
-        async with asyncio.timeout(1):
-            task = asyncio.create_task(collect(agent.stream()))
-            agent.prompt("hello")
-            await agent.wait_for_idle()
-            agent.cancel_stream()
-            events = await task
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt("hello")
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
 
     assert [type(event) for event in events] == [
         AgentTurnStartEvent,
@@ -196,6 +197,7 @@ async def test_single_turn_tool_round_trip_events_order(
     assert turn_end.iterations[1].tool_result_messages is None
 
 
+@pytest.mark.timeout(1)
 async def test_agent_awaits_each_model_call_before_proceeding(
     mock_model: MagicMock,
 ) -> None:
@@ -244,76 +246,75 @@ async def test_agent_awaits_each_model_call_before_proceeding(
 
     async with mock_model:
         agent = Agent(mock_model, tools=[stop_tool])
-        async with asyncio.timeout(1):
-            events: list[AgentEvents] = []
-            task = asyncio.create_task(collect(agent.stream(), events))
-            agent.prompt("hello")
+        events: list[AgentEvents] = []
+        task = asyncio.create_task(collect(agent.stream(), events))
+        agent.prompt("hello")
 
-            # add_user_message in flight: the loop has touched nothing else
-            await gate.wait_for_arrival()
-            await asyncio.sleep(0)
-            assert mock_model.add_user_message.await_count == 1
-            assert mock_model.add_user_message.outcomes == []
-            assert mock_model.generate.await_count == 0
-            assert mock_model.add_tool_result_message.await_count == 0
-            assert execute.await_count == 0
-            assert [type(event) for event in events] == [
-                AgentTurnStartEvent,
-                AgentIterationStartEvent,
-            ]
-            assert not agent.is_idle()
-            gate.open()
+        # add_user_message in flight: the loop has touched nothing else
+        await gate.wait_for_arrival()
+        await asyncio.sleep(0)
+        assert mock_model.add_user_message.await_count == 1
+        assert mock_model.add_user_message.outcomes == []
+        assert mock_model.generate.await_count == 0
+        assert mock_model.add_tool_result_message.await_count == 0
+        assert execute.await_count == 0
+        assert [type(event) for event in events] == [
+            AgentTurnStartEvent,
+            AgentIterationStartEvent,
+        ]
+        assert not agent.is_idle()
+        gate.open()
 
-            # first generate in flight: the user message resolved and was emitted
-            await gate.wait_for_arrival()
-            await asyncio.sleep(0)
-            assert mock_model.add_user_message.outcomes == [user_message]
-            assert mock_model.generate.await_count == 1
-            assert mock_model.generate.outcomes == []
-            assert mock_model.add_tool_result_message.await_count == 0
-            assert [type(event) for event in events] == [
-                AgentTurnStartEvent,
-                AgentIterationStartEvent,
-                AgentSessionMessageEvent,
-            ]
-            gate.open()
+        # first generate in flight: the user message resolved and was emitted
+        await gate.wait_for_arrival()
+        await asyncio.sleep(0)
+        assert mock_model.add_user_message.outcomes == [user_message]
+        assert mock_model.generate.await_count == 1
+        assert mock_model.generate.outcomes == []
+        assert mock_model.add_tool_result_message.await_count == 0
+        assert [type(event) for event in events] == [
+            AgentTurnStartEvent,
+            AgentIterationStartEvent,
+            AgentSessionMessageEvent,
+        ]
+        gate.open()
 
-            # add_tool_result_message in flight: the tool ran, nothing further
-            await gate.wait_for_arrival()
-            await asyncio.sleep(0)
-            assert mock_model.generate.outcomes == [tool_call_message]
-            assert execute.await_args_list[0].args[0] == NoParams()
-            assert mock_model.add_tool_result_message.await_count == 1
-            assert mock_model.add_tool_result_message.outcomes == []
-            assert mock_model.add_tool_result_message.await_args_list[0].args[0] is call_id
-            assert [type(event) for event in events] == [
-                AgentTurnStartEvent,
-                AgentIterationStartEvent,
-                AgentSessionMessageEvent,
-                AgentSessionMessageEvent,
-            ]
-            gate.open()
+        # add_tool_result_message in flight: the tool ran, nothing further
+        await gate.wait_for_arrival()
+        await asyncio.sleep(0)
+        assert mock_model.generate.outcomes == [tool_call_message]
+        assert execute.await_args_list[0].args[0] == NoParams()
+        assert mock_model.add_tool_result_message.await_count == 1
+        assert mock_model.add_tool_result_message.outcomes == []
+        assert mock_model.add_tool_result_message.await_args_list[0].args[0] is call_id
+        assert [type(event) for event in events] == [
+            AgentTurnStartEvent,
+            AgentIterationStartEvent,
+            AgentSessionMessageEvent,
+            AgentSessionMessageEvent,
+        ]
+        gate.open()
 
-            # second generate in flight: the tool result resolved, iteration 1 closed
-            await gate.wait_for_arrival()
-            await asyncio.sleep(0)
-            assert mock_model.add_tool_result_message.outcomes == [tool_result]
-            assert mock_model.generate.await_count == 2
-            assert mock_model.generate.outcomes == [tool_call_message]
-            assert [type(event) for event in events] == [
-                AgentTurnStartEvent,
-                AgentIterationStartEvent,
-                AgentSessionMessageEvent,
-                AgentSessionMessageEvent,
-                AgentSessionMessageEvent,
-                AgentIterationEndEvent,
-                AgentIterationStartEvent,
-            ]
-            gate.open()
+        # second generate in flight: the tool result resolved, iteration 1 closed
+        await gate.wait_for_arrival()
+        await asyncio.sleep(0)
+        assert mock_model.add_tool_result_message.outcomes == [tool_result]
+        assert mock_model.generate.await_count == 2
+        assert mock_model.generate.outcomes == [tool_call_message]
+        assert [type(event) for event in events] == [
+            AgentTurnStartEvent,
+            AgentIterationStartEvent,
+            AgentSessionMessageEvent,
+            AgentSessionMessageEvent,
+            AgentSessionMessageEvent,
+            AgentIterationEndEvent,
+            AgentIterationStartEvent,
+        ]
+        gate.open()
 
-            await agent.wait_for_idle()
-            agent.cancel_stream()
-            await task
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        await task
 
     assert [type(event) for event in events] == [
         AgentTurnStartEvent,
