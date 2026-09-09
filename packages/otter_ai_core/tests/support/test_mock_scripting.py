@@ -255,11 +255,12 @@ async def test_generator_script_passes_first_calls_args_to_the_generator() -> No
 
     async def behavior(*args: object, **kwargs: object) -> AsyncIterator[str]:
         received.append((args, kwargs))
-        yield "done"
+        yield "first"
+        yield "second"
 
     mock = AsyncMock()
     script(mock, behavior)
 
-    assert await mock("x", key=1) == "done"
-    assert await mock("ignored") == "done"
+    assert await mock("x", key=1) == "first"
+    assert await mock("ignored") == "second"
     assert received == [(("x",), {"key": 1})]

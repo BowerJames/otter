@@ -6,7 +6,8 @@ script behaviour and observe results for any abstraction's mocks.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterable
+import inspect
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
 from typing import TypeVar, cast, overload
 from unittest.mock import AsyncMock, Mock
 
@@ -16,6 +17,8 @@ type ScriptOutcome[T] = T | BaseException | type[BaseException]
 
 type ScriptedBehavior[T] = (
     Iterable[ScriptOutcome[T]]
+    | Callable[..., AsyncIterator[T]]
+    | Callable[..., Iterator[T]]
     | Callable[..., T | Awaitable[T]]
     | BaseException
     | type[BaseException]
@@ -28,6 +31,16 @@ class ScriptExhausted(AssertionError):
 
 @overload
 def script[T](mock: Mock | AsyncMock, behavior: Iterable[ScriptOutcome[T]]) -> Mock | AsyncMock: ...
+
+
+@overload
+def script[T](
+    mock: Mock | AsyncMock, behavior: Callable[..., AsyncIterator[T]]
+) -> Mock | AsyncMock: ...
+
+
+@overload
+def script[T](mock: Mock | AsyncMock, behavior: Callable[..., Iterator[T]]) -> Mock | AsyncMock: ...
 
 
 @overload
@@ -60,6 +73,12 @@ def script[T](
     - an iterable of results, consumed in order: exception classes and
       instances are raised, every other item is returned (the unittest
       ``side_effect`` convention);
+    - a generator function (sync or async): called once with the first
+      mocked call's arguments, then advanced one step per call — the
+      body runs lazily between calls (so it may await), each yielded
+      item is returned under the iterable convention above, exhaustion
+      raises and records :class:`ScriptExhausted`, and anything the
+      body raises propagates and is recorded;
     - a bare exception class or instance, raised on every call;
     - a callable receiving the mocked call's arguments: a sync callable's
       return value is returned, a coroutine function is awaited and its
@@ -70,8 +89,8 @@ def script[T](
     ``mock.await_args_list``: an item that is an exception (class or
     instance) was raised, anything else was returned. An in-flight call
     is therefore observable as ``len(call_args_list) - len(outcomes)``.
-    When an iterable script runs dry, :class:`ScriptExhausted` (an
-    ``AssertionError``) is raised and recorded first, so the log stays
+    When an iterable or generator script runs dry, :class:`ScriptExhausted`
+    (an ``AssertionError``) is raised and recorded first, so the log stays
     complete.
 
     Scripting a mock again replaces its behaviour and starts a fresh
@@ -80,8 +99,58 @@ def script[T](
     Returns ``mock`` for chaining.
     """
     outcomes: list[ScriptOutcome[T]] = []
+    consume: Callable[..., object]
 
-    if callable(behavior) and not asyncio.iscoroutinefunction(behavior):
+    def settle(item: ScriptOutcome[T]) -> T:
+        """Records ``item``, raising it when it scripts an exception."""
+        outcomes.append(item)
+        if isinstance(item, BaseException):
+            raise item
+        if isinstance(item, type) and issubclass(item, BaseException):
+            raise item
+        return cast("T", item)
+
+    if inspect.isasyncgenfunction(behavior):
+        async_generator = cast("Callable[..., AsyncIterator[T]]", behavior)
+        async_steps: AsyncIterator[T] | None = None
+
+        async def from_async_generator(*args: object, **kwargs: object) -> object:
+            nonlocal async_steps
+            if async_steps is None:
+                async_steps = async_generator(*args, **kwargs)
+            item: ScriptOutcome[T]
+            try:
+                item = await anext(async_steps)
+            except StopAsyncIteration:
+                item = ScriptExhausted(f"script for {mock!r} exhausted")
+            except BaseException as error:
+                outcomes.append(error)
+                raise
+            return settle(item)
+
+        consume = from_async_generator
+
+    elif inspect.isgeneratorfunction(behavior):
+        sync_generator = cast("Callable[..., Iterator[T]]", behavior)
+        sync_steps: Iterator[T] | None = None
+
+        def from_sync_generator(*args: object, **kwargs: object) -> object:
+            nonlocal sync_steps
+            if sync_steps is None:
+                sync_steps = sync_generator(*args, **kwargs)
+            item: ScriptOutcome[T]
+            try:
+                item = next(sync_steps)
+            except StopIteration:
+                item = ScriptExhausted(f"script for {mock!r} exhausted")
+            except BaseException as error:
+                outcomes.append(error)
+                raise
+            return settle(item)
+
+        consume = from_sync_generator
+
+    elif callable(behavior) and not asyncio.iscoroutinefunction(behavior):
         sync_behavior = cast("Callable[..., T]", behavior)
 
         def from_callable(*args: object, **kwargs: object) -> object:
@@ -93,7 +162,7 @@ def script[T](
             outcomes.append(result)
             return result
 
-        consume: Callable[..., object] = from_callable
+        consume = from_callable
 
     elif callable(behavior):
         async_behavior = cast("Callable[..., Awaitable[T]]", behavior)
@@ -117,12 +186,7 @@ def script[T](
                 item = next(items)
             except StopIteration:
                 item = ScriptExhausted(f"script for {mock!r} exhausted")
-            outcomes.append(item)
-            if isinstance(item, BaseException):
-                raise item
-            if isinstance(item, type) and issubclass(item, BaseException):
-                raise item
-            return item
+            return settle(item)
 
         consume = from_iterable
 
