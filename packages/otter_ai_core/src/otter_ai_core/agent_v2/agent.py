@@ -26,7 +26,12 @@ class Agent:
     still sees every event. The stream stays open across turns, ends
     only when :meth:`cancel_stream` closes it, and supports a single
     consumer at a time — concurrent iterations would split events
-    between them.
+    between them. A prompt sent while a turn is running is queued as a
+    steering prompt: the running turn is left undisturbed and, when it
+    ends, a follow-up turn starts immediately, adding every queued
+    prompt as a user message in its first iteration. :meth:`is_idle`
+    and :meth:`wait_for_idle` cover a run — the current turn together
+    with any follow-up turns it chains.
 
     Within a turn, each iteration adds pending input messages to the
     model, generates one assistant message, and either ends the turn
@@ -45,6 +50,7 @@ class Agent:
         self._tools_by_name = {tool.name: tool for tool in tools}
         self._events: asyncio.Queue[AgentEvents | None] = asyncio.Queue()
         self._turn: asyncio.Task[None] | None = None
+        self._steering_prompts: list[str] = []
 
     async def stream(self) -> AsyncGenerator[AgentEvents, None]:
         while True:
@@ -57,7 +63,15 @@ class Agent:
         self._events.put_nowait(None)
 
     def prompt(self, text: str) -> None:
-        self._turn = asyncio.create_task(self._run_turn(text))
+        """Starts a turn from ``text`` when idle. While a turn is
+        running, ``text`` is queued as a steering prompt instead: the
+        running turn is left undisturbed and, when it ends, a follow-up
+        turn starts immediately, adding every queued prompt as a user
+        message in its first iteration."""
+        if not self.is_idle():
+            self._steering_prompts.append(text)
+            return
+        self._turn = asyncio.create_task(self._run_turns(text))
 
     def is_idle(self) -> bool:
         return self._turn is None or self._turn.done()
@@ -66,9 +80,25 @@ class Agent:
         if self._turn is not None:
             await self._turn
 
-    async def _run_turn(self, text: str) -> None:
+    async def _run_turns(self, text: str) -> None:
+        """Runs turns for as long as steering prompts keep arriving: a
+        turn that ends with prompts queued chains a follow-up turn that
+        drains all of them into its first iteration."""
+        texts: list[str] | None = [text]
+        while texts is not None:
+            await self._run_turn(texts)
+            texts = self._drain_steering_prompts()
+
+    def _drain_steering_prompts(self) -> list[str] | None:
+        if not self._steering_prompts:
+            return None
+        drained = self._steering_prompts
+        self._steering_prompts = []
+        return drained
+
+    async def _run_turn(self, texts: list[str]) -> None:
         iterations: list[AgentIteration] = []
-        pending_text: str | None = text
+        pending_texts: list[str] | None = texts
 
         self._emit(AgentTurnStartEvent(id=_event_id()))
 
@@ -76,11 +106,12 @@ class Agent:
             self._emit(AgentIterationStartEvent())
 
             user_messages: list[UserMessage] = []
-            if pending_text is not None:
-                message = await self._model.add_user_message(pending_text)
-                pending_text = None
-                user_messages.append(message)
-                self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
+            if pending_texts is not None:
+                for text in pending_texts:
+                    message = await self._model.add_user_message(text)
+                    user_messages.append(message)
+                    self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
+                pending_texts = None
 
             assistant = await self._model.generate()
             self._emit(AgentSessionMessageEvent(id=_event_id(), message=assistant))
