@@ -199,7 +199,7 @@ async def test_single_turn_with_tool_call(
 
 
 @pytest.mark.timeout(1)
-async def test_steering_prompt_while_generating(
+async def test_steering_prompt_while_generating_final_message(
     mock_model: MagicMock,
 ) -> None:
     user_message1 = mock_user_message()
@@ -242,3 +242,114 @@ async def test_steering_prompt_while_generating(
         AgentIterationEndEvent,
         AgentTurnEndEvent,
     ]
+
+
+@pytest.mark.timeout(1)
+async def test_steering_prompt_while_generating_tool_call_message(
+    mock_model: MagicMock,
+) -> None:
+    class NoParams(BaseModel):
+        pass
+
+    user_message1 = mock_user_message()
+    user_message2 = mock_user_message()
+    script(mock_model.add_user_message, [user_message1, user_message2])
+
+    gate = Gate()
+    call_id = mock_string()
+    tool_name = "stop"
+    tool_parameters: dict[str, Any] = {}
+    tool_call = mock_tool_call(call_id, tool_name, tool_parameters)
+
+    assistant_message1 = mock_assistant_message(tool_calls=[tool_call])
+    assistant_message2 = mock_assistant_message()
+
+    async def generate() -> AsyncIterator[AssistantMessage]:
+        await gate.wait_for_open()
+        yield assistant_message1
+        yield assistant_message2
+
+    script(mock_model.generate, generate)
+
+    script(
+        mock_model.add_tool_result_message,
+        lambda tool_call_id, text: mock_tool_result_message(),
+    )
+
+    tool_result = mock_agent_tool_result()
+    execute = AsyncMock(return_value=tool_result)
+    stop_tool = create_agent_tool("stop", "requests the final response", NoParams, execute)
+
+    async with mock_model:
+        agent = Agent(mock_model, tools=[stop_tool])
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt(mock_string())
+        await gate.wait_for_arrival()
+        agent.prompt(mock_string())
+        gate.open()
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
+
+    tool_result_message = mock_model.add_tool_result_message.outcomes[0]
+
+    assert [type(event) for event in events] == [
+        AgentTurnStartEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentTurnEndEvent,
+    ]
+
+    user_message1_added = events[2]
+    assistant1_added = events[3]
+    tool_result_added = events[4]
+    user_message2_added = events[7]
+    assistant2_added = events[8]
+    assert isinstance(user_message1_added, AgentSessionMessageEvent)
+    assert isinstance(assistant1_added, AgentSessionMessageEvent)
+    assert isinstance(tool_result_added, AgentSessionMessageEvent)
+    assert isinstance(user_message2_added, AgentSessionMessageEvent)
+    assert isinstance(assistant2_added, AgentSessionMessageEvent)
+    assert user_message1_added.message is user_message1
+    assert assistant1_added.message is assistant_message1
+    assert tool_result_added.message is tool_result_message
+    assert user_message2_added.message is user_message2
+    assert assistant2_added.message is assistant_message2
+
+    iteration1_end = events[5]
+    assert isinstance(iteration1_end, AgentIterationEndEvent)
+    assert iteration1_end.termination == "tool_response"
+    assert iteration1_end.user_messages == [user_message1]
+    assert iteration1_end.assistant_message is assistant_message1
+    assert iteration1_end.tool_result_messages == [tool_result_message]
+
+    iteration2_end = events[9]
+    assert isinstance(iteration2_end, AgentIterationEndEvent)
+    assert iteration2_end.termination == "final_response"
+    assert iteration2_end.user_messages == [user_message2]
+    assert iteration2_end.assistant_message is assistant_message2
+    assert iteration2_end.tool_result_messages is None
+
+    turn_end = events[10]
+    assert isinstance(turn_end, AgentTurnEndEvent)
+    assert turn_end.termination == "final_response"
+    assert len(turn_end.iterations) == 2
+    assert turn_end.iterations[0].user_messages == [user_message1]
+    assert turn_end.iterations[0].assistant_message is assistant_message1
+    assert turn_end.iterations[0].tool_result_messages == [tool_result_message]
+    assert turn_end.iterations[1].user_messages == [user_message2]
+    assert turn_end.iterations[1].assistant_message is assistant_message2
+    assert turn_end.iterations[1].tool_result_messages is None
+
+    assert len(mock_model.generate.outcomes) == 2
+    assert len(mock_model.add_user_message.outcomes) == 2
+    assert execute.await_args_list[0].args[0] == NoParams()
+    assert mock_model.add_tool_result_message.await_args_list[0].args[0] is call_id
+    assert mock_model.add_tool_result_message.await_args_list[0].args[1] is tool_result.text
