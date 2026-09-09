@@ -16,6 +16,8 @@ from otter_ai_core.agent_v2 import (
     AgentTurnEndEvent,
     AgentTurnStartEvent,
 )
+from otter_ai_core.components.gate import Gate
+from otter_ai_core.types.conversation import AssistantMessage
 
 from ..support import script
 from .helpers import (
@@ -194,3 +196,47 @@ async def test_single_turn_with_tool_call(
     assert turn_end.iterations[1].user_messages == []
     assert turn_end.iterations[1].assistant_message is assistant2
     assert turn_end.iterations[1].tool_result_messages is None
+
+
+@pytest.mark.timeout(1)
+async def test_steering_prompt_while_generating(
+    mock_model: MagicMock,
+) -> None:
+    user_message1 = mock_user_message()
+    user_message2 = mock_user_message()
+    script(mock_model.add_user_message, [user_message1, user_message2])
+
+    gate = Gate()
+    assistant_message1 = mock_assistant_message()
+    assistant_message2 = mock_assistant_message()
+    messages = iter([assistant_message1, assistant_message2])
+
+    async def generate() -> AssistantMessage:
+        await gate.wait_for_open()
+        return next(messages)
+
+    script(mock_model.generate, generate)
+
+    async with mock_model:
+        agent = Agent(mock_model, tools=[])
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt(mock_string())
+        await gate.wait_for_arrival()
+        agent.prompt(mock_string())
+        gate.open()
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
+
+    assert [type(event) for event in events] == [
+        AgentTurnStartEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentTurnEndEvent,
+    ]
