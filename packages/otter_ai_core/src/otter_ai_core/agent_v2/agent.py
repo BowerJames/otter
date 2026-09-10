@@ -155,12 +155,24 @@ class Agent:
     async def _execute_tool_calls(self, calls: Iterable[ToolCall]) -> list[ToolResultMessage]:
         tool_result_messages: list[ToolResultMessage] = []
         for call in calls:
-            tool = self._tools_by_name[call.tool_name]
-            result = await tool.execute(call.parameters)
-            message = await self._model.add_tool_result_message(call.id, result.text)
+            text = await self._tool_call_result_text(call)
+            message = await self._model.add_tool_result_message(call.id, text)
             tool_result_messages.append(message)
             self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
         return tool_result_messages
+
+    async def _tool_call_result_text(self, call: ToolCall) -> str:
+        """Produces the tool result text for ``call``: the before-tool
+        hook's blocking reason when one is returned, otherwise the
+        result text of the executed tool."""
+        hook = self._before_tool_hook
+        if hook is not None:
+            reason = await hook(call)
+            if reason is not None:
+                return reason
+        tool = self._tools_by_name[call.tool_name]
+        result = await tool.execute(call.parameters)
+        return result.text
 
     def _close_iteration(
         self,
