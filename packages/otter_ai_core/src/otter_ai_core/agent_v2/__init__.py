@@ -7,6 +7,7 @@ from .types import (
     AgentSessionMessageEvent,
     AgentTurnEndEvent,
     AgentTurnStartEvent,
+    BeforeToolHook,
 )
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "AgentTurnEndEvent",
     "AgentIteration",
     "AgentEvents",
+    "BeforeToolHook",
     "Agent",
 ]

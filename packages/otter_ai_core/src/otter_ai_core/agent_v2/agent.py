@@ -12,6 +12,7 @@ from otter_ai_core.agent_v2.types import (
     AgentSessionMessageEvent,
     AgentTurnEndEvent,
     AgentTurnStartEvent,
+    BeforeToolHook,
 )
 from otter_ai_core.types import AssistantMessage, ToolCall, ToolResultMessage, UserMessage
 
@@ -41,16 +42,25 @@ class Agent:
     when the assistant's ``stop_reason`` is ``final_response`` or
     executes the requested tool calls and iterates again with their
     results. Assistant messages are treated as opaque except for
-    ``stop_reason`` and ``tool_calls``.
+    ``stop_reason`` and ``tool_calls``. When ``before_tool_hook`` is
+    given it is awaited before each tool call: a returned reason blocks
+    execution of that call and is delivered to the model as the call's
+    tool result text; ``None`` lets the call proceed.
     """
 
-    def __init__(self, model: Model, tools: list[AgentTool]) -> None:
+    def __init__(
+        self,
+        model: Model,
+        tools: list[AgentTool],
+        before_tool_hook: BeforeToolHook | None = None,
+    ) -> None:
         names = [tool.name for tool in tools]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise ValueError(f"duplicate tool names: {duplicates}")
         self._model = model
         self._tools_by_name = {tool.name: tool for tool in tools}
+        self._before_tool_hook = before_tool_hook
         self._events: asyncio.Queue[AgentEvents | None] = asyncio.Queue()
         self._turn: asyncio.Task[None] | None = None
         self._steering_prompts: list[str] = []

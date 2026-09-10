@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Literal
 
 from pydantic import BaseModel
@@ -5,9 +6,12 @@ from pydantic import BaseModel
 from otter_ai_core.types import (
     AssistantMessage,
     SessionMessage,
+    ToolCall,
     ToolResultMessage,
     UserMessage,
 )
+
+type BeforeToolHook = Callable[[ToolCall], Awaitable[str | None]]
 
 
 class _Event(BaseModel):

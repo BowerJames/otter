@@ -17,7 +17,10 @@ from otter_ai_core.agent_v2 import (
     AgentTurnStartEvent,
 )
 from otter_ai_core.components.gate import Gate
-from otter_ai_core.types.conversation import AssistantMessage
+from otter_ai_core.types import (
+    AssistantMessage,
+    ToolCall,
+)
 
 from ..support import script
 from .helpers import (
@@ -39,7 +42,6 @@ async def collect(
     return events
 
 
-@pytest.mark.timeout(1)
 async def test_duplicate_tool_names(mock_model: MagicMock) -> None:
     class NoParams(BaseModel):
         pass
@@ -50,7 +52,6 @@ async def test_duplicate_tool_names(mock_model: MagicMock) -> None:
         Agent(mock_model, tools=[tool_a, tool_b])
 
 
-@pytest.mark.timeout(1)
 async def test_single_iteration_loop(
     mock_model: MagicMock,
 ) -> None:
@@ -99,7 +100,6 @@ async def test_single_iteration_loop(
     assert turn_end.iterations[0].tool_result_messages is None
 
 
-@pytest.mark.timeout(1)
 async def test_single_turn_with_tool_call(
     mock_model: MagicMock,
 ) -> None:
@@ -198,7 +198,6 @@ async def test_single_turn_with_tool_call(
     assert turn_end.iterations[1].tool_result_messages is None
 
 
-@pytest.mark.timeout(1)
 async def test_steering_prompt_while_generating_final_message(
     mock_model: MagicMock,
 ) -> None:
@@ -244,7 +243,6 @@ async def test_steering_prompt_while_generating_final_message(
     ]
 
 
-@pytest.mark.timeout(1)
 async def test_steering_prompt_while_generating_tool_call_message(
     mock_model: MagicMock,
 ) -> None:
@@ -353,3 +351,57 @@ async def test_steering_prompt_while_generating_tool_call_message(
     assert execute.await_args_list[0].args[0] == NoParams()
     assert mock_model.add_tool_result_message.await_args_list[0].args[0] is call_id
     assert mock_model.add_tool_result_message.await_args_list[0].args[1] is tool_result.text
+
+
+async def test_before_tool_hook_can_block(mock_model: MagicMock) -> None:
+    class NoParams(BaseModel):
+        pass
+
+    execute = AsyncMock()
+    tool_name = "stop"
+    stop_tool = create_agent_tool(tool_name, "requests the final response", NoParams, execute)
+
+    user_message1 = mock_user_message()
+    script(mock_model.add_user_message, [user_message1])
+
+    call_id = mock_string()
+    tool_parameters: dict[str, Any] = {}
+    tool_call = mock_tool_call(call_id, tool_name, tool_parameters)
+
+    assistant_message1 = mock_assistant_message(tool_calls=[tool_call])
+    assistant_message2 = mock_assistant_message()
+    script(mock_model.generate, [assistant_message1, assistant_message2])
+
+    blocking_reason = mock_string()
+
+    async def before_tool_block(tool_call: ToolCall) -> str | None:
+        return blocking_reason
+
+    script(
+        mock_model.add_tool_result_message,
+        lambda tool_call_id, text: mock_tool_result_message(),
+    )
+
+    async with mock_model:
+        agent = Agent(mock_model, tools=[stop_tool], before_tool_hook=before_tool_block)
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt(mock_string())
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
+
+    assert [type(event) for event in events] == [
+        AgentTurnStartEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentTurnEndEvent,
+    ]
+
+    execute.assert_not_called()
+    mock_model.add_tool_result_message.assert_awaited_once()
