@@ -405,3 +405,56 @@ async def test_before_tool_hook_can_block(mock_model: MagicMock) -> None:
 
     execute.assert_not_called()
     mock_model.add_tool_result_message.assert_awaited_once()
+
+
+async def test_before_tool_hook_allows_when_returning_none(mock_model: MagicMock) -> None:
+    class NoParams(BaseModel):
+        pass
+
+    tool_result = mock_agent_tool_result()
+    execute = AsyncMock(return_value=tool_result)
+    tool_name = "stop"
+    stop_tool = create_agent_tool(tool_name, "requests the final response", NoParams, execute)
+
+    user_message1 = mock_user_message()
+    script(mock_model.add_user_message, [user_message1])
+
+    call_id = mock_string()
+    tool_parameters: dict[str, Any] = {}
+    tool_call = mock_tool_call(call_id, tool_name, tool_parameters)
+
+    assistant_message1 = mock_assistant_message(tool_calls=[tool_call])
+    assistant_message2 = mock_assistant_message()
+    script(mock_model.generate, [assistant_message1, assistant_message2])
+
+    async def before_tool_allow(tool_call: ToolCall) -> str | None:
+        return None
+
+    script(
+        mock_model.add_tool_result_message,
+        lambda tool_call_id, text: mock_tool_result_message(),
+    )
+
+    async with mock_model:
+        agent = Agent(mock_model, tools=[stop_tool], before_tool_hook=before_tool_allow)
+        task = asyncio.create_task(collect(agent.stream()))
+        agent.prompt(mock_string())
+        await agent.wait_for_idle()
+        agent.cancel_stream()
+        events = await task
+
+    assert [type(event) for event in events] == [
+        AgentTurnStartEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentIterationStartEvent,
+        AgentSessionMessageEvent,
+        AgentIterationEndEvent,
+        AgentTurnEndEvent,
+    ]
+
+    execute.assert_awaited_once()
+    mock_model.add_tool_result_message.assert_awaited_once()
