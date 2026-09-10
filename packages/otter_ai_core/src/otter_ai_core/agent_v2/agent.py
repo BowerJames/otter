@@ -99,21 +99,19 @@ class Agent:
         """Runs turns for as long as steering prompts keep arriving: a
         turn that ends with prompts queued chains a follow-up turn that
         drains all of them into its first iteration."""
-        texts: list[str] | None = [text]
-        while texts is not None:
+        texts = [text]
+        while texts:
             await self._run_turn(texts)
             texts = self._drain_steering_prompts()
 
-    def _drain_steering_prompts(self) -> list[str] | None:
-        if not self._steering_prompts:
-            return None
+    def _drain_steering_prompts(self) -> list[str]:
         drained = self._steering_prompts
         self._steering_prompts = []
         return drained
 
     async def _run_turn(self, texts: list[str]) -> None:
         iterations: list[AgentIteration] = []
-        pending_texts: list[str] | None = texts
+        pending_texts = texts
 
         self._emit(AgentTurnStartEvent(id=_event_id()))
 
@@ -121,12 +119,10 @@ class Agent:
             self._emit(AgentIterationStartEvent())
 
             user_messages: list[UserMessage] = []
-            if pending_texts is not None:
-                for text in pending_texts:
-                    message = await self._model.add_user_message(text)
-                    user_messages.append(message)
-                    self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
-                pending_texts = None
+            for text in pending_texts:
+                message = await self._model.add_user_message(text)
+                user_messages.append(message)
+                self._emit(AgentSessionMessageEvent(id=_event_id(), message=message))
 
             assistant = await self._model.generate()
             self._emit(AgentSessionMessageEvent(id=_event_id(), message=assistant))
@@ -144,7 +140,7 @@ class Agent:
                 )
                 return
 
-            tool_result_messages = await self._execute_tool_calls(assistant.tool_calls)
+            tool_result_messages = await self._add_tool_result_messages(assistant.tool_calls)
             iterations.append(
                 self._close_iteration(
                     user_messages, assistant, tool_result_messages, "tool_response"
@@ -152,7 +148,7 @@ class Agent:
             )
             pending_texts = self._drain_steering_prompts()
 
-    async def _execute_tool_calls(self, calls: Iterable[ToolCall]) -> list[ToolResultMessage]:
+    async def _add_tool_result_messages(self, calls: Iterable[ToolCall]) -> list[ToolResultMessage]:
         tool_result_messages: list[ToolResultMessage] = []
         for call in calls:
             text = await self._tool_call_result_text(call)
