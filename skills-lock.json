@@ -24,6 +24,12 @@
       "sourceType": "github",
       "skillPath": "skills/utils/repo-explorer/SKILL.md",
       "computedHash": "55badaaad621d177235b00d81c63077a06ab4a3d762a10dc0aa762a1c269ff48"
+    },
+    "testing": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/testing/SKILL.md",
+      "computedHash": "eeded5ff1c2130038e3cc90b6c820568bc330f6e08b8b55c25948aa71077e1e0"
     }
   }
 }
