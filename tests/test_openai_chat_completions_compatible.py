@@ -16,7 +16,9 @@ from otter.messages import (
     TextPart,
     ThinkingPart,
     ToolCall,
+    ToolResultMessage,
     ToolSpec,
+    UserMessage,
     UserPart,
 )
 from otter.openai_chat_completions_compatible import OpenAIChatCompletionsCompatibleConversation
@@ -358,4 +360,111 @@ async def test_generating_for_a_model_without_audio_support_sends_a_note_in_plac
 
     assert fake_endpoint.request_bodies[0]["messages"][0]["content"] == [
         {"type": "text", "text": "[audio omitted: this model cannot hear audio]"}
+    ]
+
+
+async def test_generating_sends_the_context_a_conversation_starts_with_ahead_of_what_is_added(
+    fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client,
+        model="glm-4.6",
+        system="You are terse.",
+        context=[
+            UserMessage((TextPart("What is in my notes?"),)),
+            AssistantMessage(
+                (
+                    TextPart("Let me look."),
+                    ToolCall(id="call_1", name="read_file", arguments={"path": "notes.txt"}),
+                )
+            ),
+            ToolResultMessage("call_1", "Buy milk."),
+            AssistantMessage((TextPart("They say to buy milk."),)),
+        ],
+    )
+    conversation.add_user_message([TextPart("Thanks")])
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["messages"] == [
+        {"role": "system", "content": "You are terse."},
+        {"role": "user", "content": [{"type": "text", "text": "What is in my notes?"}]},
+        {
+            "role": "assistant",
+            "content": "Let me look.",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": '{"path": "notes.txt"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "Buy milk."},
+        {"role": "assistant", "content": "They say to buy milk."},
+        {"role": "user", "content": [{"type": "text", "text": "Thanks"}]},
+    ]
+
+
+async def test_generating_sends_an_assistant_turn_of_the_context_without_its_thinking(
+    fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client,
+        model="glm-4.6",
+        context=[
+            UserMessage((TextPart("Hello"),)),
+            AssistantMessage((ThinkingPart("A greeting; greet back."), TextPart("Hi there"))),
+        ],
+    )
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["messages"][1] == {
+        "role": "assistant",
+        "content": "Hi there",
+    }
+
+
+async def test_generating_sends_a_tool_call_only_turn_of_the_context_without_content(
+    fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client,
+        model="glm-4.6",
+        context=[
+            AssistantMessage((ToolCall(id="call_1", name="read_file", arguments={}),)),
+        ],
+    )
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["messages"] == [
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                }
+            ],
+        }
+    ]
+
+
+async def test_generating_sends_a_note_in_place_of_an_image_of_the_context_the_model_cannot_view(
+    fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client,
+        model="glm-4.6",
+        supports_images=False,
+        context=[UserMessage((ImageUrlPart(url="https://example.test/cat.png"),))],
+    )
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["messages"][0]["content"] == [
+        {"type": "text", "text": "[image omitted: this model cannot view images]"}
     ]

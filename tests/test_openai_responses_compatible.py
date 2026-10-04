@@ -16,7 +16,9 @@ from otter.messages import (
     TextPart,
     ThinkingPart,
     ToolCall,
+    ToolResultMessage,
     ToolSpec,
+    UserMessage,
     UserPart,
 )
 from otter.openai_responses_compatible import OpenAIResponsesCompatibleConversation
@@ -447,3 +449,76 @@ async def test_generating_returns_a_refusal_as_the_text_of_the_models_turn(
     reply = await conversation.generate()
 
     assert reply == AssistantMessage(content=(TextPart("I can't help with that."),))
+
+
+async def test_generating_sends_the_context_a_conversation_starts_with_ahead_of_what_is_added(
+    fake_endpoint: FakeResponsesEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIResponsesCompatibleConversation(
+        client,
+        model="gpt-5.1",
+        context=[
+            UserMessage((TextPart("What is in my notes?"),)),
+            AssistantMessage(
+                (
+                    TextPart("Let me look."),
+                    ToolCall(id="call_1", name="read_file", arguments={"path": "notes.txt"}),
+                )
+            ),
+            ToolResultMessage("call_1", "Buy milk."),
+            AssistantMessage((TextPart("They say to buy milk."),)),
+        ],
+    )
+    conversation.add_user_message([TextPart("Thanks")])
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["input"] == [
+        {"role": "user", "content": [{"type": "input_text", "text": "What is in my notes?"}]},
+        {"role": "assistant", "content": "Let me look."},
+        {
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "read_file",
+            "arguments": '{"path": "notes.txt"}',
+        },
+        {"type": "function_call_output", "call_id": "call_1", "output": "Buy milk."},
+        {"role": "assistant", "content": "They say to buy milk."},
+        {"role": "user", "content": [{"type": "input_text", "text": "Thanks"}]},
+    ]
+
+
+async def test_generating_sends_an_assistant_turn_of_the_context_without_its_thinking(
+    fake_endpoint: FakeResponsesEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIResponsesCompatibleConversation(
+        client,
+        model="gpt-5.1",
+        context=[
+            UserMessage((TextPart("Hello"),)),
+            AssistantMessage((ThinkingPart("A greeting; greet back."), TextPart("Hi there"))),
+        ],
+    )
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["input"][1:] == [
+        {"role": "assistant", "content": "Hi there"}
+    ]
+
+
+async def test_generating_sends_a_note_in_place_of_an_image_of_the_context_the_model_cannot_view(
+    fake_endpoint: FakeResponsesEndpoint, client: AsyncOpenAI
+) -> None:
+    conversation = OpenAIResponsesCompatibleConversation(
+        client,
+        model="gpt-5.1",
+        supports_images=False,
+        context=[UserMessage((ImageUrlPart(url="https://example.test/cat.png"),))],
+    )
+
+    await conversation.generate()
+
+    assert fake_endpoint.request_bodies[0]["input"][0]["content"] == [
+        {"type": "input_text", "text": "[image omitted: this model cannot view images]"}
+    ]

@@ -67,3 +67,22 @@ class ToolSpec:
     name: str
     description: str
     parameters: Mapping[str, object]
+
+
+@dataclass(frozen=True)
+class UserMessage:
+    """One turn from the user: its content parts, in order."""
+
+    content: tuple[UserPart, ...]
+
+
+@dataclass(frozen=True)
+class ToolResultMessage:
+    """The result of a tool call a model asked for: `tool_call_id` is the call's `id`."""
+
+    tool_call_id: str
+    text: str
+
+
+type ContextEntry = UserMessage | AssistantMessage | ToolResultMessage
+"""One thing in the context a model is shown: a turn, or the result of a tool call."""

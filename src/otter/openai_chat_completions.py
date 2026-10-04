@@ -22,6 +22,8 @@ def create_openai_conversations(
         base_url="https://api.openai.com/v1", api_key=api_key, http_client=http_client
     )
     # Only the audio models accept audio input: the rest answer it with a 400.
-    return lambda model, *, system=None, tools=(): OpenAIChatCompletionsCompatibleConversation(
-        client, model, system=system, tools=tools, supports_audio=False
+    return lambda model, *, system=None, tools=(), context=(): (
+        OpenAIChatCompletionsCompatibleConversation(
+            client, model, system=system, tools=tools, context=context, supports_audio=False
+        )
     )

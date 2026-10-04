@@ -51,6 +51,8 @@ def create_model_factory(http_client: httpx2.AsyncClient | None = None) -> Model
             raise ValueError(f"provider {provider!r} does not serve {model_type!r} models")
         create_conversation = providers[provider](api_key, http_client=http_client)
         name = model_config.model_name
-        return lambda system, tools: create_conversation(name, system=system, tools=tools)
+        return lambda system, tools, context: create_conversation(
+            name, system=system, tools=tools, context=context
+        )
 
     return create_model

@@ -21,6 +21,8 @@ def create_zai_coding_plan_responses_conversations(
         base_url="https://api.z.ai/api/v1", api_key=api_key, http_client=http_client
     )
     # The endpoint accepts an image but drops it before the model, without saying so.
-    return lambda model, *, system=None, tools=(): OpenAIResponsesCompatibleConversation(
-        client, model, system=system, tools=tools, supports_images=False
+    return lambda model, *, system=None, tools=(), context=(): (
+        OpenAIResponsesCompatibleConversation(
+            client, model, system=system, tools=tools, context=context, supports_images=False
+        )
     )

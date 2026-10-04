@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from otter.messages import AssistantMessage, ToolSpec, UserPart
+from otter.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
 
 class Conversation(Protocol):
@@ -27,8 +27,18 @@ class Conversation(Protocol):
 
 
 class ConversationFactory(Protocol):
-    """Starts a new, empty conversation with `model`."""
+    """Starts a new conversation with `model`.
+
+    `context` is the history the conversation starts out with, oldest first; leave it
+    out to start empty. It is sent to the model as it stands, ahead of anything added
+    later. The thinking in its assistant turns is not sent.
+    """
 
     def __call__(
-        self, model: str, *, system: str | None = None, tools: Sequence[ToolSpec] = ()
+        self,
+        model: str,
+        *,
+        system: str | None = None,
+        tools: Sequence[ToolSpec] = (),
+        context: Sequence[ContextEntry] = (),
     ) -> Conversation: ...

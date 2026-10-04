@@ -15,12 +15,15 @@ from otter.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,
+    ContextEntry,
     ImagePart,
     ImageUrlPart,
     TextPart,
     ThinkingPart,
     ToolCall,
+    ToolResultMessage,
     ToolSpec,
+    UserMessage,
     UserPart,
 )
 
@@ -31,6 +34,8 @@ class OpenAIResponsesCompatibleConversation:
     The client decides which provider is spoken to (its base URL and API key); any
     provider serving the responses format will do. `system` is the system prompt the
     model sees ahead of every turn, and `tools` are the tools it may ask to have called.
+    `context` is the history the conversation starts out with, oldest first; the
+    thinking in its assistant turns is not sent.
 
     The whole history is sent with each request and the provider is asked to keep none
     of it, so the conversation lives only here.
@@ -54,6 +59,7 @@ class OpenAIResponsesCompatibleConversation:
         *,
         system: str | None = None,
         tools: Sequence[ToolSpec] = (),
+        context: Sequence[ContextEntry] = (),
         supports_images: bool = True,
     ) -> None:
         self._client = client
@@ -74,6 +80,16 @@ class OpenAIResponsesCompatibleConversation:
             }
             for tool in tools
         ]
+        for entry in context:
+            match entry:
+                case UserMessage():
+                    self.add_user_message(entry.content)
+                case AssistantMessage():
+                    self._items.extend(_assistant_turn_on_the_wire(entry))
+                case ToolResultMessage():
+                    self.add_tool_result(entry.tool_call_id, entry.text)
+                case _:
+                    assert_never(entry)
 
     def add_user_message(self, content: Sequence[UserPart]) -> None:
         """Append a user turn; it is sent to the model on the next `generate`."""
@@ -160,3 +176,27 @@ class OpenAIResponsesCompatibleConversation:
         self._items.append(
             {"type": "function_call_output", "call_id": tool_call_id, "output": text}
         )
+
+
+def _assistant_turn_on_the_wire(message: AssistantMessage) -> list[ResponseInputItemParam]:
+    items: list[ResponseInputItemParam] = []
+    for part in message.content:
+        match part:
+            case TextPart():
+                items.append({"role": "assistant", "content": part.text})
+            case ToolCall():
+                items.append(
+                    {
+                        "type": "function_call",
+                        "call_id": part.id,
+                        "name": part.name,
+                        "arguments": json.dumps(part.arguments),
+                    }
+                )
+            case ThinkingPart():
+                # Only the provider's own reasoning items can be sent back, and a
+                # context entry does not carry them.
+                pass
+            case _:
+                assert_never(part)
+    return items
