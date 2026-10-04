@@ -14,7 +14,9 @@ dev = [
     "mypy>=1.14",
     "pytest>=8.3",
     "pytest-asyncio>=1.0",
+    "python-dotenv>=1.2.4",
     "ruff>=0.9",
+    "textual>=8.2.8",
 ]
 
 [build-system]
