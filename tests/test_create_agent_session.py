@@ -163,6 +163,14 @@ def test_a_key_that_cannot_be_resolved_propagates_and_no_model_is_made(
     assert models.made == []
 
 
+def test_a_configuration_no_model_can_be_made_for_propagates() -> None:
+    def no_model(model_config: ModelConfig, api_key: str) -> Model:
+        raise ValueError(f"no model for {model_config.model_type}")
+
+    with pytest.raises(ValueError, match=r"^no model for chat-completions$"):
+        create_agent_session("Be brief.", [], GLM, auth_resolver=key_for, model_factory=no_model)
+
+
 def test_the_models_conversation_is_started_with_the_context_the_session_manager_holds(
     models: FakeModels,
 ) -> None:
