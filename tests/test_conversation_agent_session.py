@@ -274,6 +274,38 @@ async def test_a_prompt_made_while_the_model_is_working_joins_after_the_tool_res
     ]
 
 
+async def test_queued_prompts_join_in_the_order_they_were_made(
+    conversations: FakeConversations, manager: FakeSessionManager, files: FakeFiles
+) -> None:
+    asks = AssistantMessage(content=(ToolCall("call-1", "read_file", {"path": "a.txt"}),))
+    conversations.script = [asks, says("Done")]
+    session = ConversationAgentSession(conversations, manager, tools=[files])
+    session.prompt("First")
+    stream = session.stream()
+    while await anext(stream) != AssistantTurn(asks):
+        pass
+
+    session.prompt("Second")
+    session.prompt("Third")
+    events = await until_idle(stream)
+
+    assert events == [
+        ToolResult("call-1", "file contents"),
+        UserTurn((TextPart("Second"),)),
+        UserTurn((TextPart("Third"),)),
+        AssistantTurn(says("Done")),
+        Idle(),
+    ]
+    assert conversations.history == [
+        ("user", (TextPart("First"),)),
+        asks,
+        ("tool", "call-1", "file contents"),
+        ("user", (TextPart("Second"),)),
+        ("user", (TextPart("Third"),)),
+        says("Done"),
+    ]
+
+
 async def test_ending_a_session_at_rest_ends_its_stream(
     conversations: FakeConversations, manager: FakeSessionManager
 ) -> None:
@@ -315,6 +347,22 @@ async def test_ending_a_session_mid_turn_finishes_the_turn_and_goes_no_further(
         ("tool", "call-1", "file contents"),
         ("tool", "call-2", "file contents"),
     ]
+
+
+async def test_ending_an_ended_session_does_nothing(
+    conversations: FakeConversations, manager: FakeSessionManager
+) -> None:
+    conversations.script = [says("Hi there")]
+    session = ConversationAgentSession(conversations, manager)
+    session.prompt("Hello")
+    stream = session.stream()
+    await until_idle(stream)
+    session.end()
+    session.end()
+
+    assert [event async for event in stream] == []
+    with pytest.raises(RuntimeError, match=r"^the session has ended$"):
+        session.prompt("Try again")
 
 
 async def test_an_ended_session_takes_no_more_prompts(
@@ -380,6 +428,28 @@ async def test_a_stream_cancelled_part_way_through_a_turns_tool_calls_ends_the_s
     reading.cancel()
     with pytest.raises(asyncio.CancelledError):
         await reading
+
+    with pytest.raises(RuntimeError, match=r"^the session has ended$"):
+        session.prompt("Try again")
+
+
+async def test_a_stream_abandoned_part_way_through_a_turns_tool_calls_ends_the_session(
+    conversations: FakeConversations, manager: FakeSessionManager, files: FakeFiles
+) -> None:
+    asks = AssistantMessage(
+        content=(
+            ToolCall("call-1", "read_file", {"path": "a.txt"}),
+            ToolCall("call-2", "read_file", {"path": "b.txt"}),
+        )
+    )
+    conversations.script = [asks]
+    session = ConversationAgentSession(conversations, manager, tools=[files])
+    session.prompt("Read both files")
+    stream = session.stream()
+    while await anext(stream) != ToolResult("call-1", "file contents"):
+        pass
+
+    await stream.aclose()
 
     with pytest.raises(RuntimeError, match=r"^the session has ended$"):
         session.prompt("Try again")
