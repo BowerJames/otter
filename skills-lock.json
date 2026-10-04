@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "codebase-design": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/codebase-design/SKILL.md",
+      "computedHash": "13f2214f4d540b1988e98c5463b6d85d2e5413f8fac603eff00bb2cee603317f"
+    },
+    "dependency-injection": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/dependency-injection/SKILL.md",
+      "computedHash": "101db6fec4c8a52bd96e41402761b427d7dd8d4b80c5ef6168c4fc2598833e8e"
+    },
+    "factory-pattern": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/factory-pattern/SKILL.md",
+      "computedHash": "406add31aae1e5f708156837d059f1be308423a3aef4109576b129b84a3facd6"
+    },
+    "repo-explorer": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/utils/repo-explorer/SKILL.md",
+      "computedHash": "55badaaad621d177235b00d81c63077a06ab4a3d762a10dc0aa762a1c269ff48"
+    }
+  }
+}
