@@ -1,0 +1,31 @@
+#!/bin/sh
+# pre-push: block direct pushes to main — changes must go through a PR.
+# Enable with: git config core.hooksPath .githooks  (or: just hooks)
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        cat <<'EOF'
+
+Blocked: this push targets 'main', which is protected by a ruleset.
+The remote would reject it anyway — here's the PR flow instead.
+
+If your commits are already on local main, move them to a branch:
+
+    git switch -c my-branch
+    git switch main && git reset --hard origin/main
+    git switch my-branch
+
+Then push, open the PR, and merge once CI is green:
+
+    git push -u origin my-branch
+    gh pr create --fill
+    gh pr merge --squash --delete-branch
+
+(Emergency bypass: git push --no-verify)
+
+EOF
+        exit 1
+    fi
+done
+
+exit 0
