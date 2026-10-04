@@ -7,7 +7,9 @@ from collections.abc import Callable, Mapping
 type Provider = str
 """The name a provider is known by, such as "openai" or "zai"."""
 
-type AuthResolver = Callable[[Provider], str]
+type ApiKey = str
+
+type AuthResolver = Callable[[Provider], ApiKey]
 """Returns the API key to use with a provider, or raises `MissingApiKeyError`."""
 
 
@@ -26,7 +28,7 @@ def create_environment_auth_resolver(environ: Mapping[str, str] = os.environ) ->
     the process environment.
     """
 
-    def resolve(provider: Provider) -> str:
+    def resolve(provider: Provider) -> ApiKey:
         variable = re.sub(r"[^A-Z0-9]", "_", provider.upper()) + "_API_KEY"
         key = environ.get(variable)
         if not key:
