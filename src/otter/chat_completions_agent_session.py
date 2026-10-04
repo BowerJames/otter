@@ -1,58 +1,34 @@
-"""An ongoing agent session: prompts go in, and the agent's work comes out as events."""
+"""An agent session run on a model spoken to through a conversation."""
 
 import asyncio
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass
 
-from otter.conversation import ConversationFactory
+from otter.agent_session import (
+    AgentTool,
+    AssistantTurn,
+    Idle,
+    SessionEvent,
+    ToolResult,
+    UserTurn,
+)
 from otter.messages import (
-    AssistantMessage,
     AudioPart,
     ImagePart,
     ImageUrlPart,
     TextPart,
     ToolCall,
+    ToolSpec,
     UserPart,
 )
-from otter.tools import Tool
-
-
-@dataclass(frozen=True)
-class UserTurn:
-    """A queued prompt has joined the conversation."""
-
-    content: tuple[UserPart, ...]
-
-
-@dataclass(frozen=True)
-class AssistantTurn:
-    """The model produced a turn."""
-
-    message: AssistantMessage
-
-
-@dataclass(frozen=True)
-class ToolResult:
-    """A tool the model asked for has run; `text` is the result the model is shown."""
-
-    tool_call_id: str
-    text: str
-
-
-@dataclass(frozen=True)
-class Idle:
-    """The session has come to rest: nothing is queued and the model is owed nothing."""
-
-
-type SessionEvent = UserTurn | AssistantTurn | ToolResult | Idle
+from otter.model import Model
 
 
 class ChatCompletionsAgentSession:
     """One ongoing agent session: prompts are queued, and `stream` does the work.
 
-    The session holds one conversation with `model`, started through
-    `create_conversation` with `system` as its system prompt. `tools` are what the model
+    The session holds one conversation with `model`, started with `system` as its system
+    prompt. `tools` are what the model
     may ask to have run; each is run when asked for, one at a time and in the order the
     model asked, and its result is shown to the model.
 
@@ -62,16 +38,15 @@ class ChatCompletionsAgentSession:
 
     def __init__(
         self,
-        create_conversation: ConversationFactory,
-        model: str,
+        model: Model,
         *,
         system: str | None = None,
-        tools: Sequence[Tool] = (),
+        tools: Sequence[AgentTool] = (),
     ) -> None:
-        self._conversation = create_conversation(
-            model, system=system, tools=[tool.spec for tool in tools]
+        self._conversation = model(
+            system, [ToolSpec(tool.name, tool.description, tool.parameters) for tool in tools]
         )
-        self._tools = {tool.spec.name: tool for tool in tools}
+        self._tools = {tool.name: tool for tool in tools}
         self._queued: deque[tuple[UserPart, ...]] = deque()
         # Whether the model owes a turn: the history ends in something it has not answered.
         self._owed = False
@@ -138,7 +113,7 @@ class ChatCompletionsAgentSession:
                 try:
                     yield AssistantTurn(message)
                     for call in calls:
-                        text = await self._tools[call.name].run(call.arguments)
+                        text = await self._tools[call.name].execute(call.arguments)
                         self._conversation.add_tool_result(call.id, text)
                         answered += 1
                         yield ToolResult(call.id, text)
