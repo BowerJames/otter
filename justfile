@@ -32,7 +32,7 @@ fix:
 # Run all checks (lint, format, types, tests)
 check: lint format-check typecheck test
 
-# Chat with an agent session, e.g. just tui --model-name glm-5.3 --model-type chat-completions --provider zai
+# Chat with an agent session, e.g. just tui --model-name glm-5.3 --model-type chat-completions --provider zai [--session-file session.jsonl]
 tui *args:
     uv run python scripts/tui.py {{args}}
 
