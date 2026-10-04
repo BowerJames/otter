@@ -122,6 +122,21 @@ class UnreadableFiles(FakeFiles):
         raise PermissionError("a.txt is not readable")
 
 
+class StallingFiles(FakeFiles):
+    """A test adapter for a tool: the second run never finishes, stalling the session mid-turn."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.second_run_started = asyncio.Event()
+
+    async def execute(self, args: Mapping[str, object]) -> str:
+        text = await super().execute(args)
+        if len(self.runs) == 2:
+            self.second_run_started.set()
+            await asyncio.Event().wait()  # an event nothing ever sets: the run never finishes
+        return text
+
+
 @pytest.fixture
 def files() -> FakeFiles:
     return FakeFiles()
@@ -338,6 +353,34 @@ async def test_a_failed_tool_propagates_and_ends_the_session(
         await until_idle(session.stream())
 
     assert [event async for event in session.stream()] == []
+    with pytest.raises(RuntimeError, match=r"^the session has ended$"):
+        session.prompt("Try again")
+
+
+async def test_a_stream_cancelled_part_way_through_a_turns_tool_calls_ends_the_session(
+    conversations: FakeConversations, manager: FakeSessionManager
+) -> None:
+    asks = AssistantMessage(
+        content=(
+            ToolCall("call-1", "read_file", {"path": "a.txt"}),
+            ToolCall("call-2", "read_file", {"path": "b.txt"}),
+        )
+    )
+    conversations.script = [asks]
+    files = StallingFiles()
+    session = ConversationAgentSession(conversations, manager, tools=[files])
+    session.prompt("Read both files")
+
+    async def read_the_stream() -> None:
+        async for _ in session.stream():
+            pass
+
+    reading = asyncio.create_task(read_the_stream())
+    await files.second_run_started.wait()
+    reading.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await reading
+
     with pytest.raises(RuntimeError, match=r"^the session has ended$"):
         session.prompt("Try again")
 
