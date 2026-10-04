@@ -26,7 +26,7 @@ from otter.messages import (
 )
 
 
-class OpenAIChatCompletionsConversation:
+class OpenAIChatCompletionsCompatibleConversation:
     """One conversation with one model: it holds the history and generates the next turn.
 
     The client decides which provider is spoken to (its base URL and API key); any
