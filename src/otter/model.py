@@ -11,7 +11,7 @@ type ModelName = str
 """The name a provider knows a model by, such as "glm-5.3"."""
 
 type ModelType = str
-"""How a model is spoken to, such as "chat-completions"."""
+"""How a model is spoken to, such as "chat-completions" or "responses"."""
 
 
 class ModelConfig(Protocol):

@@ -24,7 +24,7 @@ from otter.messages import (
 from otter.model import Model
 
 
-class ChatCompletionsAgentSession:
+class ConversationAgentSession:
     """One ongoing agent session: prompts are queued, and `stream` does the work.
 
     The session holds one conversation with `model`, started with `system` as its system
