@@ -28,3 +28,14 @@ uv run mypy src tests    # type check
 uv run ruff check .      # lint
 uv run ruff format .     # format
 ```
+
+### Trying a session out
+
+`scripts/tui.py` opens a terminal chat with an agent session:
+
+```sh
+just tui --model-name glm-4.6 --model-type chat-completions --provider zai
+```
+
+The provider's API key is read from `<PROVIDER>_API_KEY`, which can be set in a `.env` file
+at the root of the repository.
