@@ -1,6 +1,6 @@
 """What an ongoing agent session is to its callers, whichever kind of model it runs on."""
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -81,7 +81,7 @@ class AgentSession(Protocol):
         """
         ...
 
-    def stream(self) -> AsyncIterator[SessionEvent]:
+    def stream(self) -> AsyncGenerator[SessionEvent, None]:
         """Run the session, yielding each thing that happens in it as it happens.
 
         The stream does not finish when the model does: it yields `Idle` and waits for
