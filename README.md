@@ -34,7 +34,7 @@ uv run ruff format .     # format
 `scripts/tui.py` opens a terminal chat with an agent session:
 
 ```sh
-just tui --model-name glm-4.6 --model-type chat-completions --provider zai
+just tui --model-name glm-5.3 --model-type chat-completions --provider zai
 ```
 
 `--model-type` is `chat-completions` or `responses`; the providers `openai` and `zai` serve both.
