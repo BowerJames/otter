@@ -113,7 +113,9 @@ class SessionApp(App[None]):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Chat with an otter agent session.")
     parser.add_argument("--model-name", required=True, help='such as "glm-5.3"')
-    parser.add_argument("--model-type", required=True, help='such as "chat-completions"')
+    parser.add_argument(
+        "--model-type", required=True, help='such as "chat-completions" or "responses"'
+    )
     parser.add_argument("--provider", required=True, help='such as "zai" or "openai"')
     parser.add_argument(
         "--system-prompt", default="You are a helpful assistant.", help="the system prompt"

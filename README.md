@@ -37,5 +37,7 @@ uv run ruff format .     # format
 just tui --model-name glm-4.6 --model-type chat-completions --provider zai
 ```
 
+`--model-type` is `chat-completions` or `responses`; the providers `openai` and `zai` serve both.
+
 The provider's API key is read from `<PROVIDER>_API_KEY`, which can be set in a `.env` file
 at the root of the repository.

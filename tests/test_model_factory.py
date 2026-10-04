@@ -25,13 +25,37 @@ ECHO = ToolSpec(
 
 
 class FakeProvider:
-    """A test adapter for the network: records each request, answers with a plain text turn."""
+    """A test adapter for the network: records each request, answers with a plain text turn.
+
+    The turn is in the form of whichever endpoint was asked: chat completions or responses.
+    """
 
     def __init__(self) -> None:
         self.requests: list[httpx2.Request] = []
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
+        if request.url.path.endswith("/responses"):
+            return httpx2.Response(
+                200,
+                json={
+                    "id": "resp_1",
+                    "object": "response",
+                    "created_at": 0,
+                    "model": "any",
+                    "status": "completed",
+                    "error": None,
+                    "output": [
+                        {
+                            "id": "msg_1",
+                            "type": "message",
+                            "role": "assistant",
+                            "status": "completed",
+                            "content": [{"type": "output_text", "text": "OK", "annotations": []}],
+                        }
+                    ],
+                },
+            )
         return httpx2.Response(
             200,
             json={
@@ -61,17 +85,23 @@ def http_client(fake_provider: FakeProvider) -> httpx2.AsyncClient:
 
 
 @pytest.mark.parametrize(
-    "provider, url",
+    "model_type, provider, url",
     [
-        ("openai", "https://api.openai.com/v1/chat/completions"),
-        ("zai", "https://api.z.ai/api/coding/paas/v4/chat/completions"),
+        ("chat-completions", "openai", "https://api.openai.com/v1/chat/completions"),
+        ("chat-completions", "zai", "https://api.z.ai/api/coding/paas/v4/chat/completions"),
+        ("responses", "openai", "https://api.openai.com/v1/responses"),
+        ("responses", "zai", "https://api.z.ai/api/v1/responses"),
     ],
 )
-async def test_a_chat_completions_model_is_reached_at_its_provider_with_the_api_key(
-    provider: str, url: str, fake_provider: FakeProvider, http_client: httpx2.AsyncClient
+async def test_a_model_is_reached_at_its_providers_endpoint_for_its_type_with_the_api_key(
+    model_type: str,
+    provider: str,
+    url: str,
+    fake_provider: FakeProvider,
+    http_client: httpx2.AsyncClient,
 ) -> None:
     create_model = create_model_factory(http_client)
-    model = create_model(Config("some-model", "chat-completions", provider), "secret-key")
+    model = create_model(Config("some-model", model_type, provider), "secret-key")
     conversation = model(None, [])
     conversation.add_user_message([TextPart("Hello")])
 
@@ -111,16 +141,17 @@ async def test_a_models_conversations_use_its_name_and_the_system_prompt_and_too
 def test_a_model_type_that_is_not_known_is_refused(http_client: httpx2.AsyncClient) -> None:
     create_model = create_model_factory(http_client)
 
-    with pytest.raises(ValueError, match=r"^unknown model type 'responses'$"):
-        create_model(Config("gpt-5.1", "responses", "openai"), "secret-key")
+    with pytest.raises(ValueError, match=r"^unknown model type 'telepathy'$"):
+        create_model(Config("gpt-5.1", "telepathy", "openai"), "secret-key")
 
 
+@pytest.mark.parametrize("model_type", ["chat-completions", "responses"])
 def test_a_provider_that_does_not_serve_the_model_type_is_refused(
-    http_client: httpx2.AsyncClient,
+    model_type: str, http_client: httpx2.AsyncClient
 ) -> None:
     create_model = create_model_factory(http_client)
 
     with pytest.raises(
-        ValueError, match=r"^provider 'acme' does not serve 'chat-completions' models$"
+        ValueError, match=rf"^provider 'acme' does not serve '{model_type}' models$"
     ):
-        create_model(Config("some-model", "chat-completions", "acme"), "secret-key")
+        create_model(Config("some-model", model_type, "acme"), "secret-key")

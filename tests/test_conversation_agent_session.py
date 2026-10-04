@@ -1,4 +1,4 @@
-"""Behaviour of ChatCompletionsAgentSession, observed at a fake conversation and its events."""
+"""Behaviour of ConversationAgentSession, observed at a fake conversation and its events."""
 
 import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -6,8 +6,8 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 import pytest
 
 from otter.agent_session import AssistantTurn, Idle, SessionEvent, ToolResult, UserTurn
-from otter.chat_completions_agent_session import ChatCompletionsAgentSession
 from otter.conversation import Conversation
+from otter.conversation_agent_session import ConversationAgentSession
 from otter.messages import (
     AssistantMessage,
     AudioPart,
@@ -107,7 +107,7 @@ async def test_a_prompt_is_answered_by_the_model_and_the_session_comes_to_rest(
     conversations: FakeConversations,
 ) -> None:
     conversations.script = [says("Hi there")]
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     session.prompt("Hello")
 
     events = await until_idle(session.stream())
@@ -123,7 +123,7 @@ async def test_a_prompt_is_answered_by_the_model_and_the_session_comes_to_rest(
 async def test_the_conversation_is_started_with_the_system_prompt_and_tool_specs(
     conversations: FakeConversations, files: FakeFiles
 ) -> None:
-    ChatCompletionsAgentSession(conversations, system="Be brief.", tools=[files])
+    ConversationAgentSession(conversations, system="Be brief.", tools=[files])
 
     assert conversations.started == [("Be brief.", [READ_FILE])]
 
@@ -132,7 +132,7 @@ async def test_a_prompt_carries_its_images_and_audio_after_its_text(
     conversations: FakeConversations,
 ) -> None:
     conversations.script = [says("Noted")]
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     image = ImagePart(data="iVBORw==", media_type="image/png")
     clip = AudioPart(data="UklGRg==", format="wav")
     session.prompt("Look and listen", images=[image], audio=[clip])
@@ -147,7 +147,7 @@ async def test_a_tool_the_model_asks_for_is_run_and_its_result_goes_back_to_the_
 ) -> None:
     asks = AssistantMessage(content=(ToolCall("call-1", "read_file", {"path": "a.txt"}),))
     conversations.script = [asks, says("It says hello")]
-    session = ChatCompletionsAgentSession(conversations, tools=[files])
+    session = ConversationAgentSession(conversations, tools=[files])
     session.prompt("What is in a.txt?")
 
     events = await until_idle(session.stream())
@@ -170,7 +170,7 @@ async def test_a_prompt_made_while_the_session_is_at_rest_starts_the_model_again
     conversations: FakeConversations,
 ) -> None:
     conversations.script = [says("Hi there"), says("Still here")]
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     stream = session.stream()
     session.prompt("Hello")
     await until_idle(stream)
@@ -188,7 +188,7 @@ async def test_a_prompt_made_while_the_session_is_at_rest_starts_the_model_again
 async def test_a_session_with_nothing_to_do_is_at_rest_from_the_start(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
 
     events = await until_idle(session.stream())
 
@@ -206,7 +206,7 @@ async def test_a_prompt_made_while_the_model_is_working_joins_after_the_tool_res
         )
     )
     conversations.script = [asks, says("Done")]
-    session = ChatCompletionsAgentSession(conversations, tools=[files])
+    session = ConversationAgentSession(conversations, tools=[files])
     session.prompt("Read both files")
     stream = session.stream()
     while await anext(stream) != ToolResult("call-1", "file contents"):
@@ -228,7 +228,7 @@ async def test_a_prompt_made_while_the_model_is_working_joins_after_the_tool_res
 async def test_ending_a_session_at_rest_ends_its_stream(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     stream = session.stream()
     await until_idle(stream)
 
@@ -247,7 +247,7 @@ async def test_ending_a_session_mid_turn_finishes_the_turn_and_goes_no_further(
         )
     )
     conversations.script = [asks, says("Done")]
-    session = ChatCompletionsAgentSession(conversations, tools=[files])
+    session = ConversationAgentSession(conversations, tools=[files])
     session.prompt("Read both files")
     stream = session.stream()
     while await anext(stream) != AssistantTurn(asks):
@@ -271,7 +271,7 @@ async def test_ending_a_session_mid_turn_finishes_the_turn_and_goes_no_further(
 async def test_an_ended_session_takes_no_more_prompts(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     session.end()
 
     with pytest.raises(RuntimeError, match=r"^the session has ended$"):
@@ -282,7 +282,7 @@ async def test_a_failed_generate_propagates_and_streaming_again_retries_it(
     conversations: FakeConversations,
 ) -> None:
     conversations.script = [ConnectionError("no route to host"), says("Hi there")]
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     session.prompt("Hello")
     with pytest.raises(ConnectionError, match=r"^no route to host$"):
         await until_idle(session.stream())
@@ -297,7 +297,7 @@ async def test_a_failed_tool_propagates_and_ends_the_session(
 ) -> None:
     asks = AssistantMessage(content=(ToolCall("call-1", "read_file", {"path": "a.txt"}),))
     conversations.script = [asks, says("Done")]
-    session = ChatCompletionsAgentSession(conversations, tools=[UnreadableFiles()])
+    session = ConversationAgentSession(conversations, tools=[UnreadableFiles()])
     session.prompt("What is in a.txt?")
 
     with pytest.raises(PermissionError, match=r"^a\.txt is not readable$"):
@@ -311,7 +311,7 @@ async def test_a_failed_tool_propagates_and_ends_the_session(
 async def test_a_session_has_one_stream_at_a_time(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     first = session.stream()
     await until_idle(first)
 
@@ -324,7 +324,7 @@ async def test_waiting_for_idle_lasts_until_the_model_has_finished_its_work(
 ) -> None:
     asks = AssistantMessage(content=(ToolCall("call-1", "read_file", {"path": "a.txt"}),))
     conversations.script = [asks, says("It says hello")]
-    session = ChatCompletionsAgentSession(conversations, tools=[files])
+    session = ConversationAgentSession(conversations, tools=[files])
     stream = session.stream()
     session.prompt("What is in a.txt?")
     waiting = asyncio.create_task(session.wait_for_idle())
@@ -341,7 +341,7 @@ async def test_waiting_for_idle_lasts_until_the_model_has_finished_its_work(
 async def test_waiting_for_idle_returns_at_once_for_a_session_with_nothing_to_do(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
 
     await asyncio.wait_for(session.wait_for_idle(), timeout=1)
 
@@ -349,7 +349,7 @@ async def test_waiting_for_idle_returns_at_once_for_a_session_with_nothing_to_do
 async def test_waiting_for_idle_returns_when_the_session_ends(
     conversations: FakeConversations,
 ) -> None:
-    session = ChatCompletionsAgentSession(conversations)
+    session = ConversationAgentSession(conversations)
     session.prompt("Hello")
     waiting = asyncio.create_task(session.wait_for_idle())
     await asyncio.sleep(0)

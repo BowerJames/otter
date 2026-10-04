@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from otter.agent_session import AgentSession, AgentTool
 from otter.auth_resolver import AuthResolver, create_environment_auth_resolver
-from otter.chat_completions_agent_session import ChatCompletionsAgentSession
+from otter.conversation_agent_session import ConversationAgentSession
 from otter.model import ModelConfig, ModelFactory
 from otter.model_factory import create_model_factory
 
@@ -35,4 +35,4 @@ def create_agent_session(
     model can be made for.
     """
     model = model_factory(model_config, auth_resolver(model_config.provider))
-    return ChatCompletionsAgentSession(model, system=system_prompt, tools=tools)
+    return ConversationAgentSession(model, system=system_prompt, tools=tools)
