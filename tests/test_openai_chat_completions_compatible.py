@@ -1,4 +1,4 @@
-"""Behaviour of OpenAIChatCompletionsConversation, observed on the wire at a fake endpoint."""
+"""Behaviour of OpenAIChatCompletionsCompatibleConversation, observed at a fake endpoint."""
 
 import json
 from json import JSONDecodeError
@@ -19,7 +19,7 @@ from otter.messages import (
     ToolSpec,
     UserPart,
 )
-from otter.openai_chat_completions import OpenAIChatCompletionsConversation
+from otter.openai_chat_completions_compatible import OpenAIChatCompletionsCompatibleConversation
 
 
 def text_reply(text: str) -> dict[str, Any]:
@@ -97,7 +97,7 @@ def client(fake_endpoint: FakeChatCompletionsEndpoint) -> AsyncOpenAI:
 async def test_generating_sends_the_added_user_message_to_the_configured_model(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([TextPart("Hello")])
 
     await conversation.generate()
@@ -114,7 +114,7 @@ async def test_generating_returns_the_text_the_model_replied_with(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
     fake_endpoint.replies = [text_reply("Hi there")]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([TextPart("Hello")])
 
     reply = await conversation.generate()
@@ -126,7 +126,7 @@ async def test_generating_again_sends_the_earlier_turns_before_the_new_one(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
     fake_endpoint.replies = [text_reply("Hi there")]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([TextPart("Hello")])
     await conversation.generate()
     conversation.add_user_message([TextPart("How are you?")])
@@ -143,7 +143,7 @@ async def test_generating_again_sends_the_earlier_turns_before_the_new_one(
 async def test_generating_sends_the_system_prompt_ahead_of_the_conversation(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(
+    conversation = OpenAIChatCompletionsCompatibleConversation(
         client, model="glm-4.6", system="You are terse."
     )
     conversation.add_user_message([TextPart("Hello")])
@@ -159,7 +159,9 @@ async def test_generating_sends_the_system_prompt_ahead_of_the_conversation(
 async def test_generating_offers_the_model_the_conversations_tools(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", tools=[READ_FILE])
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", tools=[READ_FILE]
+    )
     conversation.add_user_message([TextPart("Hello")])
 
     await conversation.generate()
@@ -184,7 +186,9 @@ async def test_generating_returns_the_tool_call_the_model_asked_for(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
     fake_endpoint.replies = [tool_call_reply("call_1", "read_file", '{"path": "notes.txt"}')]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", tools=[READ_FILE])
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", tools=[READ_FILE]
+    )
     conversation.add_user_message([TextPart("What is in my notes?")])
 
     reply = await conversation.generate()
@@ -198,7 +202,9 @@ async def test_generating_after_a_tool_result_sends_the_call_and_its_result(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
     fake_endpoint.replies = [tool_call_reply("call_1", "read_file", '{"path": "notes.txt"}')]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", tools=[READ_FILE])
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", tools=[READ_FILE]
+    )
     conversation.add_user_message([TextPart("What is in my notes?")])
     await conversation.generate()
     conversation.add_tool_result("call_1", "buy milk")
@@ -224,7 +230,7 @@ async def test_generating_after_a_tool_result_sends_the_call_and_its_result(
 async def test_generating_again_after_a_failed_request_resends_the_same_conversation(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([TextPart("Hello")])
     fake_endpoint.fail_next = True
     with pytest.raises(APIStatusError):
@@ -241,7 +247,9 @@ async def test_generating_again_after_unreadable_tool_arguments_resends_the_same
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
     fake_endpoint.replies = [tool_call_reply("call_1", "read_file", '{"path": ')]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", tools=[READ_FILE])
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", tools=[READ_FILE]
+    )
     conversation.add_user_message([TextPart("What is in my notes?")])
     with pytest.raises(JSONDecodeError):
         await conversation.generate()
@@ -256,7 +264,7 @@ async def test_generating_again_after_unreadable_tool_arguments_resends_the_same
 async def test_generating_sends_an_inline_image_as_a_data_uri_in_its_place_among_the_text(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message(
         [
             TextPart("Before"),
@@ -277,7 +285,7 @@ async def test_generating_sends_an_inline_image_as_a_data_uri_in_its_place_among
 async def test_generating_sends_inline_audio_with_its_format(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([AudioPart(data="UklGRg==", format="wav")])
 
     await conversation.generate()
@@ -290,7 +298,7 @@ async def test_generating_sends_inline_audio_with_its_format(
 async def test_generating_sends_an_image_url_for_the_provider_to_fetch(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([ImageUrlPart(url="https://images.test/cat.png")])
 
     await conversation.generate()
@@ -306,7 +314,7 @@ async def test_generating_returns_the_models_thinking_ahead_of_its_text(
     fake_endpoint.replies = [
         {"role": "assistant", "content": "pong", "reasoning_content": "They want pong."}
     ]
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6")
+    conversation = OpenAIChatCompletionsCompatibleConversation(client, model="glm-4.6")
     conversation.add_user_message([TextPart("ping")])
 
     reply = await conversation.generate()
@@ -324,7 +332,9 @@ async def test_generating_returns_the_models_thinking_ahead_of_its_text(
 async def test_generating_for_a_model_without_image_support_sends_a_note_in_place_of_an_image(
     image: UserPart, fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", supports_images=False)
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", supports_images=False
+    )
     conversation.add_user_message([TextPart("Before"), image, TextPart("After")])
 
     await conversation.generate()
@@ -339,7 +349,9 @@ async def test_generating_for_a_model_without_image_support_sends_a_note_in_plac
 async def test_generating_for_a_model_without_audio_support_sends_a_note_in_place_of_audio(
     fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
 ) -> None:
-    conversation = OpenAIChatCompletionsConversation(client, model="glm-4.6", supports_audio=False)
+    conversation = OpenAIChatCompletionsCompatibleConversation(
+        client, model="glm-4.6", supports_audio=False
+    )
     conversation.add_user_message([AudioPart(data="UklGRg==", format="wav")])
 
     await conversation.generate()

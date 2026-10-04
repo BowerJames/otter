@@ -4,7 +4,7 @@ import httpx2
 from openai import AsyncOpenAI
 
 from otter.conversation import ConversationFactory
-from otter.openai_chat_completions import OpenAIChatCompletionsConversation
+from otter.openai_chat_completions_compatible import OpenAIChatCompletionsCompatibleConversation
 
 
 def create_zai_coding_plan_conversations(
@@ -21,6 +21,6 @@ def create_zai_coding_plan_conversations(
         base_url="https://api.z.ai/api/coding/paas/v4", api_key=api_key, http_client=http_client
     )
     # The coding plan endpoint accepts text only: it answers anything else with a 400.
-    return lambda model, *, system=None, tools=(): OpenAIChatCompletionsConversation(
+    return lambda model, *, system=None, tools=(): OpenAIChatCompletionsCompatibleConversation(
         client, model, system=system, tools=tools, supports_images=False, supports_audio=False
     )
