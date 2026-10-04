@@ -2,7 +2,7 @@
 
 import asyncio
 from collections import deque
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 
 from otter.agent_session import (
     AgentTool,
@@ -90,7 +90,7 @@ class ConversationAgentSession:
         self._at_rest.clear()
         self._wake.set()
 
-    async def stream(self) -> AsyncIterator[SessionEvent]:
+    async def stream(self) -> AsyncGenerator[SessionEvent, None]:
         """Run the session, yielding each thing that happens in it as it happens.
 
         The stream does not finish when the model does: it yields `Idle` and waits for
