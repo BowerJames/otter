@@ -5,7 +5,7 @@ import json
 import httpx2
 import pytest
 
-from otter.messages import AudioPart, ImagePart, TextPart, UserPart
+from otter.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage, UserPart
 from otter.zai_chat_completions import create_zai_coding_plan_conversations
 
 
@@ -83,3 +83,26 @@ async def test_a_conversation_sends_a_note_in_place_of_content_the_coding_plan_r
 
     [request] = fake_zai.requests
     assert json.loads(request.content)["messages"][0]["content"] == [{"type": "text", "text": note}]
+
+
+async def test_a_conversation_starts_from_the_context_it_is_given(
+    fake_zai: FakeZai, http_client: httpx2.AsyncClient
+) -> None:
+    create_conversation = create_zai_coding_plan_conversations("zai-key", http_client=http_client)
+    conversation = create_conversation(
+        "glm-5.3",
+        context=[
+            UserMessage((TextPart("Hello"),)),
+            AssistantMessage((TextPart("Hi there"),)),
+        ],
+    )
+    conversation.add_user_message([TextPart("How are you?")])
+
+    await conversation.generate()
+
+    [request] = fake_zai.requests
+    assert json.loads(request.content)["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
+        {"role": "assistant", "content": "Hi there"},
+        {"role": "user", "content": [{"type": "text", "text": "How are you?"}]},
+    ]

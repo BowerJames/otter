@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import httpx2
 import pytest
 
-from otter.messages import TextPart, ToolSpec
+from otter.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
 from otter.model_factory import create_model_factory
 
 
@@ -102,7 +102,7 @@ async def test_a_model_is_reached_at_its_providers_endpoint_for_its_type_with_th
 ) -> None:
     create_model = create_model_factory(http_client)
     model = create_model(Config("some-model", model_type, provider), "secret-key")
-    conversation = model(None, [])
+    conversation = model(None, [], [])
     conversation.add_user_message([TextPart("Hello")])
 
     await conversation.generate()
@@ -117,7 +117,7 @@ async def test_a_models_conversations_use_its_name_and_the_system_prompt_and_too
 ) -> None:
     create_model = create_model_factory(http_client)
     model = create_model(Config("glm-5.3", "chat-completions", "zai"), "secret-key")
-    conversation = model("Be brief.", [ECHO])
+    conversation = model("Be brief.", [ECHO], [])
     conversation.add_user_message([TextPart("Hello")])
 
     await conversation.generate()
@@ -136,6 +136,31 @@ async def test_a_models_conversations_use_its_name_and_the_system_prompt_and_too
             },
         }
     ]
+
+
+@pytest.mark.parametrize(
+    "model_type, history",
+    [
+        ("chat-completions", "messages"),
+        ("responses", "input"),
+    ],
+)
+async def test_a_models_conversations_start_from_the_context_given(
+    model_type: str,
+    history: str,
+    fake_provider: FakeProvider,
+    http_client: httpx2.AsyncClient,
+) -> None:
+    create_model = create_model_factory(http_client)
+    model = create_model(Config("some-model", model_type, "openai"), "secret-key")
+    conversation = model(
+        None, [], [UserMessage((TextPart("Hello"),)), AssistantMessage((TextPart("Hi there"),))]
+    )
+
+    await conversation.generate()
+
+    [request] = fake_provider.requests
+    assert json.loads(request.content)[history][1] == {"role": "assistant", "content": "Hi there"}
 
 
 def test_a_model_type_that_is_not_known_is_refused(http_client: httpx2.AsyncClient) -> None:

@@ -21,6 +21,8 @@ def create_openai_responses_conversations(
     client = AsyncOpenAI(
         base_url="https://api.openai.com/v1", api_key=api_key, http_client=http_client
     )
-    return lambda model, *, system=None, tools=(): OpenAIResponsesCompatibleConversation(
-        client, model, system=system, tools=tools
+    return lambda model, *, system=None, tools=(), context=(): (
+        OpenAIResponsesCompatibleConversation(
+            client, model, system=system, tools=tools, context=context
+        )
     )

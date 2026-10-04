@@ -13,15 +13,19 @@ from otter.agent_session import (
     UserTurn,
 )
 from otter.messages import (
+    AssistantMessage,
     AudioPart,
     ImagePart,
     ImageUrlPart,
     TextPart,
     ToolCall,
+    ToolResultMessage,
     ToolSpec,
+    UserMessage,
     UserPart,
 )
 from otter.model import Model
+from otter.session_manager import SessionManager
 
 
 class ConversationAgentSession:
@@ -32,6 +36,11 @@ class ConversationAgentSession:
     may ask to have run; each is run when asked for, one at a time and in the order the
     model asked, and its result is shown to the model.
 
+    The conversation starts out with the entries `session_manager` holds, so the session
+    picks up where they leave off: if they end with something the model has not
+    answered, it is answered once the session is streamed. Everything that then joins
+    the conversation is appended to `session_manager` as it joins.
+
     Nothing happens unless `stream` is being read: the session advances only as its
     events are taken.
     """
@@ -39,17 +48,22 @@ class ConversationAgentSession:
     def __init__(
         self,
         model: Model,
+        session_manager: SessionManager,
         *,
         system: str | None = None,
         tools: Sequence[AgentTool] = (),
     ) -> None:
+        self._session_manager = session_manager
+        context = session_manager.entries()
         self._conversation = model(
-            system, [ToolSpec(tool.name, tool.description, tool.parameters) for tool in tools]
+            system,
+            [ToolSpec(tool.name, tool.description, tool.parameters) for tool in tools],
+            context,
         )
         self._tools = {tool.name: tool for tool in tools}
         self._queued: deque[tuple[UserPart, ...]] = deque()
         # Whether the model owes a turn: the history ends in something it has not answered.
-        self._owed = False
+        self._owed = bool(context) and not isinstance(context[-1], AssistantMessage)
         self._wake = asyncio.Event()
         self._at_rest = asyncio.Event()
         self._at_rest.set()
@@ -88,6 +102,11 @@ class ConversationAgentSession:
         session has ended: the model's turn is left asking for a result it never got.
         The same holds if the stream is abandoned or cancelled part-way through a turn's
         tool calls; use `end` to stop cleanly.
+
+        If the session manager fails to take a prompt, the error propagates and the
+        session is as it was, the prompt still queued, so streaming again retries. If it
+        fails to take the model's turn or a tool's result, the error propagates and the
+        session has ended.
         """
         if self._streaming:
             raise RuntimeError("the session is already being streamed")
@@ -95,7 +114,11 @@ class ConversationAgentSession:
         try:
             while not self._ended:
                 while self._queued:
-                    content = self._queued.popleft()
+                    content = self._queued[0]
+                    # Stored before it leaves the queue, so a prompt that cannot be
+                    # stored is still queued.
+                    self._session_manager.append(UserMessage(content))
+                    self._queued.popleft()
                     self._conversation.add_user_message(content)
                     self._owed = True
                     yield UserTurn(content)
@@ -109,18 +132,23 @@ class ConversationAgentSession:
                 message = await self._conversation.generate()
                 calls = [part for part in message.content if isinstance(part, ToolCall)]
                 self._owed = bool(calls)
+                stored = False
                 answered = 0
                 try:
+                    self._session_manager.append(message)
+                    stored = True
                     yield AssistantTurn(message)
                     for call in calls:
                         text = await self._tools[call.name].execute(call.arguments)
+                        self._session_manager.append(ToolResultMessage(call.id, text))
                         self._conversation.add_tool_result(call.id, text)
                         answered += 1
                         yield ToolResult(call.id, text)
                 except BaseException:
                     # A tool call left without a result is a history no provider will
-                    # accept, and the conversation cannot take the model's turn back.
-                    if answered < len(calls):
+                    # accept, and the conversation cannot take the model's turn back:
+                    # nor can it if the turn could not be stored.
+                    if not stored or answered < len(calls):
                         self.end()
                     raise
         finally:

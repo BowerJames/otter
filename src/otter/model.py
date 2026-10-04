@@ -5,7 +5,7 @@ from typing import Protocol
 
 from otter.auth_resolver import ApiKey, Provider
 from otter.conversation import Conversation
-from otter.messages import ToolSpec
+from otter.messages import ContextEntry, ToolSpec
 
 type ModelName = str
 """The name a provider knows a model by, such as "glm-5.3"."""
@@ -27,11 +27,12 @@ class ModelConfig(Protocol):
     def provider(self) -> Provider: ...
 
 
-type Model = Callable[[str | None, Sequence[ToolSpec]], Conversation]
-"""Starts a new, empty conversation with the model.
+type Model = Callable[[str | None, Sequence[ToolSpec], Sequence[ContextEntry]], Conversation]
+"""Starts a new conversation with the model.
 
 It is given the system prompt the model sees ahead of every turn, or None for no system
-prompt, and the tools the model may ask to have called.
+prompt, the tools the model may ask to have called, and the context the conversation
+starts out with, oldest first.
 """
 
 type ModelFactory = Callable[[ModelConfig, ApiKey], Model]

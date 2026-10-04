@@ -21,6 +21,14 @@ def create_zai_coding_plan_conversations(
         base_url="https://api.z.ai/api/coding/paas/v4", api_key=api_key, http_client=http_client
     )
     # The coding plan endpoint accepts text only: it answers anything else with a 400.
-    return lambda model, *, system=None, tools=(): OpenAIChatCompletionsCompatibleConversation(
-        client, model, system=system, tools=tools, supports_images=False, supports_audio=False
+    return lambda model, *, system=None, tools=(), context=(): (
+        OpenAIChatCompletionsCompatibleConversation(
+            client,
+            model,
+            system=system,
+            tools=tools,
+            context=context,
+            supports_images=False,
+            supports_audio=False,
+        )
     )
