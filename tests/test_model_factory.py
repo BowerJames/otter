@@ -1,13 +1,19 @@
 """Behaviour of the models otter reaches out of the box, observed on the wire at a fake provider."""
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Any
 
 import httpx2
 import pytest
+from openai.types.realtime import RealtimeClientEventParam, RealtimeServerEvent
+from pydantic import TypeAdapter
 
 from otter.domain.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
 from otter.model import create_model_factory
+from otter.realtime_conversation import RealtimeConnect
 
 
 @dataclass(frozen=True)
@@ -74,9 +80,61 @@ class FakeProvider:
         )
 
 
+class FakeRealtime:
+    """A test adapter for the network a realtime model is reached over: records the API
+    key and model each connection was opened with and every event sent, and answers
+    each turn with the text "OK".
+    """
+
+    def __init__(self) -> None:
+        self.opened: list[tuple[str, str]] = []
+        self.sent: list[Any] = []
+
+    def __call__(self, api_key: str) -> RealtimeConnect:
+        @asynccontextmanager
+        async def connect(model: str) -> AsyncIterator["FakeRealtime"]:
+            self.opened.append((api_key, model))
+            yield self
+
+        return connect
+
+    async def send(self, event: RealtimeClientEventParam) -> None:
+        self.sent.append(event)
+
+    async def __aiter__(self) -> AsyncIterator[RealtimeServerEvent]:
+        yield _TURN_DONE
+
+
+_TURN_DONE = TypeAdapter[RealtimeServerEvent](RealtimeServerEvent).validate_python(
+    {
+        "type": "response.done",
+        "event_id": "event_1",
+        "response": {
+            "id": "resp_1",
+            "object": "realtime.response",
+            "status": "completed",
+            "output": [
+                {
+                    "id": "item_1",
+                    "type": "message",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [{"type": "output_text", "text": "OK"}],
+                }
+            ],
+        },
+    }
+)
+
+
 @pytest.fixture
 def fake_provider() -> FakeProvider:
     return FakeProvider()
+
+
+@pytest.fixture
+def fake_realtime() -> FakeRealtime:
+    return FakeRealtime()
 
 
 @pytest.fixture
@@ -182,11 +240,50 @@ def test_a_provider_that_does_not_serve_the_model_type_is_refused(
         create_model(Config("some-model", model_type, "acme"), "secret-key")
 
 
-async def test_a_realtime_model_of_openai_starts_a_conversation_without_connecting() -> None:
-    create_model = create_model_factory()
+async def test_a_realtime_model_of_openai_is_reached_by_its_name_with_the_api_key(
+    fake_realtime: FakeRealtime,
+) -> None:
+    create_model = create_model_factory(realtime_connector=fake_realtime)
+    model = create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")
+    conversation = model(None, [], [])
+    conversation.add_user_message([TextPart("Hello")])
 
-    conversation = create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")(
+    await conversation.generate()
+
+    assert fake_realtime.opened == [("secret-key", "gpt-realtime")]
+
+
+async def test_a_realtime_models_conversations_use_the_system_prompt_tools_and_context_given(
+    fake_realtime: FakeRealtime,
+) -> None:
+    create_model = create_model_factory(realtime_connector=fake_realtime)
+    model = create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")
+    conversation = model("Be brief.", [ECHO], [UserMessage((TextPart("Hello"),))])
+
+    await conversation.generate()
+
+    [session] = [e["session"] for e in fake_realtime.sent if e["type"] == "session.update"]
+    assert session["instructions"] == "Be brief."
+    assert session["tools"] == [
+        {
+            "type": "function",
+            "name": "echo",
+            "description": "Repeat the text",
+            "parameters": {"type": "object", "properties": {"text": {"type": "string"}}},
+        }
+    ]
+    assert [e["item"] for e in fake_realtime.sent if e["type"] == "conversation.item.create"] == [
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hello"}]}
+    ]
+
+
+async def test_a_realtime_model_of_openai_starts_a_conversation_without_connecting(
+    fake_realtime: FakeRealtime,
+) -> None:
+    create_model = create_model_factory(realtime_connector=fake_realtime)
+
+    create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")(
         "Be brief.", [ECHO], [UserMessage((TextPart("Hello"),))]
     )
 
-    await conversation.aclose()
+    assert fake_realtime.opened == []
