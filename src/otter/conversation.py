@@ -25,6 +25,13 @@ class Conversation(Protocol):
         """
         ...
 
+    async def aclose(self) -> None:
+        """Let go of anything held open, such as a connection to the model.
+
+        Closing a closed conversation does nothing.
+        """
+        ...
+
 
 class ConversationFactory(Protocol):
     """Starts a new conversation with `model`.

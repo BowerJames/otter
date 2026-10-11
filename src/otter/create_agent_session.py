@@ -28,7 +28,8 @@ def create_agent_session(
     """Start an agent session on the model `model_config` names.
 
     `system_prompt` is what the model sees ahead of every turn, and `tools` are what it
-    may ask to have run.
+    may ask to have run. Use the session in `async with`, so that whatever it holds open
+    is let go of when it is done with.
 
     `auth_resolver` is asked for the API key of the configuration's provider; leave it
     out to read the key from the environment variable `<PROVIDER>_API_KEY`.

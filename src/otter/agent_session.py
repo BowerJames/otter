@@ -2,7 +2,8 @@
 
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from types import TracebackType
+from typing import Protocol, Self
 
 from otter.messages import AssistantMessage, AudioPart, ImagePart, ImageUrlPart, UserPart
 
@@ -63,6 +64,10 @@ class AgentSession(Protocol):
 
     Nothing happens unless `stream` is being read: the session advances only as its
     events are taken.
+
+    A session is an async context manager, and may hold something open for as long as
+    it lasts, such as a connection to its model: use it in `async with` so that it is
+    ended and let go of.
     """
 
     def prompt(
@@ -111,4 +116,17 @@ class AgentSession(Protocol):
         then the stream finishes without the model being asked again. Prompts still
         queued are dropped.
         """
+        ...
+
+    async def __aenter__(self) -> Self:
+        """Enter the session, which is returned: `async with session:` scopes its life."""
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leave the session: it is ended, and anything it holds open is let go of."""
         ...

@@ -468,3 +468,16 @@ async def test_generating_sends_a_note_in_place_of_an_image_of_the_context_the_m
     assert fake_endpoint.request_bodies[0]["messages"][0]["content"] == [
         {"type": "text", "text": "[image omitted: this model cannot view images]"}
     ]
+
+
+async def test_closing_a_conversation_leaves_others_on_the_same_client_able_to_generate(
+    fake_endpoint: FakeChatCompletionsEndpoint, client: AsyncOpenAI
+) -> None:
+    closed = OpenAIChatCompletionsCompatibleConversation(client, model="gpt-5.1")
+    other = OpenAIChatCompletionsCompatibleConversation(client, model="gpt-5.1")
+    other.add_user_message([TextPart("Hello")])
+
+    await closed.aclose()
+
+    await other.generate()
+    assert len(fake_endpoint.request_bodies) == 1

@@ -37,7 +37,8 @@ uv run ruff format .     # format
 just tui --model-name glm-5.3 --model-type chat-completions --provider zai
 ```
 
-`--model-type` is `chat-completions` or `responses`; the providers `openai` and `zai` serve both.
+`--model-type` is `chat-completions`, `responses` or `realtime`; the providers `openai` and `zai`
+serve the first two, and `openai` alone serves `realtime`.
 
 Add `--session-file session.jsonl` to keep the session in a file: running again with the same
 file picks the session up where it left off.
