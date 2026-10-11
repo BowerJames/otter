@@ -504,6 +504,11 @@ dependencies = [
     { name = "openai", extra = ["realtime"] },
 ]
 
+[package.optional-dependencies]
+tui = [
+    { name = "textual" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
@@ -518,7 +523,9 @@ dev = [
 requires-dist = [
     { name = "httpx2", specifier = ">=2.13.1" },
     { name = "openai", extras = ["realtime"], specifier = ">=3.24.0" },
+    { name = "textual", marker = "extra == 'tui'", specifier = ">=8.2.8" },
 ]
+provides-extras = ["tui"]
 
 [package.metadata.requires-dev]
 dev = [

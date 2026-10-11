@@ -9,6 +9,12 @@ dependencies = [
     "openai[realtime]>=3.24.0",
 ]
 
+[project.optional-dependencies]
+# What `otter.chat_screen` needs to put a chat on the terminal.
+tui = [
+    "textual>=8.2.8",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=1.14",
