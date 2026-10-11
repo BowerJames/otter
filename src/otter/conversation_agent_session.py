@@ -3,6 +3,8 @@
 import asyncio
 from collections import deque
 from collections.abc import AsyncGenerator, Sequence
+from types import TracebackType
+from typing import Self
 
 from otter.agent_session import (
     AgentTool,
@@ -43,6 +45,9 @@ class ConversationAgentSession:
 
     Nothing happens unless `stream` is being read: the session advances only as its
     events are taken.
+
+    The session is an async context manager, and leaving it ends it and closes the
+    conversation, which may be holding a connection to the model open.
     """
 
     def __init__(
@@ -176,3 +181,23 @@ class ConversationAgentSession:
         self._queued.clear()
         self._at_rest.set()
         self._wake.set()
+
+    async def __aenter__(self) -> Self:
+        """Enter the session, which is returned: `async with session:` scopes its life."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leave the session: it is ended, and its conversation is closed.
+
+        Leave once the stream is no longer being read: a turn the model is part-way
+        through elsewhere is cut short by the conversation closing under it. If the
+        conversation fails to close, the error propagates and the session has ended
+        all the same.
+        """
+        self.end()
+        await self._conversation.aclose()

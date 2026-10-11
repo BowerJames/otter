@@ -170,7 +170,7 @@ def test_a_model_type_that_is_not_known_is_refused(http_client: httpx2.AsyncClie
         create_model(Config("gpt-5.1", "telepathy", "openai"), "secret-key")
 
 
-@pytest.mark.parametrize("model_type", ["chat-completions", "responses"])
+@pytest.mark.parametrize("model_type", ["chat-completions", "responses", "realtime"])
 def test_a_provider_that_does_not_serve_the_model_type_is_refused(
     model_type: str, http_client: httpx2.AsyncClient
 ) -> None:
@@ -180,3 +180,13 @@ def test_a_provider_that_does_not_serve_the_model_type_is_refused(
         ValueError, match=rf"^provider 'acme' does not serve '{model_type}' models$"
     ):
         create_model(Config("some-model", model_type, "acme"), "secret-key")
+
+
+async def test_a_realtime_model_of_openai_starts_a_conversation_without_connecting() -> None:
+    create_model = create_model_factory()
+
+    conversation = create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")(
+        "Be brief.", [ECHO], [UserMessage((TextPart("Hello"),))]
+    )
+
+    await conversation.aclose()

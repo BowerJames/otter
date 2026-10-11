@@ -9,7 +9,9 @@ from otter.auth_resolver import ApiKey, Provider
 from otter.conversation import ConversationFactory
 from otter.model import Model, ModelConfig, ModelFactory, ModelType
 from otter.openai_chat_completions import create_openai_conversations
+from otter.openai_realtime import create_openai_realtime_conversations
 from otter.openai_responses import create_openai_responses_conversations
+from otter.realtime_as_conversation import realtime_as_conversation
 from otter.zai_chat_completions import create_zai_coding_plan_conversations
 from otter.zai_responses import create_zai_coding_plan_responses_conversations
 
@@ -18,6 +20,16 @@ class _ConversationsOfProvider(Protocol):
     def __call__(
         self, api_key: str, *, http_client: httpx2.AsyncClient | None = None
     ) -> ConversationFactory: ...
+
+
+def _create_openai_realtime_conversations(
+    api_key: str, *, http_client: httpx2.AsyncClient | None = None
+) -> ConversationFactory:
+    # A realtime model is reached over a websocket, which `http_client` has no part in.
+    create_conversation = create_openai_realtime_conversations(api_key)
+    return lambda model, *, system=None, tools=(), context=(): realtime_as_conversation(
+        create_conversation(model, system=system, tools=tools, context=context)
+    )
 
 
 _PROVIDERS_OF_MODEL_TYPE: Mapping[ModelType, Mapping[Provider, _ConversationsOfProvider]] = {
@@ -29,6 +41,7 @@ _PROVIDERS_OF_MODEL_TYPE: Mapping[ModelType, Mapping[Provider, _ConversationsOfP
         "openai": create_openai_responses_conversations,
         "zai": create_zai_coding_plan_responses_conversations,
     },
+    "realtime": {"openai": _create_openai_realtime_conversations},
 }
 
 
@@ -36,10 +49,14 @@ def create_model_factory(http_client: httpx2.AsyncClient | None = None) -> Model
     """Return a factory of the models otter knows how to reach.
 
     The model types "chat-completions" and "responses" are each served by the providers
-    "openai" and "zai" (Z.ai's coding plan). The factory raises `ValueError` for any
-    other model type, and for a provider that does not serve the model type.
-    `http_client` is what requests are sent through; leave it out to reach providers
-    over the network.
+    "openai" and "zai" (Z.ai's coding plan), and "realtime" by "openai". The factory
+    raises `ValueError` for any other model type, and for a provider that does not serve
+    the model type. `http_client` is what requests are sent through; leave it out to
+    reach providers over the network.
+
+    A realtime model's turns are taken whole and as text. It is reached over a
+    connection of its own, made when its first turn is generated and kept until the
+    conversation is closed, which `http_client` has no part in.
     """
 
     def create_model(model_config: ModelConfig, api_key: ApiKey) -> Model:

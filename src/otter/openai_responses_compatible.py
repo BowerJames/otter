@@ -171,6 +171,9 @@ class OpenAIResponsesCompatibleConversation:
         )
         return AssistantMessage(content=tuple(content))
 
+    async def aclose(self) -> None:
+        """Does nothing: a conversation holds nothing open, and the client is not its to close."""
+
     def add_tool_result(self, tool_call_id: str, text: str) -> None:
         """Append the result of a tool call the model asked for in its last turn."""
         self._items.append(

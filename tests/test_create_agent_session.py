@@ -76,6 +76,9 @@ class FakeModels:
     async def generate(self) -> AssistantMessage:
         return AssistantMessage(content=(TextPart("OK"),))
 
+    async def aclose(self) -> None:
+        pass
+
 
 class FakeSessionManager:
     """A test adapter for the session manager: holds the entries it starts with and those

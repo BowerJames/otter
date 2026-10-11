@@ -10,6 +10,7 @@ already holds a session is picked up where it left off, its turns shown in the t
 """
 
 import argparse
+import asyncio
 import json
 import sys
 from collections.abc import Sequence
@@ -82,9 +83,6 @@ class SessionApp(App[None]):
                     self._show_tool_result(text)
         self._read_session()
 
-    def on_unmount(self) -> None:
-        self._session.end()
-
     def on_input_submitted(self, message: Input.Submitted) -> None:
         if not message.value.strip():
             return
@@ -150,7 +148,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Chat with an otter agent session.")
     parser.add_argument("--model-name", required=True, help='such as "glm-5.3"')
     parser.add_argument(
-        "--model-type", required=True, help='such as "chat-completions" or "responses"'
+        "--model-type", required=True, help='"chat-completions", "responses" or "realtime"'
     )
     parser.add_argument("--provider", required=True, help='such as "zai" or "openai"')
     parser.add_argument(
@@ -177,7 +175,12 @@ def main() -> None:
         )
     except (MissingApiKeyError, ValueError, OSError) as error:
         sys.exit(f"error: {error}")
-    SessionApp(session, f"{model.model_name} ({model.provider})", context).run()
+    asyncio.run(_chat(session, f"{model.model_name} ({model.provider})", context))
+
+
+async def _chat(session: AgentSession, title: str, context: Sequence[ContextEntry]) -> None:
+    async with session:
+        await SessionApp(session, title, context).run_async()
 
 
 if __name__ == "__main__":
