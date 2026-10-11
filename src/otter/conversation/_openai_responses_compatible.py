@@ -11,7 +11,7 @@ from openai.types.responses import (
     ResponseInputItemParam,
 )
 
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,
@@ -26,6 +26,40 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
+
+from ._conversation import Conversation
+
+
+def create_openai_responses_compatible_conversation(
+    client: AsyncOpenAI,
+    model: str,
+    *,
+    system: str | None = None,
+    tools: Sequence[ToolSpec] = (),
+    context: Sequence[ContextEntry] = (),
+    supports_images: bool = True,
+) -> Conversation:
+    """Start a conversation with `model`, served over a responses endpoint.
+
+    The client decides which provider is spoken to (its base URL and API key); any
+    provider serving the responses format will do. `system` is the system prompt the
+    model sees ahead of every turn, and `tools` are the tools it may ask to have called.
+    `context` is the history the conversation starts out with, oldest first; the
+    thinking in its assistant turns is not sent.
+
+    `supports_images` says whether the model can take images in. Where it is false, an
+    image is not sent: a short text note saying it was omitted goes to the model in its
+    place, so the conversation stays usable. The responses format has no place for
+    audio, so audio is always replaced by such a note.
+    """
+    return OpenAIResponsesCompatibleConversation(
+        client,
+        model,
+        system=system,
+        tools=tools,
+        context=context,
+        supports_images=supports_images,
+    )
 
 
 class OpenAIResponsesCompatibleConversation:

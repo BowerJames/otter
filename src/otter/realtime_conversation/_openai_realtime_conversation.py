@@ -19,7 +19,7 @@ from openai.types.realtime.realtime_conversation_item_user_message_param import 
     Content as UserContentParam,
 )
 
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,
@@ -34,8 +34,10 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
-from otter.realtime_conversation import (
+
+from ._realtime_conversation import (
     AudioDelta,
+    RealtimeConversation,
     RealtimeEvent,
     TextDelta,
     TranscriptDelta,
@@ -55,6 +57,32 @@ class RealtimeConnection(Protocol):
 
 type RealtimeConnect = Callable[[str], AbstractAsyncContextManager[RealtimeConnection]]
 """Opens a connection for a conversation with the named model; leaving it closes it."""
+
+
+def create_openai_realtime_conversation(
+    connect: RealtimeConnect,
+    model: str,
+    *,
+    system: str | None = None,
+    tools: Sequence[ToolSpec] = (),
+    context: Sequence[ContextEntry] = (),
+    voice: str | None = None,
+) -> RealtimeConversation:
+    """Start a realtime conversation with `model`, served over OpenAI's realtime format.
+
+    `connect` opens the connection the model is spoken to over, and so decides which
+    provider that is. `system` is the system prompt the model sees ahead of every turn,
+    and `tools` are the tools it may ask to have called. `context` is the history the
+    conversation starts out with, oldest first; the thinking in its assistant turns is
+    not sent. Given a `voice`, the model speaks its turns in it; left out, it writes
+    them as text.
+
+    One connection is made, when the first turn is generated, and kept between turns;
+    a conversation that is done with should be closed.
+    """
+    return OpenAIRealtimeConversation(
+        connect, model, system=system, tools=tools, context=context, voice=voice
+    )
 
 
 class OpenAIRealtimeConversation:

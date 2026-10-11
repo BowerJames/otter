@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from otter.create_file_system_session_manager import create_file_system_session_manager
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AudioPart,
     ContextEntry,
@@ -21,6 +20,7 @@ from otter.messages import (
     ToolResultMessage,
     UserMessage,
 )
+from otter.session_manager import create_file_system_session_manager
 
 ASKS = UserMessage((TextPart("What is in a.txt?"),))
 CALLS = AssistantMessage((ToolCall("call-1", "read_file", {"path": "a.txt"}),))

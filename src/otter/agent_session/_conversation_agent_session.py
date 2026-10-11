@@ -6,15 +6,7 @@ from collections.abc import AsyncGenerator, Sequence
 from types import TracebackType
 from typing import Self
 
-from otter.agent_session import (
-    AgentTool,
-    AssistantTurn,
-    Idle,
-    SessionEvent,
-    ToolResult,
-    UserTurn,
-)
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,
@@ -28,6 +20,40 @@ from otter.messages import (
 )
 from otter.model import Model
 from otter.session_manager import SessionManager
+
+from ._agent_session import (
+    AgentSession,
+    AgentTool,
+    AssistantTurn,
+    Idle,
+    SessionEvent,
+    ToolResult,
+    UserTurn,
+)
+
+
+def create_conversation_agent_session(
+    model: Model,
+    session_manager: SessionManager,
+    *,
+    system: str | None = None,
+    tools: Sequence[AgentTool] = (),
+) -> AgentSession:
+    """Start an agent session on `model`, its context kept in `session_manager`.
+
+    The session holds one conversation with `model`, started with `system` as its system
+    prompt. `tools` are what the model may ask to have run; each is run when asked for,
+    one at a time and in the order the model asked, and its result is shown to the model.
+
+    The conversation starts out with the entries `session_manager` holds, so the session
+    picks up where they leave off: if they end with something the model has not
+    answered, it is answered once the session is streamed. Everything that then joins
+    the conversation is appended to `session_manager` as it joins.
+
+    Leaving the session ends it and closes the conversation, which may be holding a
+    connection to the model open.
+    """
+    return ConversationAgentSession(model, session_manager, system=system, tools=tools)
 
 
 class ConversationAgentSession:

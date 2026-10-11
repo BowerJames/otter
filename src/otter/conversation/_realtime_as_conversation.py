@@ -3,9 +3,10 @@
 from collections.abc import Sequence
 from contextlib import aclosing
 
-from otter.conversation import Conversation
-from otter.messages import AssistantMessage, UserPart
+from otter.domain.messages import AssistantMessage, UserPart
 from otter.realtime_conversation import RealtimeConversation, TurnDone
+
+from ._conversation import Conversation
 
 
 def realtime_as_conversation(realtime: RealtimeConversation) -> Conversation:

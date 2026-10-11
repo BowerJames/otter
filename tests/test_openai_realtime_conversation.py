@@ -1,4 +1,4 @@
-"""Behaviour of OpenAIRealtimeConversation, observed at a fake realtime endpoint."""
+"""Behaviour of an OpenAI realtime conversation, observed at a fake realtime endpoint."""
 
 import base64
 import io
@@ -13,7 +13,7 @@ import pytest
 from openai.types.realtime import RealtimeClientEventParam, RealtimeServerEvent
 from pydantic import TypeAdapter
 
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,
@@ -26,8 +26,14 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
-from otter.openai_realtime_conversation import OpenAIRealtimeConversation
-from otter.realtime_conversation import AudioDelta, TextDelta, TranscriptDelta, TurnDone
+from otter.realtime_conversation import (
+    AudioDelta,
+    RealtimeConversation,
+    TextDelta,
+    TranscriptDelta,
+    TurnDone,
+    create_openai_realtime_conversation,
+)
 
 _SERVER_EVENT: TypeAdapter[RealtimeServerEvent] = TypeAdapter(RealtimeServerEvent)
 
@@ -175,7 +181,7 @@ class FakeRealtimeEndpoint:
         return self.turns.pop(0) if self.turns else [done(text_item("OK"))]
 
 
-async def turn(conversation: OpenAIRealtimeConversation) -> AssistantMessage:
+async def turn(conversation: RealtimeConversation) -> AssistantMessage:
     """Have the model take a whole turn and return it."""
     events = [event async for event in conversation.generate()]
     assert isinstance(events[-1], TurnDone)
@@ -201,7 +207,7 @@ def fake_endpoint() -> FakeRealtimeEndpoint:
 async def test_generating_sends_the_added_user_message_to_the_configured_model(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     await turn(conversation)
@@ -218,7 +224,7 @@ async def test_generating_ends_with_the_text_the_model_replied_with(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[done(text_item("Hi there"))]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     events = [event async for event in conversation.generate()]
@@ -236,7 +242,7 @@ async def test_generating_yields_the_text_as_the_model_writes_it(
             done(text_item("Hi there")),
         ]
     ]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     events = [event async for event in conversation.generate()]
@@ -255,7 +261,9 @@ async def test_generating_yields_what_the_model_says_as_sound_and_as_its_transcr
             done(spoken_item("Hi")),
         ]
     ]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime", voice="marin")
+    conversation = create_openai_realtime_conversation(
+        fake_endpoint, model="gpt-realtime", voice="marin"
+    )
     conversation.add_user_message([TextPart("Hello")])
 
     events = [event async for event in conversation.generate()]
@@ -267,7 +275,9 @@ async def test_a_spoken_turn_ends_with_its_transcript_as_text(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[done(spoken_item("Hi there"))]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime", voice="marin")
+    conversation = create_openai_realtime_conversation(
+        fake_endpoint, model="gpt-realtime", voice="marin"
+    )
     conversation.add_user_message([TextPart("Hello")])
 
     assert await turn(conversation) == AssistantMessage((TextPart("Hi there"),))
@@ -277,7 +287,7 @@ async def test_generating_ends_with_the_tool_calls_the_model_asked_for(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[done(tool_call_item("call_1", "read_file", '{"path": "a.txt"}'))]]
-    conversation = OpenAIRealtimeConversation(
+    conversation = create_openai_realtime_conversation(
         fake_endpoint, model="gpt-realtime", tools=[READ_FILE]
     )
     conversation.add_user_message([TextPart("Read a.txt")])
@@ -290,7 +300,7 @@ async def test_generating_ends_with_the_tool_calls_the_model_asked_for(
 async def test_generating_first_tells_the_endpoint_the_system_prompt_and_the_tools(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(
+    conversation = create_openai_realtime_conversation(
         fake_endpoint, model="gpt-realtime", system="Be brief.", tools=[READ_FILE]
     )
     conversation.add_user_message([TextPart("Hello")])
@@ -323,7 +333,7 @@ async def test_generating_first_tells_the_endpoint_the_system_prompt_and_the_too
 async def test_a_conversation_without_a_system_prompt_or_tools_asks_for_text_alone(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     await turn(conversation)
@@ -338,7 +348,9 @@ async def test_a_conversation_without_a_system_prompt_or_tools_asks_for_text_alo
 async def test_a_conversation_given_a_voice_asks_the_model_to_speak_in_it(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime", voice="marin")
+    conversation = create_openai_realtime_conversation(
+        fake_endpoint, model="gpt-realtime", voice="marin"
+    )
     conversation.add_user_message([TextPart("Hello")])
 
     await turn(conversation)
@@ -357,7 +369,7 @@ async def test_a_conversation_given_a_voice_asks_the_model_to_speak_in_it(
 async def test_a_second_turn_sends_only_what_was_added_since_over_the_same_connection(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
     await turn(conversation)
     conversation.add_user_message([TextPart("How are you?")])
@@ -377,7 +389,7 @@ async def test_a_second_turn_sends_only_what_was_added_since_over_the_same_conne
 
 async def test_generating_sends_an_added_tool_result(fake_endpoint: FakeRealtimeEndpoint) -> None:
     fake_endpoint.turns = [[done(tool_call_item("call_1", "read_file", '{"path": "a.txt"}'))]]
-    conversation = OpenAIRealtimeConversation(
+    conversation = create_openai_realtime_conversation(
         fake_endpoint, model="gpt-realtime", tools=[READ_FILE]
     )
     conversation.add_user_message([TextPart("Read a.txt")])
@@ -395,7 +407,7 @@ async def test_generating_sends_an_added_tool_result(fake_endpoint: FakeRealtime
 async def test_a_conversation_starts_from_the_context_it_is_given(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(
+    conversation = create_openai_realtime_conversation(
         fake_endpoint,
         model="gpt-realtime",
         context=[
@@ -439,7 +451,7 @@ async def test_generating_raises_when_the_endpoint_reports_an_error(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[error("bad item")]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     with pytest.raises(RuntimeError, match=r"^the model failed: bad item$"):
@@ -450,7 +462,7 @@ async def test_generating_raises_when_the_turn_ends_failed(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[FAILED]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     with pytest.raises(RuntimeError, match=r"^the model failed: overloaded$"):
@@ -461,7 +473,7 @@ async def test_generating_raises_when_the_connection_closes_before_the_turn_is_d
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[delta("response.output_text.delta", "Hi")]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     with pytest.raises(
@@ -474,7 +486,7 @@ async def test_generating_raises_what_the_connection_raises(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[LOST]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     with pytest.raises(ConnectionError, match=r"^connection lost$"):
@@ -485,7 +497,7 @@ async def test_generating_raises_when_tool_arguments_are_not_json(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[done(tool_call_item("call_1", "read_file", '{"path": '))]]
-    conversation = OpenAIRealtimeConversation(
+    conversation = create_openai_realtime_conversation(
         fake_endpoint, model="gpt-realtime", tools=[READ_FILE]
     )
     conversation.add_user_message([TextPart("Read a.txt")])
@@ -509,7 +521,7 @@ async def test_a_failed_turn_leaves_the_history_as_it_was_for_a_new_connection_t
     fake_endpoint: FakeRealtimeEndpoint, failing_turn: list[dict[str, Any]]
 ) -> None:
     fake_endpoint.turns = [[done(text_item("Hi there"))], failing_turn]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
     await turn(conversation)
     conversation.add_user_message([TextPart("How are you?")])
@@ -541,7 +553,7 @@ async def test_closing_the_stream_early_abandons_the_turn_and_leaves_the_history
     fake_endpoint.turns = [
         [delta("response.output_text.delta", "Hi "), done(text_item("Hi there"))]
     ]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
     stream = conversation.generate()
     await anext(stream)
@@ -609,7 +621,7 @@ async def test_closing_the_stream_early_abandons_the_turn_and_leaves_the_history
 async def test_generating_sends_what_the_model_can_take_and_a_note_in_place_of_the_rest(
     fake_endpoint: FakeRealtimeEndpoint, part: UserPart, sent: dict[str, Any]
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([part])
 
     await turn(conversation)
@@ -621,7 +633,7 @@ async def test_generating_sends_what_the_model_can_take_and_a_note_in_place_of_t
 async def test_closing_a_conversation_closes_its_connection(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
     await turn(conversation)
 
@@ -634,7 +646,7 @@ async def test_closing_a_conversation_closes_its_connection(
 async def test_a_conversation_connects_only_once_it_generates(
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
     await conversation.aclose()
@@ -646,7 +658,7 @@ async def test_generating_after_closing_sends_the_whole_history_over_a_new_conne
     fake_endpoint: FakeRealtimeEndpoint,
 ) -> None:
     fake_endpoint.turns = [[done(text_item("Hi there"))]]
-    conversation = OpenAIRealtimeConversation(fake_endpoint, model="gpt-realtime")
+    conversation = create_openai_realtime_conversation(fake_endpoint, model="gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
     await turn(conversation)
     await conversation.aclose()

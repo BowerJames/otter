@@ -21,12 +21,16 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Input, RichLog
 
-from otter.agent_session import AgentSession, AssistantTurn, Idle, ToolResult, UserTurn
+from otter.agent_session import (
+    AgentSession,
+    AssistantTurn,
+    Idle,
+    ToolResult,
+    UserTurn,
+    create_agent_session,
+)
 from otter.auth_resolver import MissingApiKeyError
-from otter.create_agent_session import create_agent_session
-from otter.create_file_system_session_manager import create_file_system_session_manager
-from otter.in_memory_session_manager import InMemorySessionManager
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     ContextEntry,
     TextPart,
@@ -36,7 +40,11 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
-from otter.session_manager import SessionManager
+from otter.session_manager import (
+    SessionManager,
+    create_file_system_session_manager,
+    create_in_memory_session_manager,
+)
 
 
 @dataclass(frozen=True)
@@ -165,7 +173,7 @@ def main() -> None:
     session_manager: SessionManager = (
         create_file_system_session_manager(args.session_file)
         if args.session_file
-        else InMemorySessionManager()
+        else create_in_memory_session_manager()
     )
     try:
         # Read before the session can add to it: this is what the session starts with.

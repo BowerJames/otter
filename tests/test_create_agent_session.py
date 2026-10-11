@@ -7,10 +7,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from otter.agent_session import AssistantTurn, Idle, UserTurn
+from otter.agent_session import AssistantTurn, Idle, UserTurn, create_agent_session
 from otter.conversation import Conversation
-from otter.create_agent_session import create_agent_session
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     ContextEntry,
     TextPart,

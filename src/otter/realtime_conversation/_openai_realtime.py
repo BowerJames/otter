@@ -2,8 +2,8 @@
 
 from openai import AsyncOpenAI
 
-from otter.openai_realtime_conversation import OpenAIRealtimeConversation
-from otter.realtime_conversation import RealtimeConversationFactory
+from ._openai_realtime_conversation import OpenAIRealtimeConversation
+from ._realtime_conversation import RealtimeConversationFactory
 
 
 def create_openai_realtime_conversations(

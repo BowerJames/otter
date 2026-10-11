@@ -5,8 +5,8 @@ import json
 import httpx2
 import pytest
 
-from otter.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage
-from otter.openai_chat_completions import create_openai_conversations
+from otter.conversation import create_openai_conversations
+from otter.domain.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage
 
 
 class FakeOpenAI:

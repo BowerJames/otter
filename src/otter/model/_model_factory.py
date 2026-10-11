@@ -6,14 +6,17 @@ from typing import Protocol
 import httpx2
 
 from otter.auth_resolver import ApiKey, Provider
-from otter.conversation import ConversationFactory
-from otter.model import Model, ModelConfig, ModelFactory, ModelType
-from otter.openai_chat_completions import create_openai_conversations
-from otter.openai_realtime import create_openai_realtime_conversations
-from otter.openai_responses import create_openai_responses_conversations
-from otter.realtime_as_conversation import realtime_as_conversation
-from otter.zai_chat_completions import create_zai_coding_plan_conversations
-from otter.zai_responses import create_zai_coding_plan_responses_conversations
+from otter.conversation import (
+    ConversationFactory,
+    create_openai_conversations,
+    create_openai_responses_conversations,
+    create_zai_coding_plan_conversations,
+    create_zai_coding_plan_responses_conversations,
+    realtime_as_conversation,
+)
+from otter.realtime_conversation import create_openai_realtime_conversations
+
+from ._model import Model, ModelConfig, ModelFactory, ModelType
 
 
 class _ConversationsOfProvider(Protocol):

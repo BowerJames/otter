@@ -5,8 +5,15 @@ import json
 import httpx2
 import pytest
 
-from otter.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage, UserPart
-from otter.zai_chat_completions import create_zai_coding_plan_conversations
+from otter.conversation import create_zai_coding_plan_conversations
+from otter.domain.messages import (
+    AssistantMessage,
+    AudioPart,
+    ImagePart,
+    TextPart,
+    UserMessage,
+    UserPart,
+)
 
 
 class FakeZai:

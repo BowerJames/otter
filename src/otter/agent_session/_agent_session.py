@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter.messages import AssistantMessage, AudioPart, ImagePart, ImageUrlPart, UserPart
+from otter.domain.messages import AssistantMessage, AudioPart, ImagePart, ImageUrlPart, UserPart
 
 
 class AgentTool(Protocol):

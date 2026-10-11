@@ -2,7 +2,18 @@
 
 from collections.abc import Iterable, Sequence
 
-from otter.messages import ContextEntry
+from otter.domain.messages import ContextEntry
+
+from ._session_manager import SessionManager
+
+
+def create_in_memory_session_manager(entries: Iterable[ContextEntry] = ()) -> SessionManager:
+    """Return a session manager that keeps its entries in memory.
+
+    The entries last as long as the session manager does. `entries` are what it starts
+    out holding, oldest first; leave it out to start empty.
+    """
+    return InMemorySessionManager(entries)
 
 
 class InMemorySessionManager:
