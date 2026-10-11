@@ -1,6 +1,8 @@
 """Behaviour of a realtime conversation used as a plain one, observed at a fake."""
 
 from collections.abc import AsyncGenerator, Sequence
+from types import TracebackType
+from typing import Self
 
 import pytest
 
@@ -21,7 +23,8 @@ class FakeRealtimeConversation:
         self.events: list[RealtimeEvent] = []
         self.fail_with: Exception | None = None
         self.streams_closed = 0
-        self.closes = 0
+        self.entered = 0
+        self.left: list[BaseException | None] = []
 
     def add_user_message(self, content: Sequence[UserPart]) -> None:
         self.user_messages.append(content)
@@ -38,8 +41,17 @@ class FakeRealtimeConversation:
         finally:
             self.streams_closed += 1
 
-    async def aclose(self) -> None:
-        self.closes += 1
+    async def __aenter__(self) -> Self:
+        self.entered += 1
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.left.append(exc)
 
 
 @pytest.fixture
@@ -102,11 +114,32 @@ def test_an_added_tool_result_is_added_to_the_realtime_conversation(
     assert fake_realtime.tool_results == [("call_1", "file contents")]
 
 
-async def test_closing_closes_the_realtime_conversation(
+async def test_entering_enters_the_realtime_conversation_and_gives_the_conversation(
     fake_realtime: FakeRealtimeConversation,
 ) -> None:
     conversation = realtime_as_conversation(fake_realtime)
 
-    await conversation.aclose()
+    async with conversation as entered:
+        assert entered is conversation
+        assert (fake_realtime.entered, fake_realtime.left) == (1, [])
 
-    assert fake_realtime.closes == 1
+
+async def test_leaving_leaves_the_realtime_conversation(
+    fake_realtime: FakeRealtimeConversation,
+) -> None:
+    async with realtime_as_conversation(fake_realtime):
+        pass
+
+    assert fake_realtime.left == [None]
+
+
+async def test_leaving_because_of_an_error_leaves_the_realtime_conversation_with_the_error(
+    fake_realtime: FakeRealtimeConversation,
+) -> None:
+    boom = KeyError("boom")
+
+    with pytest.raises(KeyError, match=r"^'boom'$"):
+        async with realtime_as_conversation(fake_realtime):
+            raise boom
+
+    assert fake_realtime.left == [boom]

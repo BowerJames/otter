@@ -1,13 +1,19 @@
 """What an agent needs from a conversation with a model, whichever provider serves it."""
 
 from collections.abc import Sequence
-from typing import Protocol
+from types import TracebackType
+from typing import Protocol, Self
 
 from otter.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
 
 class Conversation(Protocol):
-    """One conversation with one model: it holds the history and generates the next turn."""
+    """One conversation with one model: it holds the history and generates the next turn.
+
+    A conversation is an async context manager, and may hold something open for as long
+    as it is entered, such as a connection to the model: use it in `async with`, and
+    generate its turns inside.
+    """
 
     def add_user_message(self, content: Sequence[UserPart]) -> None:
         """Append a user turn; it is sent to the model on the next `generate`."""
@@ -21,15 +27,25 @@ class Conversation(Protocol):
         """Send the conversation so far to the model and return the turn it produces.
 
         The returned turn joins the history. If generating fails, the error propagates
-        and the history is left as it was.
+        and the history is left as it was. A conversation that holds something open
+        raises `RuntimeError` if it has not been entered.
         """
         ...
 
-    async def aclose(self) -> None:
-        """Let go of anything held open, such as a connection to the model.
+    async def __aenter__(self) -> Self:
+        """Enter the conversation, which is returned, taking hold of anything it needs open.
 
-        Closing a closed conversation does nothing.
+        If that fails, the error propagates and the conversation has not been entered.
         """
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leave the conversation, letting go of anything held open."""
         ...
 
 

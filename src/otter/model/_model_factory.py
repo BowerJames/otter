@@ -66,8 +66,8 @@ def create_model_factory(
     reach providers over the network.
 
     A realtime model's turns are taken whole and as text. It is reached over a
-    connection of its own, made when its first turn is generated and kept until the
-    conversation is closed, which `http_client` has no part in: `realtime_connector` is
+    connection of its own, made when the conversation is entered and kept until it is
+    left, which `http_client` has no part in: `realtime_connector` is
     what that connection is opened through; leave it out to reach providers over the
     network.
     """

@@ -4,6 +4,8 @@ fake session manager.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import TracebackType
+from typing import Self
 
 import pytest
 
@@ -75,7 +77,15 @@ class FakeModels:
     async def generate(self) -> AssistantMessage:
         return AssistantMessage(content=(TextPart("OK"),))
 
-    async def aclose(self) -> None:
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         pass
 
 

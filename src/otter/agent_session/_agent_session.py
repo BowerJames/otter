@@ -66,8 +66,8 @@ class AgentSession(Protocol):
     events are taken.
 
     A session is an async context manager, and may hold something open for as long as
-    it lasts, such as a connection to its model: use it in `async with` so that it is
-    ended and let go of.
+    it is entered, such as a connection to its model: use it in `async with`, and stream
+    it inside, so that it is ended and let go of.
     """
 
     def prompt(
@@ -119,7 +119,11 @@ class AgentSession(Protocol):
         ...
 
     async def __aenter__(self) -> Self:
-        """Enter the session, which is returned: `async with session:` scopes its life."""
+        """Enter the session, which is returned: `async with session:` scopes its life.
+
+        Anything it needs open is taken hold of. If that fails, the error propagates
+        and the session has not been entered.
+        """
         ...
 
     async def __aexit__(
