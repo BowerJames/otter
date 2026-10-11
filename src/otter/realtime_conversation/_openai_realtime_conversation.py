@@ -6,7 +6,8 @@ import json
 import wave
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
-from typing import Protocol, assert_never
+from types import TracebackType
+from typing import Protocol, Self, assert_never
 
 from openai.types.realtime import (
     ConversationItemParam,
@@ -77,8 +78,8 @@ def create_openai_realtime_conversation(
     not sent. Given a `voice`, the model speaks its turns in it; left out, it writes
     them as text.
 
-    One connection is made, when the first turn is generated, and kept between turns;
-    a conversation that is done with should be closed.
+    The conversation is an async context manager: entering it makes its connection,
+    which is kept between turns, and leaving it closes that connection.
     """
     return OpenAIRealtimeConversation(
         connect, model, system=system, tools=tools, context=context, voice=voice
@@ -98,12 +99,13 @@ class OpenAIRealtimeConversation:
     transcript, and join the history as the transcript. Left out, the model writes its
     turns as text.
 
-    One connection is made, when the first turn is generated, and kept between turns:
-    the endpoint holds the conversation while it lasts, so each turn sends only what was
-    added since. The history is kept here too, and is what counts: whenever the
-    connection is let go of, by `aclose` or by a turn that fails or is abandoned, the
-    next turn sends all of it over a new one. A conversation that is done with should
-    be closed.
+    The conversation is an async context manager: entering it makes its connection, and
+    leaving it closes that connection. Turns are generated inside. The connection is
+    kept between turns: the endpoint holds the conversation while it lasts, so each turn
+    sends only what was added since. The history is kept here too, and is what counts:
+    when a turn fails or is abandoned the connection is replaced, and the next turn
+    sends all of the history over the new one, as does the first turn of a conversation
+    entered again.
 
     Images are sent to the model, but only those carried inline: one given as a URL is
     replaced by a short text note saying it was omitted. Audio is sent only as 16-bit
@@ -133,6 +135,7 @@ class OpenAIRealtimeConversation:
         self._connection: RealtimeConnection | None = None
         self._events: AsyncIterator[RealtimeServerEvent] | None = None
         self._open = AsyncExitStack()
+        self._entered = False
         self._session: RealtimeSessionCreateRequestParam = {
             "type": "realtime",
             "output_modalities": ["text"],
@@ -179,18 +182,21 @@ class OpenAIRealtimeConversation:
         """Have the model take its turn, yielding each piece of it as it is produced.
 
         The last thing yielded is a `TurnDone` holding the whole turn, which by then has
-        joined the history. Nothing is sent, and no connection made, until the stream is
-        read. The conversation is sent as it stands: one the endpoint cannot accept,
-        such as a tool call left without a result, is the endpoint's to reject.
+        joined the history. Nothing is sent until the stream is read. The conversation
+        is sent as it stands: one the endpoint cannot accept, such as a tool call left
+        without a result, is the endpoint's to reject. Raises `RuntimeError` if the
+        conversation has not been entered.
 
-        If the connection cannot be made or fails, the endpoint reports an error or that
+        If the connection fails, the endpoint reports an error or that
         the model failed (a `RuntimeError`), the connection closes before the turn is
         done (a `RuntimeError`), or the model's turn cannot be read (tool arguments that
         are not valid JSON raise `json.JSONDecodeError`), the error propagates and the
         history is left as it was. Closing the stream before `TurnDone` abandons the
         turn: the model stops, and the history is left as it was. Either way the
-        connection is let go of, and the next `generate` makes a new one.
+        connection is closed, and the next `generate` makes a new one.
         """
+        if not self._entered:
+            raise RuntimeError("the conversation has not been entered")
         done = False
         try:
             connection, events = await self._connected()
@@ -219,7 +225,7 @@ class OpenAIRealtimeConversation:
             # The endpoint's copy of the conversation can no longer be trusted to match
             # the history: it may hold part of a turn, or items the history never took.
             if not done:
-                await self.aclose()
+                await self._disconnect()
 
     async def _connected(self) -> tuple[RealtimeConnection, AsyncIterator[RealtimeServerEvent]]:
         if self._connection is None or self._events is None:
@@ -228,10 +234,35 @@ class OpenAIRealtimeConversation:
             await self._connection.send({"type": "session.update", "session": self._session})
         return self._connection, self._events
 
-    async def aclose(self) -> None:
-        """Close the connection, if one is open. The conversation can still be used:
-        the next `generate` sends the whole history over a new connection.
+    async def __aenter__(self) -> Self:
+        """Enter the conversation, which is returned: its connection is made.
+
+        If the connection cannot be made, the error propagates and the conversation has
+        not been entered.
         """
+        try:
+            await self._connected()
+        except BaseException:
+            await self._disconnect()
+            raise
+        self._entered = True
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leave the conversation: its connection is closed.
+
+        The history is kept: a conversation entered again sends all of it over a new
+        connection.
+        """
+        self._entered = False
+        await self._disconnect()
+
+    async def _disconnect(self) -> None:
         # Forgotten before it is closed, so a connection that fails to close is not
         # used again.
         opened, self._open = self._open, AsyncExitStack()

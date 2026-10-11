@@ -50,8 +50,8 @@ def create_conversation_agent_session(
     answered, it is answered once the session is streamed. Everything that then joins
     the conversation is appended to `session_manager` as it joins.
 
-    Leaving the session ends it and closes the conversation, which may be holding a
-    connection to the model open.
+    Entering the session enters the conversation, which may then hold a connection to
+    the model open, and leaving the session ends it and leaves the conversation.
     """
     return ConversationAgentSession(model, session_manager, system=system, tools=tools)
 
@@ -72,8 +72,9 @@ class ConversationAgentSession:
     Nothing happens unless `stream` is being read: the session advances only as its
     events are taken.
 
-    The session is an async context manager, and leaving it ends it and closes the
-    conversation, which may be holding a connection to the model open.
+    The session is an async context manager: entering it enters the conversation, which
+    may then hold a connection to the model open, and leaving it ends it and leaves the
+    conversation. Stream it inside.
     """
 
     def __init__(
@@ -209,7 +210,12 @@ class ConversationAgentSession:
         self._wake.set()
 
     async def __aenter__(self) -> Self:
-        """Enter the session, which is returned: `async with session:` scopes its life."""
+        """Enter the session, which is returned: `async with session:` scopes its life.
+
+        Its conversation is entered. If that fails, the error propagates and the
+        session has not been entered.
+        """
+        await self._conversation.__aenter__()
         return self
 
     async def __aexit__(
@@ -218,12 +224,12 @@ class ConversationAgentSession:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        """Leave the session: it is ended, and its conversation is closed.
+        """Leave the session: it is ended, and its conversation is left.
 
         Leave once the stream is no longer being read: a turn the model is part-way
-        through elsewhere is cut short by the conversation closing under it. If the
-        conversation fails to close, the error propagates and the session has ended
+        through elsewhere is cut short by the conversation being left under it. If
+        leaving the conversation fails, the error propagates and the session has ended
         all the same.
         """
         self.end()
-        await self._conversation.aclose()
+        await self._conversation.__aexit__(exc_type, exc, traceback)

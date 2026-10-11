@@ -2,7 +2,8 @@
 
 from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from types import TracebackType
+from typing import Protocol, Self
 
 from otter.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
@@ -44,7 +45,8 @@ type RealtimeEvent = TextDelta | AudioDelta | TranscriptDelta | TurnDone
 class RealtimeConversation(Protocol):
     """One conversation with one model: it holds the history and streams the next turn.
 
-    A conversation may hold a connection open between turns; `aclose` lets go of it.
+    A conversation is an async context manager, and may hold a connection open for as
+    long as it is entered: use it in `async with`, and generate its turns inside.
     """
 
     def add_user_message(self, content: Sequence[UserPart]) -> None:
@@ -62,12 +64,24 @@ class RealtimeConversation(Protocol):
         joined the history. Nothing is sent until the stream is read. If generating
         fails, the error propagates and the history is left as it was. Closing the
         stream before `TurnDone` abandons the turn: the model stops, and the history is
-        left as it was.
+        left as it was. Raises `RuntimeError` if the conversation has not been entered.
         """
         ...
 
-    async def aclose(self) -> None:
-        """Let go of any connection held. Closing a closed conversation does nothing."""
+    async def __aenter__(self) -> Self:
+        """Enter the conversation, which is returned, taking hold of any connection it needs.
+
+        If that fails, the error propagates and the conversation has not been entered.
+        """
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Leave the conversation, letting go of any connection held."""
         ...
 
 

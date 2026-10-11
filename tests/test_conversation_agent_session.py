@@ -4,6 +4,8 @@ manager and its events.
 
 import asyncio
 from collections.abc import AsyncIterator, Mapping, Sequence
+from types import TracebackType
+from typing import Self
 
 import pytest
 
@@ -34,7 +36,7 @@ class FakeConversations:
     """A test adapter for the model: its one conversation records what it was started with
     and what joins its history, and answers each `generate` with the next scripted turn.
 
-    A scripted exception is raised in place of a turn. Setting `fail_to_close` makes
+    A scripted exception is raised in place of a turn. Setting `fail_to_leave` makes
     closing the conversation raise it.
     """
 
@@ -43,8 +45,10 @@ class FakeConversations:
         self.contexts: list[list[ContextEntry]] = []
         self.history: list[object] = []
         self.script: list[AssistantMessage | Exception] = []
-        self.closes = 0
-        self.fail_to_close: Exception | None = None
+        self.entered = 0
+        self.left = 0
+        self.fail_to_enter: Exception | None = None
+        self.fail_to_leave: Exception | None = None
 
     def __call__(
         self, system: str | None, tools: Sequence[ToolSpec], context: Sequence[ContextEntry]
@@ -66,10 +70,21 @@ class FakeConversations:
         self.history.append(turn)
         return turn
 
-    async def aclose(self) -> None:
-        self.closes += 1
-        if self.fail_to_close is not None:
-            raise self.fail_to_close
+    async def __aenter__(self) -> Self:
+        if self.fail_to_enter is not None:
+            raise self.fail_to_enter
+        self.entered += 1
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.left += 1
+        if self.fail_to_leave is not None:
+            raise self.fail_to_leave
 
 
 class FakeSessionManager:
@@ -667,13 +682,36 @@ async def test_entering_a_session_gives_the_session(
         assert entered is session
 
 
-async def test_leaving_a_session_closes_its_conversation(
+async def test_a_session_enters_its_conversation_only_once_it_is_entered(
+    conversations: FakeConversations, manager: FakeSessionManager
+) -> None:
+    session = create_conversation_agent_session(conversations, manager)
+    assert conversations.entered == 0
+
+    async with session:
+        assert conversations.entered == 1
+
+
+async def test_entering_a_session_raises_what_entering_its_conversation_raises(
+    conversations: FakeConversations, manager: FakeSessionManager
+) -> None:
+    conversations.fail_to_enter = ConnectionError("no route")
+    session = create_conversation_agent_session(conversations, manager)
+
+    with pytest.raises(ConnectionError, match=r"^no route$"):
+        async with session:
+            pass
+
+    assert conversations.left == 0
+
+
+async def test_leaving_a_session_leaves_its_conversation(
     conversations: FakeConversations, manager: FakeSessionManager
 ) -> None:
     async with create_conversation_agent_session(conversations, manager):
-        assert conversations.closes == 0
+        assert conversations.left == 0
 
-    assert conversations.closes == 1
+    assert conversations.left == 1
 
 
 async def test_leaving_a_session_ends_it(
@@ -688,20 +726,20 @@ async def test_leaving_a_session_ends_it(
         session.prompt("Hello")
 
 
-async def test_a_session_left_because_of_an_error_closes_its_conversation_and_lets_the_error_out(
+async def test_a_session_left_because_of_an_error_leaves_its_conversation_and_lets_the_error_out(
     conversations: FakeConversations, manager: FakeSessionManager
 ) -> None:
     with pytest.raises(KeyError, match=r"^'boom'$"):
         async with create_conversation_agent_session(conversations, manager):
             raise KeyError("boom")
 
-    assert conversations.closes == 1
+    assert conversations.left == 1
 
 
-async def test_a_conversation_that_fails_to_close_propagates_and_the_session_has_ended(
+async def test_a_conversation_that_fails_to_be_left_propagates_and_the_session_has_ended(
     conversations: FakeConversations, manager: FakeSessionManager
 ) -> None:
-    conversations.fail_to_close = ConnectionError("connection lost")
+    conversations.fail_to_leave = ConnectionError("connection lost")
     session = create_conversation_agent_session(conversations, manager)
 
     with pytest.raises(ConnectionError, match=r"^connection lost$"):

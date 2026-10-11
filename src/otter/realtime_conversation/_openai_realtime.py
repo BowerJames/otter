@@ -23,7 +23,7 @@ def create_openai_realtime_conversations(
     """Return a factory of realtime conversations with OpenAI models.
 
     Each conversation it starts makes its own connection to OpenAI, authenticated with
-    `api_key`, when its first turn is generated, and should be closed when done with.
+    `api_key`, when it is entered, and closes it when it is left.
     Given a `voice`, the models speak their turns in it; left out, they write them as
     text. Images carried inline and 16-bit mono 24 kHz wav audio are sent to the model;
     it gets a short note in place of anything else. `connector` is what connections are

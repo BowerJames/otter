@@ -2,7 +2,8 @@
 
 import json
 from collections.abc import Sequence
-from typing import assert_never
+from types import TracebackType
+from typing import Self, assert_never
 
 from openai import AsyncOpenAI, omit
 from openai.types.chat import (
@@ -199,7 +200,16 @@ class OpenAIChatCompletionsCompatibleConversation:
         self._messages.append(turn)
         return AssistantMessage(content=tuple(content))
 
-    async def aclose(self) -> None:
+    async def __aenter__(self) -> Self:
+        """Enter the conversation, which is returned. Nothing is opened."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         """Does nothing: a conversation holds nothing open, and the client is not its to close."""
 
     def add_tool_result(self, tool_call_id: str, text: str) -> None:

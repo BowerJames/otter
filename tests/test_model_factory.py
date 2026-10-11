@@ -248,7 +248,8 @@ async def test_a_realtime_model_of_openai_is_reached_by_its_name_with_the_api_ke
     conversation = model(None, [], [])
     conversation.add_user_message([TextPart("Hello")])
 
-    await conversation.generate()
+    async with conversation:
+        await conversation.generate()
 
     assert fake_realtime.opened == [("secret-key", "gpt-realtime")]
 
@@ -260,7 +261,8 @@ async def test_a_realtime_models_conversations_use_the_system_prompt_tools_and_c
     model = create_model(Config("gpt-realtime", "realtime", "openai"), "secret-key")
     conversation = model("Be brief.", [ECHO], [UserMessage((TextPart("Hello"),))])
 
-    await conversation.generate()
+    async with conversation:
+        await conversation.generate()
 
     [session] = [e["session"] for e in fake_realtime.sent if e["type"] == "session.update"]
     assert session["instructions"] == "Be brief."

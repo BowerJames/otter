@@ -103,12 +103,13 @@ async def test_a_conversation_connects_for_its_model_with_the_api_key(
     conversation = create_conversation("gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
-    await turn(conversation)
+    async with conversation:
+        await turn(conversation)
 
     assert fake_openai.opened == [("openai-key", "gpt-realtime")]
 
 
-async def test_a_conversation_does_not_connect_until_it_generates(
+async def test_a_conversation_does_not_connect_until_it_is_entered(
     fake_openai: FakeOpenAIRealtime,
 ) -> None:
     create_conversation = create_openai_realtime_conversations("openai-key", connector=fake_openai)
@@ -126,7 +127,8 @@ async def test_a_conversation_writes_its_turns_as_text_when_no_voice_is_given(
     conversation = create_conversation("gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
-    await turn(conversation)
+    async with conversation:
+        await turn(conversation)
 
     [connection] = fake_openai.connections
     assert connection.session() == {"type": "realtime", "output_modalities": ["text"]}
@@ -141,7 +143,8 @@ async def test_a_conversation_speaks_its_turns_in_the_voice_given(
     conversation = create_conversation("gpt-realtime")
     conversation.add_user_message([TextPart("Hello")])
 
-    await turn(conversation)
+    async with conversation:
+        await turn(conversation)
 
     [connection] = fake_openai.connections
     assert connection.session() == {
@@ -161,7 +164,8 @@ async def test_a_conversation_starts_from_the_system_prompt_and_context_it_is_gi
         context=[UserMessage((TextPart("Hello"),)), AssistantMessage((TextPart("Hi there"),))],
     )
 
-    await turn(conversation)
+    async with conversation:
+        await turn(conversation)
 
     [connection] = fake_openai.connections
     assert connection.session()["instructions"] == "Be brief."
