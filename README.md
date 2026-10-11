@@ -31,7 +31,10 @@ uv run ruff format .     # format
 
 ### Trying a session out
 
-`scripts/tui.py` opens a terminal chat with an agent session:
+`scripts/tui.py` opens a terminal chat with an agent session. It wires together `otter.tui`,
+the chat itself, and `otter.chat_screen`, the screen it is held on, which is drawn with
+[Textual](https://textual.textualize.io/): outside this repository, install otter with its `tui`
+extra to get it.
 
 ```sh
 just tui --model-name glm-5.3 --model-type chat-completions --provider zai
