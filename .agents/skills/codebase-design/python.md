@@ -8,106 +8,119 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 |---|---|
 | **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
 | **Adapter** | any class or function satisfying the interface's shape |
-| **Module** | a class, a module-level function, or a package |
-| **Seam** | a typed parameter behaviour varies through: an object interface, a function interface, or a plain value |
-| **Resource** | `os.environ`, the filesystem, the clock, the network — reached only behind an adapter |
+| **Seam** | a typed parameter capability varies through: an object interface, a function interface, or a plain value |
 
-## Interfaces are types
+## Example 1
+
+Below illustrates an example of a `PaymentGateway` module in Python.
 
 ```python
-from typing import Protocol
+from typing import Protocol, Literal
 
-class PaymentGateway(Protocol):          # the interface at the seam
+type EnvVariableLoader = Callable[[str], str]
+type HTTP = Callable[[Request], Response]
+
+class PaymentGateway(Protocol):          # the interface for the PaymentGateway Module
     def charge(self, amount: float) -> bool: ...
 
-class StripeGateway:                      # an adapter — no inheritance
+class StripeGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
+
     def charge(self, amount: float) -> bool: ...
+
+class PaypalGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
+
+    def charge(self, amount: float) -> bool: ...
+
+def create_payment_gateway(
+        type: Literal["stripe", "paypal"], # seam for the PaymentGateway Module
+        env_variable_loader: EnvVariableLoader, # seam for the PaymentGateway Module to access the environment variable resource for testing
+        http: HTTP
+    ) -> PaymentGateway: # A factory for the PaymentGateway module
+    if type == "stripe":
+        api_key = env_variable_loader("STRIPE_API_KEY")
+        return StripeGateway(api_key, http)
+    elif type == "paypal":
+        api_key = env_variable_loader("PAYPAL_API_KEY")
+        return PaypalGateway(api_key, http)
 ```
 
-Matching is structural: `StripeGateway` satisfies the Protocol by shape alone. Explicit inheritance (`class StripeGateway(PaymentGateway)`) is allowed and documents intent — it lets the type checker flag drift — but it is a declaration, never a requirement.
+Matching is structural: `StripeGateway` and `PaypalGateway` both satisfy the `PaymentGateway` interface.
 
-- Prefer **Protocol over ABC** for interfaces: ABC is nominal (adapters must inherit), and a seam wants *any* satisfier.
-- `@runtime_checkable` only checks that methods exist, not their signatures — it is no substitute for the type checker.
+Explicit inheritance (`class StripeGateway(PaymentGateway)`) is allowed and documents intent — it lets the type checker flag drift — but it is a declaration, never a requirement.
 
-A function's interface is its type: `clock: Callable[[], datetime]` says everything a caller must know. When a function interface needs keyword parameters, defaults, or a name, promote it to a Protocol with `__call__`:
+This module is a well designed deep module:
+
+**Leverage for the caller** - The module allows the caller to make payments through stripe and paypal through a simple interface with a single method with a single parameter.
+
+**Flexibility for developers** - It is simple to extend the module capabilities by simply adding another class satisfying the `PaymentGateway` interface and adding a single extra conditional branch in the implementation of the factory.
+
+**Testability for everyone** - The module can be tested easily through its factory and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
+
+## Example 2
+
+Below are 2 valid formulations of an `OrderProcessor` module built on top of example 1.
 
 ```python
-class Clock(Protocol):
-    def __call__(self, *, tz: str = "UTC") -> datetime: ...
+from typing import Callable
+
+type OrderProcessor = Callable[[Order, PaymentGateway], Receipt] # Interface for the OrderProcessor module
+
+def process_order(
+    order: Order,
+    gateway: PaymentGateway # seam through which capabilities of the OrderProcessor can vary
+) -> Receipt:
+    # Implementation of the OrderProcessor module
+    total = 0
+    for item in order.items:
+        total += item.cost
+    payment_successful = gateway.charge(total)
+    if not payment_successful:
+        raise ...
+    return Receipt(
+        total=total
+    )
 ```
-
-## The shapes of a seam
-
-A seam is anywhere behaviour varies without editing the module. In Python it takes three shapes:
 
 ```python
-def __init__(self,
-             gateway: PaymentGateway,            # object interface: a whole adapter can cross it
-             clock: Callable[[], datetime],      # function interface: one function swaps
-             verbose: bool):                     # plain value: one bit of behaviour
+from typing import Callable
+
+type OrderProcessor = Callable[[Order], Receipt] # Interface for the OrderProcessor module
+
+def create_order_processor(
+    gateway: PaymentGateway # A seam for the OrderProcessor module
+) -> OrderProcessor: # Factory of the OrderProcessor module
+    def process_order(
+        order: Order
+    ) -> Receipt:
+        # Implementation of the OrderProcessor module
+        total = 0
+        for item in order.items:
+            total += item.cost
+        payment_successful = gateway.charge(total)
+        if not payment_successful:
+            raise ...
+        return Receipt(
+            total=total
+        )
+    return process_order
 ```
 
-All three are seams; they differ in **Depth**. A Protocol carries a whole interface of variation, a Callable one function's worth, a bool one bit. Fit the seam to the variation: a Protocol behind a binary toggle is ceremony; a bool behind a swappable adapter is a wall.
+Both are modules with a seam; they differ in where the seam sits. The first places it in the interface, so every caller must supply a gateway. The second places it in the factory, leaving the interface with only data. Prefer the second wherever the adapter is known when the entity is created (see dependency-injection, rule 2).
 
-## Modules don't need classes
+The second example exhibits:
 
-A module-level function with a typed parameter is already a module with a seam — no class, no framework, no decorators:
+**Leverage for Consumers** - Has the capability to total orders and process payments through Stripe and Paypal (thanks to the existing adapters)
 
-```python
-def processOrder(order: Order, gateway: PaymentGateway) -> Receipt: ...
-```
+**Locality for Maintainers** - Tests can be written with a fake payment gateway allowing them to localise bugs in the order totaling vs payment gateways. Any change to the order processing can be propagated to all payment gateway types through one place.
 
-## Adapters and seams
-
-```python
-class PaymentGateway(Protocol): # PaymentGateway is an interface of the processOrder module seam
-    def charge(self, amount: float) -> bool:
-        ...
-
-def processOrder(order, paymentGateway: PaymentGateway):
-    ...
-
-class StripeGateway: # StripeGateway is a module
-    def __init__(self, api_key: str, requester: Callable[[Request], Response]):
-        ...
-
-    def charge(self, amount: float) -> bool:
-        ...
-
-    def refund(self, amount: float) -> bool:
-        ...
-
-processOrder(order, StripeGateway()) # StripeGateway is an adapter satisfying the interface at the processOrder module seam
-```
-
-## Designing for testability
-
-**Accept dependencies, don't create them.**
-
-```python
-# Testable
-def processOrder(order, paymentGateway: PaymentGateway): # paymentGateway is a seam of the processOrder module
-    ...
-
-# Hard to test
-def processOrder(order):
-    gateway = StripeGateway()
-    ...
-```
-
-**Return results, don't produce side effects.**
-
-```python
-# Testable
-def calculateDiscount(cart) -> Discount:
-    ...
-
-# Hard to test
-def applyDiscount(cart) -> None:
-    cart.total -= discount
-    ...
-```
-
-## Gotchas
-
-- **Protocol parameter names must match** for structural compatibility — renaming `charge(self, amount)` to `charge(self, amt)` silently breaks the match.
+**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities.

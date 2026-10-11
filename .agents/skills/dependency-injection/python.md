@@ -4,42 +4,90 @@ The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Pyth
 
 ## Rule 1: code against interfaces
 
-Type dependencies as Protocols (for classes) or Callables (for functions), never as concrete classes:
+Bad example for an `OrderProcessor` module:
 
 ```python
-# Coupled: no seam — the caller is welded to one adapter
-def processOrder(order, gateway: StripeGateway):
-    ...
+class StripeGateway:
 
-# Decoupled: PaymentGateway is the interface at the seam
-# Any adapter — Stripe in production, a fake in tests — can satisfy it
-def processOrder(order, gateway: PaymentGateway):
+    def __init__(
+        self,
+        api_key,
+        http
+    ): ...
+
+    def charge(self, amount: float) -> bool: ...
+
+type OrderProcessor = Callable[[Order], Receipt]
+
+def create_order_processor(
+    gateway: StripeGateway # The factory for the OrderProcessor is using the StripeGateway class which includes its implementation.
+) -> OrderProcessor:
     ...
 ```
 
-## Rule 2: declare seams at construction
-
-The `__init__` signature (or the function signature) is where the interface declares the seam; the methods take only data:
+Good example for an `OrderProcessor` module:
 
 ```python
-class StripeGateway(PaymentGateway):
-    def __init__(self, api_key: str, requester): # Construction for the stripe gateway module includes the requester seam
-        ...
+class PaymentGateway(Protocol):
 
-    def charge(self, amount: float) -> bool: # Only data passed to the methods of the module, not seams
-        ...
+    def charge(self, amount: float) -> bool: ...
 
-    def refund(self, amount: float) -> bool:
-        ...
+type OrderProcessor = Callable[[Order], Receipt]
+
+def create_order_processor(
+    gateway: PaymentGateway # The factory for the OrderProcessor is using the PaymentGateway interface which can be substituted for any PaymentGateway.
+) -> OrderProcessor:
+    ...
+
 ```
 
-A module-level global (`gateway = StripeGateway(KEY)`, imported by consumers) is the same dependency fetched instead of declared — Python's ambient service locator.
+## Rule 2: declare seams in factories
 
-## Testing: fixtures wire the graph
+Avoid for an `OrderProcessor` module:
 
-A pytest fixture that assembles the graph with fakes is the test doing its own wiring — the same discipline at test scope. A fake is a small class satisfying the Protocol; a seam needs no mock library. `monkeypatch` is a service locator for tests: injecting a fake at the seam beats patching a global every time.
+```python
+class PaymentGateway(Protocol):
 
-## Gotchas
+    def charge(self, amount: float) -> bool: ...
 
-- **Mutable default arguments** — `def __init__(self, hooks=[])` shares one list across every instance. Defaults must be immutable; use `None` and construct inside.
-- **No framework needed.** `dependency-injector` and friends automate wiring; the discipline is stdlib-only — typed parameters and Protocols carry it.
+type OrderProcessor = Callable[[Order, PaymentGateway], Receipt]
+
+def process_order(
+    order: Order,
+    gateway: PaymentGateway # The seam that changes the capability of the order processor exists in the interface
+) -> Receipt:
+    total = 0
+    for item in order.items:
+        total += item.cost
+    payment_successful = gateway.charge(total)
+    if not payment_successful:
+        raise ...
+    return Receipt(
+        total=total
+    )
+```
+
+Prefer for an `OrderProcessor` module:
+
+```python
+class PaymentGateway(Protocol):
+
+    def charge(self, amount: float) -> bool: ...
+
+type OrderProcessor = Callable[[Order], Receipt]
+
+def create_order_processor(
+    gateway: PaymentGateway # Seam is passed in the factory for the OrderProcessor module
+) -> OrderProcessor:
+    def process_order(order: Order) -> Receipt:
+        total = 0
+        for item in order.items:
+            total += item.cost
+        payment_successful = gateway.charge(total)
+        if not payment_successful:
+            raise ...
+        return Receipt(
+            total=total
+        )
+    return process_order
+```
