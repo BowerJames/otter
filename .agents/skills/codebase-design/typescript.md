@@ -2,138 +2,117 @@
 
 The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its TypeScript spelling.
 
-The style throughout: **no classes**. Modules are functions and factory-built objects; adapters are object literals that satisfy an `interface` structurally.
+The style throughout: **no classes**. Entities are functions and object literals built by factories; they satisfy an `interface` structurally.
 
 ## Vocabulary → TypeScript
 
 | Term | TypeScript |
 |---|---|
 | **Interface** | for object shapes, an `interface`; for functions, a type — `() => Date` |
-| **Adapter** | an object literal satisfying the interface's shape, built by a factory function |
-| **Module** | a function, an object built by a factory function, or an ES module |
-| **Seam** | a typed parameter behaviour varies through: an object interface, a function type, or a plain value |
-| **Resource** | `process.env`, the filesystem, the clock, the network — reached only behind an adapter |
+| **Adapter** | any object literal or function satisfying the interface's shape |
+| **Seam** | a typed parameter capability varies through: an object interface, a function type, or a plain value |
 
-## Interfaces are types
+## Example 1
+
+Below illustrates an example of a `PaymentGateway` module in TypeScript.
 
 ```ts
-interface PaymentGateway {            // the interface at the seam
+type EnvVariableLoader = (name: string) => string;
+type Http = (request: Request) => Response;
+
+interface PaymentGateway {               // the interface for the PaymentGateway module
   charge(amount: number): boolean;
 }
 
-function createStripeGateway(apiKey: string): PaymentGateway {
+function createStripeGateway(apiKey: string, http: Http): PaymentGateway {
   return {
-    charge(amount: number) { /* ... */ },  // checked against the interface here
+    charge(amount) { /* ... */ },
   };
 }
-```
 
-Matching is structural: the object satisfies the interface by shape alone, and the annotated return type checks the literal at the factory — drift is a compile error at the construction site. No `class`, no `implements`: `implements` buys the same check at the cost of constructor ceremony, `new` at call sites, and `this` binding.
+function createPaypalGateway(apiKey: string, http: Http): PaymentGateway {
+  return {
+    charge(amount) { /* ... */ },
+  };
+}
 
-- Prefer **`interface` for object shapes** and **`type` for unions and aliases**: a seam usually wants an `interface`; reach for a union when callers should discriminate between adapters.
-- `satisfies` checks any expression against the interface without widening it.
-- The type checker proves the shape, not the behaviour — it is no substitute for a test through the interface.
-
-A function's interface is its type: `clock: () => Date` says everything a caller must know. When a function interface needs optional parameters, defaults, or a name, promote it to an interface with a call signature:
-
-```ts
-interface Clock {
-  (tz?: string): Date;   // a call signature
+function createPaymentGateway(
+  type: "stripe" | "paypal",             // seam for the PaymentGateway module
+  envVariableLoader: EnvVariableLoader,  // seam for the PaymentGateway module to access the environment variable resource for testing
+  http: Http,
+): PaymentGateway {                      // a factory for the PaymentGateway module
+  switch (type) {
+    case "stripe":
+      return createStripeGateway(envVariableLoader("STRIPE_API_KEY"), http);
+    case "paypal":
+      return createPaypalGateway(envVariableLoader("PAYPAL_API_KEY"), http);
+  }
 }
 ```
 
-## The shapes of a seam
+Matching is structural: the object literals built by `createStripeGateway` and `createPaypalGateway` both satisfy the `PaymentGateway` interface.
 
-A seam is anywhere behaviour varies without editing the module. In TypeScript it takes three shapes, declared in the factory's signature:
+The declared return type checks each literal where it is built, so drift is a compile error at that point. No `class` and no `implements` are needed. `createStripeGateway` and `createPaypalGateway` are themselves factories for the module: a module can have many.
+
+This module is a well designed deep module:
+
+**Leverage for the caller** - The module allows the caller to make payments through Stripe and PayPal through a simple interface with a single method with a single parameter.
+
+**Flexibility for developers** - It is simple to extend the module's capabilities by adding another function returning an object that satisfies the `PaymentGateway` interface and adding a single extra `case` in the implementation of the factory.
+
+**Testability for everyone** - The module can be tested easily through its factory and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
+
+## Example 2
+
+Below are 2 valid formulations of an `OrderProcessor` module built on top of example 1.
 
 ```ts
+type OrderProcessor = (order: Order, gateway: PaymentGateway) => Receipt; // interface for the OrderProcessor module
+
+function processOrder(
+  order: Order,
+  gateway: PaymentGateway, // seam through which capabilities of the OrderProcessor can vary
+): Receipt {
+  // implementation of the OrderProcessor module
+  let total = 0;
+  for (const item of order.items) {
+    total += item.cost;
+  }
+  const paymentSuccessful = gateway.charge(total);
+  if (!paymentSuccessful) {
+    throw new Error(/* ... */);
+  }
+  return { total };
+}
+```
+
+```ts
+type OrderProcessor = (order: Order) => Receipt; // interface for the OrderProcessor module
+
 function createOrderProcessor(
-  gateway: PaymentGateway,    // object interface: a whole adapter can cross it
-  clock: () => Date,          // function interface: one function swaps
-  verbose: boolean,           // plain value: one bit of behaviour
-): OrderProcessor {
-  /* ... */
-}
-```
-
-All three are seams; they differ in **Depth**. An `interface` carries a whole interface of variation, a function type one function's worth, a `boolean` one bit. Fit the seam to the variation: an interface behind a binary toggle is ceremony; a boolean behind a swappable adapter is a wall.
-
-## Modules don't need classes
-
-A function with a typed parameter is already a module with a seam — no class, no framework, no decorators:
-
-```ts
-function processOrder(order: Order, gateway: PaymentGateway): Receipt { /* ... */ }
-```
-
-Adapters don't need classes either: the factory builds the object, a closure holds its state, and the literal satisfies the interface structurally:
-
-```ts
-function createStripeGateway(apiKey: string, requester: (request: Request) => Response): PaymentGateway {
-  let retries = 0;                        // closure state — no instance, no `this`
-  return {
-    charge(amount: number) { /* ... */ }, // checked against PaymentGateway here
+  gateway: PaymentGateway, // a seam for the OrderProcessor module
+): OrderProcessor {        // factory of the OrderProcessor module
+  return function processOrder(order) {
+    // implementation of the OrderProcessor module
+    let total = 0;
+    for (const item of order.items) {
+      total += item.cost;
+    }
+    const paymentSuccessful = gateway.charge(total);
+    if (!paymentSuccessful) {
+      throw new Error(/* ... */);
+    }
+    return { total };
   };
 }
 ```
 
-This factory-plus-literal is the style: construction is an ordinary function call, state lives in closures, behaviour is data in an object rather than methods dispatched through `this`. Where a framework demands a `class` — decorators, `instanceof` — the factory still returns its instance behind the interface; callers never see a concrete.
+Both are modules with a seam; they differ in where the seam sits. The first places it in the interface, so every caller must supply a gateway. The second places it in the factory, leaving the interface with only data. Prefer the second wherever the adapter is known when the entity is created (see dependency-injection, rule 2).
 
-## Adapters and seams
+The second example exhibits:
 
-```ts
-interface PaymentGateway { // PaymentGateway is an interface of the processOrder module seam
-  charge(amount: number): boolean;
-}
+**Leverage for Consumers** - Has the capability to total orders and process payments through Stripe and PayPal (thanks to the existing adapters).
 
-function processOrder(order: Order, paymentGateway: PaymentGateway) {
-  /* ... */
-}
+**Locality for Maintainers** - Tests can be written with a fake payment gateway, allowing them to localise bugs in the order totalling vs the payment gateways. Any change to the order processing can be propagated to all payment gateway types through one place.
 
-function createStripeGateway(apiKey: string, requester: (request: Request) => Response): PaymentGateway { // a module — construction behind a function
-  const gateway = {                    // the adapter's full surface
-    charge(amount: number) { /* ... */ },
-    refund(amount: number) { /* ... */ },
-  };
-  return gateway;                      // the interface needs only charge — a subset of the adapter's surface
-}
-
-processOrder(order, createStripeGateway(key, requester)); // the adapter crossing the processOrder module seam
-```
-
-## Designing for testability
-
-**Accept dependencies, don't create them.**
-
-```ts
-// Testable
-function processOrder(order: Order, paymentGateway: PaymentGateway) { // paymentGateway is a seam of the processOrder module
-  /* ... */
-}
-
-// Hard to test
-function processOrder(order: Order) {
-  const gateway = createStripeGateway(KEY, http);
-  /* ... */
-}
-```
-
-**Return results, don't produce side effects.**
-
-```ts
-// Testable
-function calculateDiscount(cart: Cart): Discount {
-  /* ... */
-}
-
-// Hard to test
-function applyDiscount(cart: Cart): void {
-  cart.total -= discount;
-  /* ... */
-}
-```
-
-## Gotchas
-
-- **Types are erased at runtime.** Interfaces are compile-time only; an `any` or an `as` cast slides a mis-shaped object across the seam unchecked. The seam holds only where the type checker can see it.
-- **Fresh literals are excess-property checked** at returns, arguments, and `satisfies`. An adapter whose surface is wider than the interface (above) must pass through an intermediate `const` — the extra members are then structurally fine.
+**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities.

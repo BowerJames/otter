@@ -5,19 +5,25 @@
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "13f2214f4d540b1988e98c5463b6d85d2e5413f8fac603eff00bb2cee603317f"
+      "computedHash": "f7ada5451a02f1622d408784501c30366812097ab9fc800cac5b4c289c6b79aa"
     },
     "dependency-injection": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/dependency-injection/SKILL.md",
-      "computedHash": "101db6fec4c8a52bd96e41402761b427d7dd8d4b80c5ef6168c4fc2598833e8e"
+      "computedHash": "d54191a5f4767ea8b54a90ef07b1da0cba7352576e942dbc51fe64cba22f195c"
     },
     "factory-pattern": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/factory-pattern/SKILL.md",
-      "computedHash": "406add31aae1e5f708156837d059f1be308423a3aef4109576b129b84a3facd6"
+      "computedHash": "ae80c2c403fe252bb35ada6e1dec24200557b9cc112c40a31e7aa73497c953ac"
+    },
+    "project-structure": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/project-structure/SKILL.md",
+      "computedHash": "4aff0a1b861e040415129965ed3ab8aedcd3324379bb27ff04ed4b813ddcda37"
     },
     "repo-explorer": {
       "source": "BowerJames/skills",
@@ -25,11 +31,17 @@
       "skillPath": "skills/utils/repo-explorer/SKILL.md",
       "computedHash": "55badaaad621d177235b00d81c63077a06ab4a3d762a10dc0aa762a1c269ff48"
     },
+    "test-driven-development": {
+      "source": "BowerJames/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/test-driven-development/SKILL.md",
+      "computedHash": "ad2677364b63398dd778e9b9c7caad407ec8c9cad0b87e35f12100589a3cdd93"
+    },
     "testing": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/testing/SKILL.md",
-      "computedHash": "eeded5ff1c2130038e3cc90b6c820568bc330f6e08b8b55c25948aa71077e1e0"
+      "computedHash": "e0c7a0016e46ca863146e2f633009ffa6c18684a79fceefb4326bb16c335865f"
     }
   }
 }

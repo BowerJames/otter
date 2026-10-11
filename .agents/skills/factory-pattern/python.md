@@ -2,38 +2,80 @@
 
 The rules in [SKILL.md](SKILL.md) are language-agnostic. This file is their Python spelling. The vocabulary's Python shapes — Protocol and Callable mechanics — live in [codebase-design's python.md](../codebase-design/python.md).
 
-## Rule 1: return the interface
+## Example
+
+Bad example for a `PaymentGateway` module:
 
 ```python
-def create_payment_gateway(config: Config, http: Requester) -> PaymentGateway:  # ingredients in the signature
-    if config.use_stripe:
-        return StripeGateway(config.stripe_key, http)   # the concretes named here are the products
-    return PaypalGateway(config.paypal_env, http)
+class PaymentGateway(Protocol):
 
-# at a composition point — the ingredient concrete is named where concretes are named
-gateway = create_payment_gateway(config, HttpRequests())  # caller never learns the product concrete
+    def charge(self, amount: float) -> bool: ...
+
+class StripeGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
+
+    def charge(self, amount: float) -> bool: ...
+
+class PaypalGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
+
+    def charge(self, amount: float) -> bool: ...
+
+def create_payment_gateway(
+        type: Literal["stripe", "paypal"],
+        env_variable_loader: EnvVariableLoader,
+        http: HTTP
+    ) -> StripeGateway | PaypalGateway: # This is not a factory for the PaymentGateway module as it declares the return type as an implementation of the module, not the module interface.
+    if type == "stripe":
+        api_key = env_variable_loader("STRIPE_API_KEY")
+        return StripeGateway(api_key, http)
+    elif type == "paypal":
+        api_key = env_variable_loader("PAYPAL_API_KEY")
+        return PaypalGateway(api_key, http)
 ```
 
-## Rule 2: bind runtime data to root-chosen adapters
-
-Injected factories are `Callable` types. Bind the root-time ingredient with a closure or `functools.partial`:
+Good example for a `PaymentGateway` module:
 
 ```python
-from functools import partial
+class PaymentGateway(Protocol):
 
-loader_factory = partial(create_entity_loader, config_source=config_source)  # bound at the root
-loader_factory = lambda eid: create_entity_loader(eid, config_source)        # the same, as a closure
+    def charge(self, amount: float) -> bool: ...
 
-class EntityEndpoints:
-    def __init__(self, loader_factory: Callable[[EntityId], EntityLoader]):
-        self.loader_factory = loader_factory          # the factory is the seam
+class StripeGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
 
-    def on_get(self, entity_id: EntityId):            # data arrives at the boundary
-        return EntityService(self.loader_factory(entity_id)).handle()
-```
+    def charge(self, amount: float) -> bool: ...
 
-A test injects a lambda fake and controls construction without touching globals:
+class PaypalGateway:
+    def __init__(
+        self,
+        api_key: str,
+        http: HTTP
+    ): ...
 
-```python
-endpoints = EntityEndpoints(loader_factory=lambda eid: FakeLoader(eid))
+    def charge(self, amount: float) -> bool: ...
+
+def create_payment_gateway(
+        type: Literal["stripe", "paypal"],
+        env_variable_loader: EnvVariableLoader,
+        http: HTTP
+    ) -> PaymentGateway: # This is now a factory for the PaymentGateway module since it declares the return type as the interface for the module.
+    if type == "stripe":
+        api_key = env_variable_loader("STRIPE_API_KEY")
+        return StripeGateway(api_key, http)
+    elif type == "paypal":
+        api_key = env_variable_loader("PAYPAL_API_KEY")
+        return PaypalGateway(api_key, http)
 ```
