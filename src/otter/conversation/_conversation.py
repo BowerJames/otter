@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from otter.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
+from otter.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
 
 class Conversation(Protocol):

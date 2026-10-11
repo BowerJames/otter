@@ -3,8 +3,8 @@
 import httpx2
 from openai import AsyncOpenAI
 
-from otter.conversation import ConversationFactory
-from otter.openai_responses_compatible import OpenAIResponsesCompatibleConversation
+from ._conversation import ConversationFactory
+from ._openai_responses_compatible import OpenAIResponsesCompatibleConversation
 
 
 def create_openai_responses_conversations(

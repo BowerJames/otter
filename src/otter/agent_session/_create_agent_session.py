@@ -2,13 +2,12 @@
 
 from collections.abc import Sequence
 
-from otter.agent_session import AgentSession, AgentTool
 from otter.auth_resolver import AuthResolver, create_environment_auth_resolver
-from otter.conversation_agent_session import ConversationAgentSession
-from otter.in_memory_session_manager import InMemorySessionManager
-from otter.model import ModelConfig, ModelFactory
-from otter.model_factory import create_model_factory
-from otter.session_manager import SessionManager
+from otter.model import ModelConfig, ModelFactory, create_model_factory
+from otter.session_manager import SessionManager, create_in_memory_session_manager
+
+from ._agent_session import AgentSession, AgentTool
+from ._conversation_agent_session import create_conversation_agent_session
 
 type SystemPrompt = str
 
@@ -46,5 +45,7 @@ def create_agent_session(
     model = model_factory(model_config, auth_resolver(model_config.provider))
     # Made here rather than as a default: a manager holds one session's context.
     if session_manager is None:
-        session_manager = InMemorySessionManager()
-    return ConversationAgentSession(model, session_manager, system=system_prompt, tools=tools)
+        session_manager = create_in_memory_session_manager()
+    return create_conversation_agent_session(
+        model, session_manager, system=system_prompt, tools=tools
+    )

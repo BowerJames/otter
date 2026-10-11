@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from otter.messages import ContextEntry
+from otter.domain.messages import ContextEntry
 
 
 class SessionManager(Protocol):

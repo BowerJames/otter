@@ -3,8 +3,8 @@
 import httpx2
 from openai import AsyncOpenAI
 
-from otter.conversation import ConversationFactory
-from otter.openai_chat_completions_compatible import OpenAIChatCompletionsCompatibleConversation
+from ._conversation import ConversationFactory
+from ._openai_chat_completions_compatible import OpenAIChatCompletionsCompatibleConversation
 
 
 def create_openai_conversations(

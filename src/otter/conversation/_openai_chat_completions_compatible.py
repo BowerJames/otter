@@ -12,7 +12,7 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
 )
 
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,
@@ -27,6 +27,41 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
+
+from ._conversation import Conversation
+
+
+def create_openai_chat_completions_compatible_conversation(
+    client: AsyncOpenAI,
+    model: str,
+    *,
+    system: str | None = None,
+    tools: Sequence[ToolSpec] = (),
+    context: Sequence[ContextEntry] = (),
+    supports_images: bool = True,
+    supports_audio: bool = True,
+) -> Conversation:
+    """Start a conversation with `model`, served over a chat completions endpoint.
+
+    The client decides which provider is spoken to (its base URL and API key); any
+    provider serving the chat completions format will do. `system` is the system prompt
+    the model sees ahead of every turn, and `tools` are the tools it may ask to have
+    called. `context` is the history the conversation starts out with, oldest first; the
+    thinking in its assistant turns is not sent.
+
+    `supports_images` and `supports_audio` say what the model can take in. Where one is
+    false, a part of that kind is not sent: a short text note saying it was omitted goes
+    to the model in its place, so the conversation stays usable.
+    """
+    return OpenAIChatCompletionsCompatibleConversation(
+        client,
+        model,
+        system=system,
+        tools=tools,
+        context=context,
+        supports_images=supports_images,
+        supports_audio=supports_audio,
+    )
 
 
 class OpenAIChatCompletionsCompatibleConversation:

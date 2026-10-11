@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import httpx2
 import pytest
 
-from otter.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
-from otter.model_factory import create_model_factory
+from otter.domain.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
+from otter.model import create_model_factory
 
 
 @dataclass(frozen=True)

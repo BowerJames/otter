@@ -4,8 +4,8 @@ from collections.abc import AsyncGenerator, Sequence
 
 import pytest
 
-from otter.messages import AssistantMessage, TextPart, UserPart
-from otter.realtime_as_conversation import realtime_as_conversation
+from otter.conversation import realtime_as_conversation
+from otter.domain.messages import AssistantMessage, TextPart, UserPart
 from otter.realtime_conversation import RealtimeEvent, TextDelta, TurnDone
 
 

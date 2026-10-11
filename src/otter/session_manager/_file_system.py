@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol, assert_never
 
-from otter.messages import (
+from otter.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,
@@ -20,7 +20,8 @@ from otter.messages import (
     UserMessage,
     UserPart,
 )
-from otter.session_manager import SessionManager
+
+from ._session_manager import SessionManager
 
 
 class FileSystem(Protocol):
