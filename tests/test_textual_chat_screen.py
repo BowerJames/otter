@@ -3,7 +3,8 @@ shows there, and what is typed into it.
 """
 
 import asyncio
-from collections.abc import AsyncIterator
+import contextvars
+from collections.abc import AsyncIterator, Coroutine
 
 import pytest
 from textual.app import App
@@ -27,6 +28,10 @@ from otter.chat_screen import (
 class HeadlessTerminal:
     """A test adapter for the terminal: runs the app with no terminal under it, and lets
     the test read what the app is showing and press its keys.
+
+    Textual expects its pilot to be used where the app is the active one, which a test's
+    own task is not: there, a pause that gets to draw the screen before the app does
+    raises `LookupError`. So the pilot is only ever used in the context the app gave it.
     """
 
     def __init__(self) -> None:
@@ -34,6 +39,7 @@ class HeadlessTerminal:
         self._down = asyncio.Event()
         self._app: App[None] | None = None
         self._pilot: Pilot[object] | None = None
+        self._pilots_context: contextvars.Context | None = None
 
     async def __call__(self, app: App[None]) -> None:
         self._app = app
@@ -46,6 +52,12 @@ class HeadlessTerminal:
 
     async def _take(self, pilot: Pilot[object]) -> None:
         self._pilot = pilot
+        self._pilots_context = contextvars.copy_context()
+
+    async def _piloting(self, action: Coroutine[object, object, None]) -> None:
+        """Have the pilot do `action` in the context the app gave it."""
+        assert self._pilots_context is not None, "nothing is running on the terminal"
+        await asyncio.create_task(action, context=self._pilots_context)
 
     @property
     def app(self) -> App[None]:
@@ -71,16 +83,16 @@ class HeadlessTerminal:
         return self.app.query_one(Input).value
 
     async def transcript(self) -> list[str]:
-        await self.pilot.pause()
+        await self._piloting(self.pilot.pause())
         return [line.text.rstrip() for line in self.app.query_one(RichLog).lines]
 
     async def press(self, *keys: str) -> None:
-        await self.pilot.press(*keys)
-        await self.pilot.pause()
+        await self._piloting(self.pilot.press(*keys))
+        await self._piloting(self.pilot.pause())
 
     async def quit(self) -> None:
         """Press the key that quits, and wait for the app to go down."""
-        await self.pilot.press("ctrl+q")
+        await self._piloting(self.pilot.press("ctrl+q"))
         await self._down.wait()
 
     async def submit(self, text: str) -> None:
