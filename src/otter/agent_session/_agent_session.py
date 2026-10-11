@@ -66,8 +66,8 @@ class AgentSession(Protocol):
     events are taken.
 
     A session is an async context manager, and may hold something open for as long as
-    it is entered, such as a connection to its model: use it in `async with`, and stream
-    it inside, so that it is ended and let go of.
+    it is entered, such as a connection to its model: use it in `async with`, so that it
+    is ended and let go of. It runs only while entered: a stream read sooner waits.
     """
 
     def prompt(
@@ -92,6 +92,9 @@ class AgentSession(Protocol):
         The stream does not finish when the model does: it yields `Idle` and waits for
         the next prompt. It finishes once the session has ended. A session has one
         stream at a time: reading a second while the first is live raises `RuntimeError`.
+
+        Until the session is entered the stream yields nothing and waits. If entering
+        fails while it waits, it raises what entering raised.
 
         If the model fails to produce a turn, the error propagates and the session is as
         it was, so streaming again retries. If a tool fails, the error propagates and the
@@ -122,7 +125,7 @@ class AgentSession(Protocol):
         """Enter the session, which is returned: `async with session:` scopes its life.
 
         Anything it needs open is taken hold of. If that fails, the error propagates
-        and the session has not been entered.
+        and the session has not been entered: it is as it was, and may be entered again.
         """
         ...
 

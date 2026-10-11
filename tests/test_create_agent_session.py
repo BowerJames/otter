@@ -9,7 +9,15 @@ from typing import Self
 
 import pytest
 
-from otter.agent_session import AssistantTurn, Idle, UserTurn, create_agent_session
+from otter.agent_session import (
+    AssistantTurn,
+    Idle,
+    Plugin,
+    SessionControls,
+    SessionSetup,
+    UserTurn,
+    create_agent_session,
+)
 from otter.conversation import Conversation
 from otter.domain.messages import (
     AssistantMessage,
@@ -125,10 +133,13 @@ def test_the_model_is_made_for_the_configuration_with_its_providers_key(
     assert models.made == [(GLM, "zai-key")]
 
 
-def test_the_models_conversation_is_started_with_the_system_prompt_and_tools(
+async def test_the_models_conversation_is_started_with_the_system_prompt_and_tools(
     models: FakeModels,
 ) -> None:
-    create_agent_session("Be brief.", [Echo()], GLM, auth_resolver=key_for, model_factory=models)
+    async with create_agent_session(
+        "Be brief.", [Echo()], GLM, auth_resolver=key_for, model_factory=models
+    ):
+        pass
 
     assert models.started == [
         (
@@ -152,8 +163,9 @@ async def test_the_session_puts_prompts_to_the_model_and_reports_its_answers(
     )
     session.prompt("Hello")
 
-    stream = session.stream()
-    events = [await anext(stream), await anext(stream), await anext(stream)]
+    async with session:
+        stream = session.stream()
+        events = [await anext(stream), await anext(stream), await anext(stream)]
 
     assert models.user_messages == [(TextPart("Hello"),)]
     assert events == [
@@ -183,17 +195,18 @@ def test_a_configuration_no_model_can_be_made_for_propagates() -> None:
         create_agent_session("Be brief.", [], GLM, auth_resolver=key_for, model_factory=no_model)
 
 
-def test_the_models_conversation_is_started_with_the_context_the_session_manager_holds(
+async def test_the_models_conversation_is_started_with_the_context_the_session_manager_holds(
     models: FakeModels,
 ) -> None:
-    create_agent_session(
+    async with create_agent_session(
         "Be brief.",
         [],
         GLM,
         auth_resolver=key_for,
         model_factory=models,
         session_manager=FakeSessionManager([HELLO, OK]),
-    )
+    ):
+        pass
 
     assert models.contexts == [[HELLO, OK]]
 
@@ -207,9 +220,10 @@ async def test_what_happens_in_the_session_is_appended_to_the_session_manager(
     )
     session.prompt("Hello")
 
-    stream = session.stream()
-    while await anext(stream) != Idle():
-        pass
+    async with session:
+        stream = session.stream()
+        while await anext(stream) != Idle():
+            pass
 
     assert manager.stored == [HELLO, OK]
 
@@ -219,10 +233,29 @@ async def test_a_session_made_without_a_session_manager_starts_with_no_context_o
 ) -> None:
     first = create_agent_session("Be brief.", [], GLM, auth_resolver=key_for, model_factory=models)
     first.prompt("Hello")
-    stream = first.stream()
-    while await anext(stream) != Idle():
+    async with first:
+        stream = first.stream()
+        while await anext(stream) != Idle():
+            pass
+
+    async with create_agent_session(
+        "Be brief.", [], GLM, auth_resolver=key_for, model_factory=models
+    ):
         pass
 
-    create_agent_session("Be brief.", [], GLM, auth_resolver=key_for, model_factory=models)
-
     assert models.contexts == [[], []]
+
+
+async def test_the_sessions_plugins_are_asked_for_the_setup_its_model_is_started_with(
+    models: FakeModels,
+) -> None:
+    class Thorough(Plugin):
+        async def before_start(self, session: SessionControls, setup: SessionSetup) -> SessionSetup:
+            return SessionSetup("Be thorough.", setup.tools)
+
+    async with create_agent_session(
+        "Be brief.", [], GLM, auth_resolver=key_for, model_factory=models, plugins=[Thorough()]
+    ):
+        pass
+
+    assert models.started == [("Be thorough.", [])]

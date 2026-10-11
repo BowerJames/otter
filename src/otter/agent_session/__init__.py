@@ -11,15 +11,22 @@ from ._agent_session import (
 )
 from ._conversation_agent_session import create_conversation_agent_session
 from ._create_agent_session import SystemPrompt, create_agent_session
+from ._plugin import Deny, Plugin, SessionControls, SessionSetup, ToolOutcome, UnknownTool
 
 __all__ = [
     "AgentSession",
     "AgentTool",
     "AssistantTurn",
+    "Deny",
     "Idle",
+    "Plugin",
+    "SessionControls",
     "SessionEvent",
+    "SessionSetup",
     "SystemPrompt",
+    "ToolOutcome",
     "ToolResult",
+    "UnknownTool",
     "UserTurn",
     "create_agent_session",
     "create_conversation_agent_session",
