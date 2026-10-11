@@ -8,6 +8,7 @@ from otter.session_manager import SessionManager, create_in_memory_session_manag
 
 from ._agent_session import AgentSession, AgentTool
 from ._conversation_agent_session import create_conversation_agent_session
+from ._plugin import Plugin
 
 type SystemPrompt = str
 
@@ -23,6 +24,7 @@ def create_agent_session(
     auth_resolver: AuthResolver = _resolve_from_environment,
     model_factory: ModelFactory = _create_known_model,
     session_manager: SessionManager | None = None,
+    plugins: Sequence[Plugin] = (),
 ) -> AgentSession:
     """Start an agent session on the model `model_config` names.
 
@@ -41,11 +43,15 @@ def create_agent_session(
     with the entries it holds, picking up where they leave off, and appends to it
     everything that then joins the conversation; leave it out for a session that starts
     with no context and keeps its own in memory.
+
+    `plugins` are asked at each of their hooks, in the order given (see `Plugin`). On
+    entry each may change the system prompt and tools before the model is started with
+    them. Make them for this session alone: a plugin holds one session's state.
     """
     model = model_factory(model_config, auth_resolver(model_config.provider))
     # Made here rather than as a default: a manager holds one session's context.
     if session_manager is None:
         session_manager = create_in_memory_session_manager()
     return create_conversation_agent_session(
-        model, session_manager, system=system_prompt, tools=tools
+        model, session_manager, system=system_prompt, tools=tools, plugins=plugins
     )

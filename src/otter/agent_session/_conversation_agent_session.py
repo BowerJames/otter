@@ -4,8 +4,9 @@ import asyncio
 from collections import deque
 from collections.abc import AsyncGenerator, Sequence
 from types import TracebackType
-from typing import Self
+from typing import Self, cast
 
+from otter.conversation import Conversation
 from otter.domain.messages import (
     AssistantMessage,
     AudioPart,
@@ -30,6 +31,7 @@ from ._agent_session import (
     ToolResult,
     UserTurn,
 )
+from ._plugin import Plugin, SessionSetup, ToolOutcome, UnknownTool
 
 
 def create_conversation_agent_session(
@@ -38,6 +40,7 @@ def create_conversation_agent_session(
     *,
     system: str | None = None,
     tools: Sequence[AgentTool] = (),
+    plugins: Sequence[Plugin] = (),
 ) -> AgentSession:
     """Start an agent session on `model`, its context kept in `session_manager`.
 
@@ -50,19 +53,28 @@ def create_conversation_agent_session(
     answered, it is answered once the session is streamed. Everything that then joins
     the conversation is appended to `session_manager` as it joins.
 
-    Entering the session enters the conversation, which may then hold a connection to
-    the model open, and leaving the session ends it and leaves the conversation.
+    Entering the session starts the conversation and enters it, which may then hold a
+    connection to the model open, and leaving the session ends it and leaves the
+    conversation. A stream read before the session is entered waits for that.
+
+    `plugins` are asked at each of their hooks, in the order given (see `Plugin`). On
+    entry each may change `system` and `tools` before the model is started with them:
+    two tools of one name then raise `ValueError`. Make the plugins for this session
+    alone: a plugin holds one session's state.
     """
-    return ConversationAgentSession(model, session_manager, system=system, tools=tools)
+    return ConversationAgentSession(
+        model, session_manager, system=system, tools=tools, plugins=plugins
+    )
 
 
 class ConversationAgentSession:
     """One ongoing agent session: prompts are queued, and `stream` does the work.
 
     The session holds one conversation with `model`, started with `system` as its system
-    prompt. `tools` are what the model
-    may ask to have run; each is run when asked for, one at a time and in the order the
-    model asked, and its result is shown to the model.
+    prompt. `tools` are what the model may ask to have run; each is run when asked for,
+    one at a time and in the order the model asked, and its result is shown to the model.
+    `plugins` are asked at each of their hooks, in the order given, and on entry may
+    change `system` and `tools` before the model is started with them.
 
     The conversation starts out with the entries `session_manager` holds, so the session
     picks up where they leave off: if they end with something the model has not
@@ -72,9 +84,9 @@ class ConversationAgentSession:
     Nothing happens unless `stream` is being read: the session advances only as its
     events are taken.
 
-    The session is an async context manager: entering it enters the conversation, which
-    may then hold a connection to the model open, and leaving it ends it and leaves the
-    conversation. Stream it inside.
+    The session is an async context manager: entering it starts the conversation and
+    enters it, which may then hold a connection to the model open, and leaving it ends
+    it and leaves the conversation. A stream read before then waits to be entered.
     """
 
     def __init__(
@@ -84,23 +96,26 @@ class ConversationAgentSession:
         *,
         system: str | None = None,
         tools: Sequence[AgentTool] = (),
+        plugins: Sequence[Plugin] = (),
     ) -> None:
+        self._model = model
         self._session_manager = session_manager
-        context = session_manager.entries()
-        self._conversation = model(
-            system,
-            [ToolSpec(tool.name, tool.description, tool.parameters) for tool in tools],
-            context,
-        )
-        self._tools = {tool.name: tool for tool in tools}
+        self._setup = SessionSetup(system, tuple(tools))
+        self._plugins = tuple(plugins)
+        # Made on entry, once the plugins have had their say on the setup.
+        self._conversation: Conversation | None = None
+        self._tools: dict[str, AgentTool] = {}
         self._queued: deque[tuple[UserPart, ...]] = deque()
         # Whether the model owes a turn: the history ends in something it has not answered.
-        self._owed = bool(context) and not isinstance(context[-1], AssistantMessage)
+        self._owed = False
         self._wake = asyncio.Event()
         self._at_rest = asyncio.Event()
         self._at_rest.set()
         self._ended = False
         self._streaming = False
+        # What entering raised, for the stream that was waiting on it to raise in turn.
+        self._waiting_to_enter = False
+        self._failed_to_enter: Exception | None = None
 
     def prompt(
         self,
@@ -129,11 +144,19 @@ class ConversationAgentSession:
         the next prompt. It finishes once the session has ended. A session has one
         stream at a time: reading a second while the first is live raises `RuntimeError`.
 
+        Until the session is entered the stream yields nothing and waits. If entering
+        fails while it waits, it raises what entering raised.
+
         If the model fails to produce a turn, the error propagates and the session is as
-        it was, so streaming again retries. If a tool fails, the error propagates and the
-        session has ended: the model's turn is left asking for a result it never got.
-        The same holds if the stream is abandoned or cancelled part-way through a turn's
-        tool calls; use `end` to stop cleanly.
+        it was, so streaming again retries. If a tool fails, or the model asks for one
+        the session does not have (`UnknownTool`), and no plugin returns text for it,
+        the error propagates and the session has ended: the model's turn is left asking
+        for a result it never got. The same holds if the stream is abandoned or
+        cancelled part-way through a turn's tool calls; use `end` to stop cleanly.
+
+        If a plugin's hook raises, the error propagates. Before the session comes to
+        rest, the session is as it was, so streaming again asks the plugins again; part-
+        way through a turn's tool calls, the session has ended.
 
         If the session manager fails to take a prompt, the error propagates and the
         session is as it was, the prompt still queued, so streaming again retries. If it
@@ -144,6 +167,7 @@ class ConversationAgentSession:
             raise RuntimeError("the session is already being streamed")
         self._streaming = True
         try:
+            conversation = await self._entered_conversation()
             while not self._ended:
                 while self._queued:
                     content = self._queued[0]
@@ -151,17 +175,22 @@ class ConversationAgentSession:
                     # stored is still queued.
                     self._session_manager.append(UserMessage(content))
                     self._queued.popleft()
-                    self._conversation.add_user_message(content)
+                    conversation.add_user_message(content)
                     self._owed = True
-                    yield UserTurn(content)
+                    yield await self._told(UserTurn(content))
                 if not self._owed:
+                    for plugin in self._plugins:
+                        await plugin.before_idle(self)
+                    # A plugin may have prompted the session, or ended it.
+                    if self._queued or self._ended:
+                        continue
                     self._at_rest.set()
-                    yield Idle()
+                    yield await self._told(Idle())
                     while not self._queued and not self._ended:
                         self._wake.clear()
                         await self._wake.wait()
                     continue
-                message = await self._conversation.generate()
+                message = await conversation.generate()
                 calls = [part for part in message.content if isinstance(part, ToolCall)]
                 self._owed = bool(calls)
                 stored = False
@@ -169,13 +198,13 @@ class ConversationAgentSession:
                 try:
                     self._session_manager.append(message)
                     stored = True
-                    yield AssistantTurn(message)
+                    yield await self._told(AssistantTurn(message))
                     for call in calls:
-                        text = await self._tools[call.name].execute(call.arguments)
+                        text = await self._run_tool(call)
                         self._session_manager.append(ToolResultMessage(call.id, text))
-                        self._conversation.add_tool_result(call.id, text)
+                        conversation.add_tool_result(call.id, text)
                         answered += 1
-                        yield ToolResult(call.id, text)
+                        yield await self._told(ToolResult(call.id, text))
                 except BaseException:
                     # A tool call left without a result is a history no provider will
                     # accept, and the conversation cannot take the model's turn back:
@@ -185,6 +214,58 @@ class ConversationAgentSession:
                     raise
         finally:
             self._streaming = False
+
+    async def _told[Event: SessionEvent](self, event: Event) -> Event:
+        """Tell every plugin of `event`, and return it for the stream to yield."""
+        for plugin in self._plugins:
+            await plugin.on_event(self, event)
+        return event
+
+    async def _run_tool(self, call: ToolCall) -> str:
+        """Have the tool `call` asks for run, and return the text the model is shown for it.
+
+        Raises the error the call came out with, if no plugin returned text for it.
+        """
+        reasons: list[str] = []
+        for plugin in self._plugins:
+            denial = await plugin.before_tool(self, call)
+            if denial is not None:
+                reasons.append(denial.reason)
+        if reasons:
+            return "\n".join(reasons)
+        outcome: ToolOutcome
+        tool = self._tools.get(call.name)
+        if tool is None:
+            outcome = UnknownTool(call.name)
+        else:
+            try:
+                outcome = await tool.execute(call.arguments)
+            except Exception as error:
+                outcome = error
+        for plugin in self._plugins:
+            outcome = await plugin.after_tool(self, call, outcome)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    async def _entered_conversation(self) -> Conversation:
+        """Wait for the session to be entered, and return the conversation it then holds.
+
+        Raises what entering raised if it failed while this was waiting. If the session
+        ends unentered, returns a conversation that is never used.
+        """
+        self._waiting_to_enter = True
+        try:
+            while self._conversation is None and not self._ended:
+                if self._failed_to_enter is not None:
+                    error, self._failed_to_enter = self._failed_to_enter, None
+                    raise error
+                self._wake.clear()
+                await self._wake.wait()
+        finally:
+            self._waiting_to_enter = False
+            self._failed_to_enter = None
+        return cast(Conversation, self._conversation)
 
     async def wait_for_idle(self) -> None:
         """Wait until the session is at rest: nothing queued and the model owed nothing.
@@ -212,10 +293,36 @@ class ConversationAgentSession:
     async def __aenter__(self) -> Self:
         """Enter the session, which is returned: `async with session:` scopes its life.
 
-        Its conversation is entered. If that fails, the error propagates and the
-        session has not been entered.
+        Its model is started on a conversation, which is entered, and a stream waiting
+        for that begins to run. If any of it fails, the error propagates, here and from
+        a stream that was waiting, and the session has not been entered: it is as it
+        was, and may be entered again.
         """
-        await self._conversation.__aenter__()
+        try:
+            setup = self._setup
+            for plugin in self._plugins:
+                setup = await plugin.before_start(self, setup)
+            tools: dict[str, AgentTool] = {}
+            for tool in setup.tools:
+                if tool.name in tools:
+                    raise ValueError(f"two tools are named {tool.name!r}")
+                tools[tool.name] = tool
+            context = self._session_manager.entries()
+            conversation = self._model(
+                setup.system_prompt,
+                [ToolSpec(tool.name, tool.description, tool.parameters) for tool in setup.tools],
+                context,
+            )
+            await conversation.__aenter__()
+        except Exception as error:
+            if self._waiting_to_enter:
+                self._failed_to_enter = error
+                self._wake.set()
+            raise
+        self._tools = tools
+        self._owed = bool(context) and not isinstance(context[-1], AssistantMessage)
+        self._conversation = conversation
+        self._wake.set()
         return self
 
     async def __aexit__(
@@ -224,7 +331,8 @@ class ConversationAgentSession:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        """Leave the session: it is ended, and its conversation is left.
+        """Leave the session: it is ended, its plugins are asked `after_end`, and its
+        conversation is left.
 
         Leave once the stream is no longer being read: a turn the model is part-way
         through elsewhere is cut short by the conversation being left under it. If
@@ -232,4 +340,10 @@ class ConversationAgentSession:
         all the same.
         """
         self.end()
-        await self._conversation.__aexit__(exc_type, exc, traceback)
+        if self._conversation is None:
+            return
+        try:
+            for plugin in self._plugins:
+                await plugin.after_end(self)
+        finally:
+            await self._conversation.__aexit__(exc_type, exc, traceback)
