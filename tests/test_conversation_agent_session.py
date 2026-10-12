@@ -3,7 +3,7 @@ manager and its events.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import replace
 from types import TracebackType
 from typing import Self
@@ -1302,20 +1302,6 @@ async def test_a_plugin_is_told_each_event_before_the_stream_yields_it(
     ]
 
 
-async def test_a_plugin_that_fails_on_an_event_propagates_from_the_stream(
-    conversations: FakeConversations, manager: FakeSessionManager
-) -> None:
-    class Failing(Plugin):
-        async def on_event(self, session: SessionControls, event: SessionEvent) -> None:
-            raise OSError("log is full")
-
-    session = await start(conversations, manager, plugins=[Failing()])
-    session.prompt("Hello")
-
-    with pytest.raises(OSError, match=r"^log is full$"):
-        await until_idle(session.stream())
-
-
 async def test_every_plugin_is_asked_after_end_when_the_session_is_left(
     conversations: FakeConversations, manager: FakeSessionManager
 ) -> None:
@@ -1358,3 +1344,128 @@ async def test_plugins_are_not_asked_after_end_by_a_session_that_failed_to_be_en
             pass
 
     assert [entry for entry in watching.log if entry[1] == "after_end"] == []  # type: ignore[index]
+
+
+class ActingAt(Plugin):
+    """A test adapter for a plugin: does `act` to the session the first time it is asked at
+    the hook named `hook`, and otherwise leaves everything as it is.
+    """
+
+    def __init__(self, hook: str, act: Callable[[SessionControls], None]) -> None:
+        self.hook = hook
+        self.act = act
+        self.acted = False
+
+    def _asked_at(self, hook: str, session: SessionControls) -> None:
+        if hook == self.hook and not self.acted:
+            self.acted = True
+            self.act(session)
+
+    async def before_start(self, session: SessionControls, setup: SessionSetup) -> SessionSetup:
+        self._asked_at("before_start", session)
+        return setup
+
+    async def before_tool(self, session: SessionControls, call: ToolCall) -> Deny | None:
+        self._asked_at("before_tool", session)
+        return None
+
+    async def after_tool(
+        self, session: SessionControls, call: ToolCall, outcome: ToolOutcome
+    ) -> ToolOutcome:
+        self._asked_at("after_tool", session)
+        return outcome
+
+    async def before_idle(self, session: SessionControls) -> None:
+        self._asked_at("before_idle", session)
+
+    async def on_event(self, session: SessionControls, event: SessionEvent) -> None:
+        self._asked_at("on_event", session)
+
+    async def after_end(self, session: SessionControls) -> None:
+        self._asked_at("after_end", session)
+
+
+def fail(session: SessionControls) -> None:
+    raise OSError("plugin broke")
+
+
+HOOKS_WHILE_RUNNING = [
+    "before_start",
+    "before_tool",
+    "after_tool",
+    "before_idle",
+    "on_event",
+]
+
+
+@pytest.mark.parametrize("hook", [*HOOKS_WHILE_RUNNING, "after_end"])
+async def test_a_plugin_that_fails_at_a_hook_propagates_from_the_session(
+    hook: str, conversations: FakeConversations, manager: FakeSessionManager, files: FakeFiles
+) -> None:
+    conversations.script = [ASKS_FOR_A_FILE, says("It says hello")]
+    session = create_conversation_agent_session(
+        conversations, manager, tools=[files], plugins=[ActingAt(hook, fail)]
+    )
+    session.prompt("What is in a.txt?")
+
+    with pytest.raises(OSError, match=r"^plugin broke$"):
+        async with session:
+            await until_idle(session.stream())
+
+
+@pytest.mark.parametrize("hook", ["before_tool", "after_tool", "on_event"])
+async def test_a_plugin_that_fails_part_way_through_a_turns_tool_calls_ends_the_session(
+    hook: str, conversations: FakeConversations, files: FakeFiles
+) -> None:
+    # The context ends unanswered, so the first thing to happen is the model's turn.
+    manager = FakeSessionManager([UserMessage((TextPart("What is in a.txt?"),))])
+    conversations.script = [ASKS_FOR_A_FILE, says("It says hello")]
+    session = await start(conversations, manager, tools=[files], plugins=[ActingAt(hook, fail)])
+
+    with pytest.raises(OSError, match=r"^plugin broke$"):
+        await until_idle(session.stream())
+
+    with pytest.raises(RuntimeError, match=r"^the session has ended$"):
+        session.prompt("Try again")
+
+
+@pytest.mark.parametrize("hook", HOOKS_WHILE_RUNNING)
+async def test_a_prompt_a_plugin_makes_at_a_hook_joins_the_conversation(
+    hook: str, conversations: FakeConversations, manager: FakeSessionManager, files: FakeFiles
+) -> None:
+    def prompt(session: SessionControls) -> None:
+        session.prompt("And be quick")
+
+    conversations.script = [ASKS_FOR_A_FILE, says("It says hello"), says("Quickly")]
+    session = await start(conversations, manager, tools=[files], plugins=[ActingAt(hook, prompt)])
+    session.prompt("What is in a.txt?")
+
+    await asyncio.wait_for(until_idle(session.stream()), timeout=1)
+
+    joined = [entry for entry in conversations.history if isinstance(entry, tuple)]
+    assert joined.count(("user", (TextPart("And be quick"),))) == 1
+    assert manager.stored.count(UserMessage((TextPart("And be quick"),))) == 1
+
+
+@pytest.mark.parametrize("hook", HOOKS_WHILE_RUNNING)
+async def test_a_plugin_that_ends_the_session_at_a_hook_finishes_the_stream(
+    hook: str, conversations: FakeConversations, manager: FakeSessionManager, files: FakeFiles
+) -> None:
+    def end(session: SessionControls) -> None:
+        session.end()
+
+    conversations.script = [ASKS_FOR_A_FILE, says("It says hello")]
+    session = create_conversation_agent_session(
+        conversations, manager, tools=[files], plugins=[ActingAt(hook, end)]
+    )
+    session.prompt("What is in a.txt?")
+    await session.__aenter__()
+
+    async def read_to_the_end() -> list[SessionEvent]:
+        return [event async for event in session.stream()]
+
+    events = await asyncio.wait_for(read_to_the_end(), timeout=1)
+
+    assert Idle() not in events
+    with pytest.raises(RuntimeError, match=r"^the session has ended$"):
+        session.prompt("Try again")
