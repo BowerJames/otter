@@ -610,6 +610,7 @@ dependencies = [
 
 [package.optional-dependencies]
 tui = [
+    { name = "python-dotenv" },
     { name = "textual" },
 ]
 
@@ -628,6 +629,7 @@ dev = [
 requires-dist = [
     { name = "httpx2", specifier = ">=2.13.1" },
     { name = "openai", extras = ["realtime"], specifier = ">=3.24.0" },
+    { name = "python-dotenv", marker = "extra == 'tui'", specifier = ">=1.2.4" },
     { name = "textual", marker = "extra == 'tui'", specifier = ">=8.2.8" },
 ]
 provides-extras = ["tui"]

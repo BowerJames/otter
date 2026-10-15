@@ -10,8 +10,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# What `otter.chat_screen` needs to put a chat on the terminal.
+# What the terminal chat needs: Textual to draw it, and python-dotenv for its startup code.
 tui = [
+    "python-dotenv>=1.2.4",
     "textual>=8.2.8",
 ]
 
@@ -65,9 +66,70 @@ select = [
     "B",     # flake8-bugbear
     "UP",    # pyupgrade
     "SIM",   # flake8-simplify
+    "TID",   # banned imports: each constructor is called only where it may be
     "ASYNC", # async correctness
     "RUF",   # ruff-specific rules
 ]
 
 [tool.ruff.lint.isort]
 known-first-party = ["otter"]
+
+# A module's constructor is called only by its module factories, and an adapter's only by
+# its adapter factories: everything else gets the entity from a factory. Tests construct
+# the entity under test themselves.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"otter.core.agent_session.AgentSessionImpl".msg = "get an AgentSession from its module factory"
+"otter.core.chat.ChatImpl".msg = "get a Chat from its module factory"
+"otter.core.model.ModelImpl".msg = "get a Model from its module factory"
+"otter.core.session_log.SessionLogImpl".msg = "get a SessionLog from its module factory"
+"otter.infrastructure.adapters.agent_session.plugin_host.PluginHostAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.chat.textual.TextualAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.model.openai_chat_completions.OpenAIChatCompletionsAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.model.openai_realtime.OpenAIRealtimeAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.model.openai_responses.OpenAIResponsesAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.session_log.in_memory.InMemoryAdapter".msg = "get it from its adapter factory"
+"otter.infrastructure.adapters.session_log.local_file.LocalFileAdapter".msg = "get it from its adapter factory"
+
+[tool.ruff.lint.per-file-ignores]
+"src/otter/infrastructure/factories/**" = ["TID251"]
+"tests/**" = ["TID251"]
+
+# The import rules of the project structure: inward to the core, no module importing
+# another, no adapter importing another, and nothing in the core from outside the language.
+[tool.importlinter]
+root_package = "otter"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The core never imports the infrastructure"
+type = "layers"
+layers = ["otter.infrastructure", "otter.core"]
+
+[[tool.importlinter.contracts]]
+name = "The domain package imports nothing"
+type = "forbidden"
+source_modules = ["otter.core.domain"]
+forbidden_modules = ["otter.core.agent_session", "otter.core.chat", "otter.core.model", "otter.core.session_log"]
+
+[[tool.importlinter.contracts]]
+name = "No module imports another"
+type = "independence"
+modules = ["otter.core.agent_session", "otter.core.chat", "otter.core.model", "otter.core.session_log"]
+
+[[tool.importlinter.contracts]]
+name = "The core imports no third-party library"
+type = "forbidden"
+source_modules = ["otter.core"]
+forbidden_modules = ["dotenv", "httpx2", "openai", "pydantic", "rich", "textual"]
+
+[[tool.importlinter.contracts]]
+name = "No adapter imports another"
+type = "independence"
+modules = ["otter.infrastructure.adapters.*.*"]
+
+[[tool.importlinter.contracts]]
+name = "Only adapter factories import adapters"
+type = "forbidden"
+source_modules = ["otter.infrastructure.entrypoints", "otter.infrastructure.factories.modules"]
+forbidden_modules = ["otter.infrastructure.adapters"]
+allow_indirect_imports = true
