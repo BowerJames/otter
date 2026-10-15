@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from otter.conversation import create_openai_conversations
-from otter.domain.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage
+from otter.core.domain.messages import AssistantMessage, AudioPart, ImagePart, TextPart, UserMessage
 
 
 class FakeOpenAI:

@@ -13,7 +13,7 @@ import pytest
 from openai.types.realtime import RealtimeClientEventParam, RealtimeServerEvent
 from pydantic import TypeAdapter
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,

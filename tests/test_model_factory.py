@@ -11,7 +11,7 @@ import pytest
 from openai.types.realtime import RealtimeClientEventParam, RealtimeServerEvent
 from pydantic import TypeAdapter
 
-from otter.domain.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
+from otter.core.domain.messages import AssistantMessage, TextPart, ToolSpec, UserMessage
 from otter.model import create_model_factory
 from otter.realtime_conversation import RealtimeConnect
 

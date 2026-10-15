@@ -7,7 +7,7 @@ from types import TracebackType
 from typing import Self, cast
 
 from otter.conversation import Conversation
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,

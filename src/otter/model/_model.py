@@ -5,7 +5,7 @@ from typing import Protocol
 
 from otter.auth_resolver import ApiKey, Provider
 from otter.conversation import Conversation
-from otter.domain.messages import ContextEntry, ToolSpec
+from otter.core.domain.messages import ContextEntry, ToolSpec
 
 type ModelName = str
 """The name a provider knows a model by, such as "glm-5.3"."""

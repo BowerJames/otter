@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from otter.conversation import create_zai_coding_plan_conversations
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,

@@ -20,7 +20,7 @@ from openai.types.realtime.realtime_conversation_item_user_message_param import 
     Content as UserContentParam,
 )
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,

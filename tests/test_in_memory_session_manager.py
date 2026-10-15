@@ -1,6 +1,6 @@
 """Behaviour of an in-memory session manager, observed through the entries it returns."""
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     ContextEntry,
     TextPart,

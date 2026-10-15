@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
+from otter.core.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
 
 class Conversation(Protocol):

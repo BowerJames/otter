@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol, assert_never
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol, Self
 
-from otter.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
+from otter.core.domain.messages import AssistantMessage, ContextEntry, ToolSpec, UserPart
 
 
 @dataclass(frozen=True)

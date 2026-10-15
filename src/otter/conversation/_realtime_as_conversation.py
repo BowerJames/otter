@@ -5,7 +5,7 @@ from contextlib import aclosing
 from types import TracebackType
 from typing import Self
 
-from otter.domain.messages import AssistantMessage, UserPart
+from otter.core.domain.messages import AssistantMessage, UserPart
 from otter.realtime_conversation import RealtimeConversation, TurnDone
 
 from ._conversation import Conversation

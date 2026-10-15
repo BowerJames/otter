@@ -27,7 +27,7 @@ from otter.agent_session import (
     create_conversation_agent_session,
 )
 from otter.conversation import Conversation
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ContextEntry,

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from otter.domain.messages import AudioPart, ImagePart, ImageUrlPart, ToolCall
+from otter.core.domain.messages import AudioPart, ImagePart, ImageUrlPart, ToolCall
 
 from ._agent_session import AgentTool, SessionEvent
 

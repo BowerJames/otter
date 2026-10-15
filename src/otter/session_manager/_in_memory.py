@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable, Sequence
 
-from otter.domain.messages import ContextEntry
+from otter.core.domain.messages import ContextEntry
 
 from ._session_manager import SessionManager
 

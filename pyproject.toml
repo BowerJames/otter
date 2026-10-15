@@ -17,6 +17,7 @@ tui = [
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.15",
     "mypy>=1.14",
     "pytest>=8.3",
     "pytest-asyncio>=1.0",
@@ -34,7 +35,12 @@ packages = ["src/otter"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+# Integration and end-to-end tests reach real resources: run them with `just test-all`.
+addopts = "-ra --strict-markers --strict-config -m 'not integration and not e2e'"
+markers = [
+    "integration: verifies an adapter against the resource it reaches",
+    "e2e: runs the startup code with the production factories",
+]
 # asyncio_mode=auto: async test functions run without needing @pytest.mark.asyncio
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

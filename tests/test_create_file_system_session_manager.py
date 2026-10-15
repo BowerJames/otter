@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ContextEntry,

@@ -9,7 +9,7 @@ import pytest
 from openai import APIStatusError, AsyncOpenAI
 
 from otter.conversation import create_openai_responses_compatible_conversation
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AudioPart,
     ImagePart,

@@ -12,7 +12,7 @@ from openai.types.responses import (
     ResponseInputItemParam,
 )
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,

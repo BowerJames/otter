@@ -19,7 +19,7 @@ from otter.agent_session import (
     create_agent_session,
 )
 from otter.conversation import Conversation
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     ContextEntry,
     TextPart,

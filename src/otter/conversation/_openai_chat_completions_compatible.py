@@ -13,7 +13,7 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
 )
 
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     AssistantPart,
     AudioPart,

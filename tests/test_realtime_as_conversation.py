@@ -7,7 +7,7 @@ from typing import Self
 import pytest
 
 from otter.conversation import realtime_as_conversation
-from otter.domain.messages import AssistantMessage, TextPart, UserPart
+from otter.core.domain.messages import AssistantMessage, TextPart, UserPart
 from otter.realtime_conversation import RealtimeEvent, TextDelta, TurnDone
 
 

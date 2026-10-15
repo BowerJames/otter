@@ -15,7 +15,7 @@ from otter.chat_screen import (
     TranscriptLine,
     UserLine,
 )
-from otter.domain.messages import (
+from otter.core.domain.messages import (
     AssistantMessage,
     ContextEntry,
     TextPart,

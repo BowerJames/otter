@@ -6,7 +6,7 @@ import httpx2
 import pytest
 
 from otter.conversation import create_zai_coding_plan_responses_conversations
-from otter.domain.messages import AssistantMessage, ImagePart, TextPart, UserMessage
+from otter.core.domain.messages import AssistantMessage, ImagePart, TextPart, UserMessage
 
 
 class FakeZai:
