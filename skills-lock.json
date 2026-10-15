@@ -5,25 +5,19 @@
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "f7ada5451a02f1622d408784501c30366812097ab9fc800cac5b4c289c6b79aa"
+      "computedHash": "3312844331b24ea482d0516cb633355078a100adc93dc1269ee872d80abb54c0"
     },
     "dependency-injection": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/dependency-injection/SKILL.md",
-      "computedHash": "d54191a5f4767ea8b54a90ef07b1da0cba7352576e942dbc51fe64cba22f195c"
-    },
-    "factory-pattern": {
-      "source": "BowerJames/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/factory-pattern/SKILL.md",
-      "computedHash": "ae80c2c403fe252bb35ada6e1dec24200557b9cc112c40a31e7aa73497c953ac"
+      "computedHash": "5e2383f7e2007c8d7f6f16ed23f51491ae71b8738f9a548fff82214d22f931ac"
     },
     "project-structure": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/project-structure/SKILL.md",
-      "computedHash": "4aff0a1b861e040415129965ed3ab8aedcd3324379bb27ff04ed4b813ddcda37"
+      "computedHash": "e96089342188861fd92f7fe71eba70e7aa771e8e04b1a92264a94a02176c0784"
     },
     "repo-explorer": {
       "source": "BowerJames/skills",
@@ -35,13 +29,13 @@
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/test-driven-development/SKILL.md",
-      "computedHash": "ad2677364b63398dd778e9b9c7caad407ec8c9cad0b87e35f12100589a3cdd93"
+      "computedHash": "dafdaa3494c1e23a86cfb1e252b3084a60d745eccdbcba07b4ff148eb6b97dba"
     },
     "testing": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/testing/SKILL.md",
-      "computedHash": "e0c7a0016e46ca863146e2f633009ffa6c18684a79fceefb4326bb16c335865f"
+      "computedHash": "a59adcebf5fb42f7befe1b0d850368052644c2e965f61bc39cc98e4fd5b79008"
     }
   }
 }

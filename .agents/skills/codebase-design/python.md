@@ -6,121 +6,113 @@ The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its Py
 
 | Term | Python |
 |---|---|
-| **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
-| **Adapter** | any class or function satisfying the interface's shape |
-| **Seam** | a typed parameter capability varies through: an object interface, a function interface, or a plain value |
+| **Interface** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[Order], Receipt]` |
+| **Port** | for classes, a `typing.Protocol`; for functions, a type — `Callable[[], datetime]` |
+| **Adapter** | a class or function satisfying the port's shape |
+| **Constructor** | when the implementation is a class, its `__init__`; when the implementation is a function, the function that takes the port and returns it |
+| **Data carrier** | a frozen `dataclass`, or a type alias such as a `Literal` |
+| **Error** | an `Exception` subclass |
 
-## Example 1
+## Module
 
-Below illustrates an example of a `PaymentGateway` module in Python.
+Below illustrates an example of an `OrderProcessor` module in Python.
 
-```python
-from typing import Protocol, Literal
-
-type EnvVariableLoader = Callable[[str], str]
-type HTTP = Callable[[Request], Response]
-
-class PaymentGateway(Protocol):          # the interface for the PaymentGateway Module
-    def charge(self, amount: float) -> bool: ...
-
-class StripeGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
-
-    def charge(self, amount: float) -> bool: ...
-
-class PaypalGateway:
-    def __init__(
-        self,
-        api_key: str,
-        http: HTTP
-    ): ...
-
-    def charge(self, amount: float) -> bool: ...
-
-def create_payment_gateway(
-        type: Literal["stripe", "paypal"], # seam for the PaymentGateway Module
-        env_variable_loader: EnvVariableLoader, # seam for the PaymentGateway Module to access the environment variable resource for testing
-        http: HTTP
-    ) -> PaymentGateway: # A factory for the PaymentGateway module
-    if type == "stripe":
-        api_key = env_variable_loader("STRIPE_API_KEY")
-        return StripeGateway(api_key, http)
-    elif type == "paypal":
-        api_key = env_variable_loader("PAYPAL_API_KEY")
-        return PaypalGateway(api_key, http)
-```
-
-Matching is structural: `StripeGateway` and `PaypalGateway` both satisfy the `PaymentGateway` interface.
-
-Explicit inheritance (`class StripeGateway(PaymentGateway)`) is allowed and documents intent — it lets the type checker flag drift — but it is a declaration, never a requirement.
-
-This module is a well designed deep module:
-
-**Leverage for the caller** - The module allows the caller to make payments through stripe and paypal through a simple interface with a single method with a single parameter.
-
-**Flexibility for developers** - It is simple to extend the module capabilities by simply adding another class satisfying the `PaymentGateway` interface and adding a single extra conditional branch in the implementation of the factory.
-
-**Testability for everyone** - The module can be tested easily through its factory and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
-
-## Example 2
-
-Below are 2 valid formulations of an `OrderProcessor` module built on top of example 1.
+The interface of a module can be spelled as a `typing.Protocol` or as a type. Both of the below define the same interface; pick one.
 
 ```python
-from typing import Callable
+from typing import Protocol
 
-type OrderProcessor = Callable[[Order, PaymentGateway], Receipt] # Interface for the OrderProcessor module
-
-def process_order(
-    order: Order,
-    gateway: PaymentGateway # seam through which capabilities of the OrderProcessor can vary
-) -> Receipt:
-    # Implementation of the OrderProcessor module
-    total = 0
-    for item in order.items:
-        total += item.cost
-    payment_successful = gateway.charge(total)
-    if not payment_successful:
-        raise ...
-    return Receipt(
-        total=total
-    )
+class OrderProcessor(Protocol): # Interface for the module, as a Protocol
+    def __call__(self, order: Order) -> Receipt: ...
 ```
 
 ```python
 from typing import Callable
 
-type OrderProcessor = Callable[[Order], Receipt] # Interface for the OrderProcessor module
+type OrderProcessor = Callable[[Order], Receipt] # Interface for the module, as a type
+```
+
+The rest of the module is the same whichever spelling is used.
+
+```python
+from typing import Literal, Protocol
+
+type Currency = Literal["GBP", "USD", "EUR"] # Data carrier: its only invariant is the one its type expresses
+
+class OrderProcessorPort(Protocol): # The module's one port: everything it needs from outside itself
+    def charge(self, amount: int, currency: Currency) -> bool: ...
+
+class PaymentDeclined(Exception): # An error the module's implementation determines, so the module owns it
+    ...
+
+class OrderProcessorImpl: # Implementation of the module
+    def __init__(
+        self,
+        port: OrderProcessorPort, # the port
+        currency: Currency # configuration
+    ): # Constructor for the module
+        self.port = port
+        self.currency = currency
+
+    def __call__(self, order: Order) -> Receipt:
+        total = sum(item.cost for item in order.items)
+        if not self.port.charge(total, self.currency):
+            raise PaymentDeclined(order.id)
+        return Receipt(total=total, currency=self.currency)
+
+class StripeAdapter(OrderProcessorPort): # Adapter for the port
+    def __init__(self, api_key: str, http: HTTP): ... # Constructor for the stripe adapter
+
+    def charge(self, amount: int, currency: Currency) -> bool: ...
+
+class PaypalAdapter(OrderProcessorPort): # Adapter for the port
+    def __init__(self, api_key: str, http: HTTP): ... # Constructor for the paypal adapter
+
+    def charge(self, amount: int, currency: Currency) -> bool: ...
+
+def create_stripe_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the stripe adapter
+    return StripeAdapter(api_key, RealHTTP())
+
+def create_paypal_adapter(api_key: str) -> OrderProcessorPort: # An adapter factory for the paypal adapter
+    return PaypalAdapter(api_key, RealHTTP())
 
 def create_order_processor(
-    gateway: PaymentGateway # A seam for the OrderProcessor module
-) -> OrderProcessor: # Factory of the OrderProcessor module
-    def process_order(
-        order: Order
-    ) -> Receipt:
-        # Implementation of the OrderProcessor module
-        total = 0
-        for item in order.items:
-            total += item.cost
-        payment_successful = gateway.charge(total)
-        if not payment_successful:
-            raise ...
-        return Receipt(
-            total=total
-        )
-    return process_order
+        provider: Literal["stripe", "paypal"],
+        api_key: str,
+        currency: Currency
+    ) -> OrderProcessor: # A module factory for the order processor module
+    if provider == "stripe":
+        port = create_stripe_adapter(api_key)
+    elif provider == "paypal":
+        port = create_paypal_adapter(api_key)
+    return OrderProcessorImpl(port, currency)
 ```
 
-Both are modules with a seam; they differ in where the seam sits. The first places it in the interface, so every caller must supply a gateway. The second places it in the factory, leaving the interface with only data. Prefer the second wherever the adapter is known when the entity is created (see dependency-injection, rule 2).
+Matching is structural: any class with a matching `charge` satisfies `OrderProcessorPort`. An adapter inherits from the port it satisfies anyway (`class StripeAdapter(OrderProcessorPort)`). The inheritance is a reminder, not a requirement: it links the adapter to the port it is intended for, so a developer reading the adapter can see the dependency.
 
-The second example exhibits:
+## Errors
 
-**Leverage for Consumers** - Has the capability to total orders and process payments through Stripe and Paypal (thanks to the existing adapters)
+The adapter handles what it can decide and lets everything else propagate:
 
-**Locality for Maintainers** - Tests can be written with a fake payment gateway allowing them to localise bugs in the order totaling vs payment gateways. Any change to the order processing can be propagated to all payment gateway types through one place.
+```python
+class StripeAdapter(OrderProcessorPort):
+    def __init__(self, api_key: str, http: HTTP):
+        self.api_key = api_key
+        self.http = http
 
-**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities.
+    def charge(self, amount: int, currency: Currency) -> bool:
+        response = self.http(Request(...)) # a network error propagates unchanged
+        if response.status == 402:
+            return False # handled: a decline is an answer the port can give
+        return True
+```
+
+Wrapping hides the error's origin:
+
+```python
+    def charge(self, amount: int, currency: Currency) -> bool:
+        try:
+            response = self.http(Request(...))
+        except ConnectionError as error:
+            raise PaymentFailed() from error # bad: wraps an error the adapter did not determine
+```

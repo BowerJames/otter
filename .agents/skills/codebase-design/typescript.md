@@ -2,117 +2,124 @@
 
 The vocabulary in [SKILL.md](SKILL.md) is language-agnostic. This file is its TypeScript spelling.
 
-The style throughout: **no classes**. Entities are functions and object literals built by factories; they satisfy an `interface` structurally.
+The style throughout: **no classes**. Entities are functions and object literals returned by their constructors; they satisfy an `interface` structurally. The one exception is an error: a subclass of `Error`.
 
 ## Vocabulary → TypeScript
 
 | Term | TypeScript |
 |---|---|
-| **Interface** | for object shapes, an `interface`; for functions, a type — `() => Date` |
-| **Adapter** | any object literal or function satisfying the interface's shape |
-| **Seam** | a typed parameter capability varies through: an object interface, a function type, or a plain value |
+| **Interface** | for object shapes, an `interface`; for functions, a type — `(order: Order) => Receipt` |
+| **Port** | for object shapes, an `interface`; for functions, a type — `() => Date` |
+| **Adapter** | an object literal or function satisfying the port's shape |
+| **Constructor** | the function that takes the port and returns the entity |
+| **Data carrier** | an `interface` or `type` of plain, `readonly` data, or a union of literals |
+| **Error** | a subclass of `Error` |
 
-## Example 1
+With no classes, a constructor and a factory are both functions. They are told apart by name: a constructor is `new…` (`newOrderProcessor`), a factory is `create…` (`createOrderProcessor`).
 
-Below illustrates an example of a `PaymentGateway` module in TypeScript.
+## Module
 
-```ts
-type EnvVariableLoader = (name: string) => string;
-type Http = (request: Request) => Response;
+Below illustrates an example of an `OrderProcessor` module in TypeScript.
 
-interface PaymentGateway {               // the interface for the PaymentGateway module
-  charge(amount: number): boolean;
-}
-
-function createStripeGateway(apiKey: string, http: Http): PaymentGateway {
-  return {
-    charge(amount) { /* ... */ },
-  };
-}
-
-function createPaypalGateway(apiKey: string, http: Http): PaymentGateway {
-  return {
-    charge(amount) { /* ... */ },
-  };
-}
-
-function createPaymentGateway(
-  type: "stripe" | "paypal",             // seam for the PaymentGateway module
-  envVariableLoader: EnvVariableLoader,  // seam for the PaymentGateway module to access the environment variable resource for testing
-  http: Http,
-): PaymentGateway {                      // a factory for the PaymentGateway module
-  switch (type) {
-    case "stripe":
-      return createStripeGateway(envVariableLoader("STRIPE_API_KEY"), http);
-    case "paypal":
-      return createPaypalGateway(envVariableLoader("PAYPAL_API_KEY"), http);
-  }
-}
-```
-
-Matching is structural: the object literals built by `createStripeGateway` and `createPaypalGateway` both satisfy the `PaymentGateway` interface.
-
-The declared return type checks each literal where it is built, so drift is a compile error at that point. No `class` and no `implements` are needed. `createStripeGateway` and `createPaypalGateway` are themselves factories for the module: a module can have many.
-
-This module is a well designed deep module:
-
-**Leverage for the caller** - The module allows the caller to make payments through Stripe and PayPal through a simple interface with a single method with a single parameter.
-
-**Flexibility for developers** - It is simple to extend the module's capabilities by adding another function returning an object that satisfies the `PaymentGateway` interface and adding a single extra `case` in the implementation of the factory.
-
-**Testability for everyone** - The module can be tested easily through its factory and interface by providing test adapters for the env loader and http dependencies to observe behaviours through.
-
-## Example 2
-
-Below are 2 valid formulations of an `OrderProcessor` module built on top of example 1.
+The interface of a module can be spelled as an `interface` or as a type. Both of the below define the same interface; pick one.
 
 ```ts
-type OrderProcessor = (order: Order, gateway: PaymentGateway) => Receipt; // interface for the OrderProcessor module
-
-function processOrder(
-  order: Order,
-  gateway: PaymentGateway, // seam through which capabilities of the OrderProcessor can vary
-): Receipt {
-  // implementation of the OrderProcessor module
-  let total = 0;
-  for (const item of order.items) {
-    total += item.cost;
-  }
-  const paymentSuccessful = gateway.charge(total);
-  if (!paymentSuccessful) {
-    throw new Error(/* ... */);
-  }
-  return { total };
+interface OrderProcessor { // Interface for the module, as an interface
+  (order: Order): Receipt;
 }
 ```
 
 ```ts
-type OrderProcessor = (order: Order) => Receipt; // interface for the OrderProcessor module
+type OrderProcessor = (order: Order) => Receipt; // Interface for the module, as a type
+```
+
+The rest of the module is the same whichever spelling is used.
+
+```ts
+type Currency = "GBP" | "USD" | "EUR"; // Data carrier: its only invariant is the one its type expresses
+
+interface OrderProcessorPort { // The module's one port: everything it needs from outside itself
+  charge(amount: number, currency: Currency): boolean;
+}
+
+class PaymentDeclined extends Error {} // An error the module's implementation determines, so the module owns it
+
+function newOrderProcessor(
+  port: OrderProcessorPort, // the port
+  currency: Currency,       // configuration
+): OrderProcessor { // Constructor for the module
+  return function processOrder(order) { // Implementation of the module
+    const total = order.items.reduce((sum, item) => sum + item.cost, 0);
+    if (!port.charge(total, currency)) {
+      throw new PaymentDeclined(order.id);
+    }
+    return { total, currency };
+  };
+}
+
+function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the stripe adapter
+  return { // Adapter for the port
+    charge(amount, currency) { /* ... */ },
+  };
+}
+
+function newPaypalAdapter(apiKey: string, http: Http): OrderProcessorPort { // Constructor for the paypal adapter
+  return { // Adapter for the port
+    charge(amount, currency) { /* ... */ },
+  };
+}
+
+function createStripeAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the stripe adapter
+  return newStripeAdapter(apiKey, newRealHttp());
+}
+
+function createPaypalAdapter(apiKey: string): OrderProcessorPort { // An adapter factory for the paypal adapter
+  return newPaypalAdapter(apiKey, newRealHttp());
+}
 
 function createOrderProcessor(
-  gateway: PaymentGateway, // a seam for the OrderProcessor module
-): OrderProcessor {        // factory of the OrderProcessor module
-  return function processOrder(order) {
-    // implementation of the OrderProcessor module
-    let total = 0;
-    for (const item of order.items) {
-      total += item.cost;
-    }
-    const paymentSuccessful = gateway.charge(total);
-    if (!paymentSuccessful) {
-      throw new Error(/* ... */);
-    }
-    return { total };
+  provider: "stripe" | "paypal",
+  apiKey: string,
+  currency: Currency,
+): OrderProcessor { // A module factory for the order processor module
+  switch (provider) {
+    case "stripe":
+      return newOrderProcessor(createStripeAdapter(apiKey), currency);
+    case "paypal":
+      return newOrderProcessor(createPaypalAdapter(apiKey), currency);
+  }
+}
+```
+
+Matching is structural: the object literals returned by `newStripeAdapter` and `newPaypalAdapter` both satisfy `OrderProcessorPort`. The declared return type checks each literal where it is built, so drift is a compile error at that point. No `class` and no `implements` are needed.
+
+## Errors
+
+The adapter handles what it can decide and lets everything else propagate:
+
+```ts
+function newStripeAdapter(apiKey: string, http: Http): OrderProcessorPort {
+  return {
+    charge(amount, currency) {
+      const response = http({ /* ... */ }); // a network error propagates unchanged
+      if (response.status === 402) {
+        return false; // handled: a decline is an answer the port can give
+      }
+      return true;
+    },
   };
 }
 ```
 
-Both are modules with a seam; they differ in where the seam sits. The first places it in the interface, so every caller must supply a gateway. The second places it in the factory, leaving the interface with only data. Prefer the second wherever the adapter is known when the entity is created (see dependency-injection, rule 2).
+Wrapping hides the error's origin:
 
-The second example exhibits:
-
-**Leverage for Consumers** - Has the capability to total orders and process payments through Stripe and PayPal (thanks to the existing adapters).
-
-**Locality for Maintainers** - Tests can be written with a fake payment gateway, allowing them to localise bugs in the order totalling vs the payment gateways. Any change to the order processing can be propagated to all payment gateway types through one place.
-
-**Testability for Everyone** - A fake payment gateway allows tests to pin a single behaviour "Charges payment gateway with total equal to the sum of the cost of all items in the order" and the module gains the capability for all gateway types. One behaviour giving a range of capabilities.
+```ts
+    charge(amount, currency) {
+      try {
+        const response = http({ /* ... */ });
+        /* ... */
+      } catch (error) {
+        throw new PaymentFailed({ cause: error }); // bad: wraps an error the adapter did not determine
+      }
+    },
+```
