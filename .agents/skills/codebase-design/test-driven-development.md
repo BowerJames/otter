@@ -1,15 +1,6 @@
----
-name: test-driven-development
-description: Development methodology for driving development through tests. Use this when you are adding, enhancing or amending modules or adapters. Requires the codebase-design, testing and project-structure skills.
----
-
-# Prerequisites
-
-- **[codebase-design](../codebase-design/SKILL.md)** — read it first. This skill uses its vocabulary (entity, module, interface, behaviour, implementation, constructor, port, configuration, adapter, factory, data carrier, resource).
-- **[testing](../testing/SKILL.md)** — read it first. This skill uses its vocabulary (entity under test, test adapter, test harness, ...).
-- **[project-structure](../project-structure/SKILL.md)** — where the files created in each cycle go.
-
 # Test-driven development
+
+This file uses the vocabulary of [codebase-design](SKILL.md) and [testing](testing.md). Where the files created in each cycle go is covered by [project-structure](project-structure.md).
 
 ## The TDD Cycle
 
@@ -26,19 +17,21 @@ TDD is the red → green → refactor loop, and the loop is a feedback loop: the
 
 When developing with TDD you should not try to complete all the design work up front. Start with a minimal constructor and interface and evolve them gradually along with your test harness as behaviours you add require.
 
-The module's port is added to the constructor when a behaviour first needs something from outside the module. After that, a behaviour that needs something new adds a method to that port, never a second port. The test adapter gains the method in the same cycle.
+A port is added to the constructor when a behaviour first needs a new dependency, and its fake is written in the same cycle. A behaviour that needs more from a dependency the component already has adds a method to that port's interface, and the port's fake gains the method in the same cycle. A port's interface starts in the component; it becomes a contract only when a second component needs it and it means the same thing to both.
 
-## Adapters
+## Edge components and adapters
 
-An adapter is driven by tests in the same way, through the port it satisfies and its own constructor. Where a behaviour can be measured with test adapters for what the adapter's constructor takes, the cycle uses unit tests. Where it can only be measured against the real resource, the cycle's test is an integration test.
+An edge component is driven by tests in the same way, through its interface and its own constructor. An outbound edge component's cycles pass the library's own test hook, or a fake of its view; an inbound edge component's cycles drive it through its framework's test client. Where a behaviour can only be measured against the real resource, the cycle's test is an integration test.
+
+An adapter is driven through the port's interface or the contract it satisfies, constructed with fakes of the interfaces of the components it calls.
 
 ## After the cycles
 
-The cycles build a module in the core against a test adapter. Once its behaviours are pinned, its production adapters are driven by their own cycles. The adapter factories, the module factory and the startup code are written last: they hold no behaviour, so no cycle drives them.
+The cycles build a component against fakes. Once its behaviours are pinned, whatever will satisfy its ports in production is driven by its own cycles: the edge components that face foreign components, and the adapters that join it to other components. The factories, composites and entrypoints are written last: they hold no behaviour, so no cycle drives them.
 
 ## Language idioms
 
 The sections above are language-agnostic. When implementing, read the file for the target language:
 
-- [python.md](python.md) — two red → green → refactor cycles building `OrderProcessor`, mypy as the compile step, fixtures passing the test adapter to the constructor
-- [typescript.md](typescript.md) — two red → green → refactor cycles building `OrderProcessor`, `tsc` as the compile step, a setup helper passing the test adapter to the constructor
+- [python/test-driven-development.md](python/test-driven-development.md) — two red → green → refactor cycles building `OrderProcessor`, mypy as the compile step, fixtures passing the fake to the constructor
+- [typescript/test-driven-development.md](typescript/test-driven-development.md) — two red → green → refactor cycles building `OrderProcessor`, `tsc` as the compile step, a setup helper passing the fake to the constructor

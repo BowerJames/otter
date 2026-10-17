@@ -5,37 +5,13 @@
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "3312844331b24ea482d0516cb633355078a100adc93dc1269ee872d80abb54c0"
-    },
-    "dependency-injection": {
-      "source": "BowerJames/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/dependency-injection/SKILL.md",
-      "computedHash": "5e2383f7e2007c8d7f6f16ed23f51491ae71b8738f9a548fff82214d22f931ac"
-    },
-    "project-structure": {
-      "source": "BowerJames/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/project-structure/SKILL.md",
-      "computedHash": "e96089342188861fd92f7fe71eba70e7aa771e8e04b1a92264a94a02176c0784"
+      "computedHash": "6f2da8b1795e944f52e90356d2acda6b7d9c44ac46b75bd20f72a4a036f10c40"
     },
     "repo-explorer": {
       "source": "BowerJames/skills",
       "sourceType": "github",
       "skillPath": "skills/utils/repo-explorer/SKILL.md",
       "computedHash": "55badaaad621d177235b00d81c63077a06ab4a3d762a10dc0aa762a1c269ff48"
-    },
-    "test-driven-development": {
-      "source": "BowerJames/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/test-driven-development/SKILL.md",
-      "computedHash": "dafdaa3494c1e23a86cfb1e252b3084a60d745eccdbcba07b4ff148eb6b97dba"
-    },
-    "testing": {
-      "source": "BowerJames/skills",
-      "sourceType": "github",
-      "skillPath": "skills/engineering/testing/SKILL.md",
-      "computedHash": "a59adcebf5fb42f7befe1b0d850368052644c2e965f61bc39cc98e4fd5b79008"
     }
   }
 }
