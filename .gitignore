@@ -29,3 +29,6 @@ venv/
 .coverage
 coverage.xml
 htmlcov/
+
+# pi agent state
+.pi/loops/
